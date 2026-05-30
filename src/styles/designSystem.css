@@ -1,0 +1,308 @@
+/* Sculpt & Glow - Brand-Configured Unified Design System */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap');
+
+:root {
+  /* Official Sculpt & Glow HSL Color Specifications */
+  --brand-black: 0 0% 5%;        /* #0D0D0D - Deep black background */
+  --brand-charcoal: 0 0% 10%;    /* #1A1A1A - Card & sidebar panels */
+  --brand-plum: 281 65% 15%;     /* #2E0D3D - Deep plum background */
+  --brand-purple: 277 54% 37%;   /* #6B2C91 - Regal purple highlight */
+  --brand-gold: 46 65% 53%;      /* #D4AF37 - Luxury gold */
+  --brand-gold-bronze: 40 54% 38%; /* #B8860B - Rich gold / bronze */
+  --brand-cream: 37 32% 93%;     /* #F5EFE6 - Soft cream body text */
+  --brand-lilac: 270 38% 75%;    /* #BFA6D8 - Muted lilac accent */
+  --brand-taupe: 31 15% 58%;     /* #A89684 - Taupe neutral */
+
+  /* State badges */
+  --status-pending: 45 93% 47%;    /* Amber */
+  --status-confirmed: 200 95% 45%;  /* Blue */
+  --status-checkin: 270 95% 65%;    /* Purple */
+  --status-progress: 180 90% 40%;   /* Teal */
+  --status-completed: 142 70% 45%;  /* Emerald */
+  --status-cancelled: 0 84% 60%;    /* Rose Red */
+  
+  --shadow-premium: 0 15px 35px rgba(0, 0, 0, 0.8);
+  --shadow-gold-glow: 0 0 25px rgba(212, 175, 55, 0.25);
+  --shadow-purple-glow: 0 0 25px rgba(107, 44, 145, 0.25);
+  --border-radius-lg: 20px;
+  --border-radius-md: 12px;
+  --transition-smooth: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  
+  font-family: 'Inter', system-ui, sans-serif;
+  color-scheme: dark;
+}
+
+body {
+  background-color: hsl(var(--brand-black));
+  color: hsl(var(--brand-cream));
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+h1, h2, h3, h4, h5, h6, .font-display {
+  font-family: 'Outfit', sans-serif;
+  letter-spacing: -0.02em;
+  color: hsl(var(--brand-cream));
+}
+
+.font-serif {
+  font-family: 'Playfair Display', serif;
+  font-style: italic;
+}
+
+/* Three-Column Multi-Device Workspace Layout */
+.workspace-container {
+  display: grid;
+  grid-template-columns: minmax(420px, 1.2fr) minmax(320px, 0.8fr) minmax(420px, 1fr);
+  gap: 24px;
+  padding: 24px;
+  height: calc(100vh - 70px); /* Adjusts for top technician bar */
+  box-sizing: border-box;
+}
+
+@media (max-width: 1300px) {
+  .workspace-container {
+    grid-template-columns: 1fr;
+    height: auto;
+    overflow-y: auto;
+  }
+}
+
+/* Glassmorphic Cards & Branding Panels */
+.panel-premium {
+  background-color: hsl(var(--brand-charcoal));
+  border: 1px solid hsl(var(--brand-purple) / 0.3);
+  border-radius: var(--border-radius-lg);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  box-shadow: var(--shadow-premium);
+  position: relative;
+  transition: var(--transition-smooth);
+}
+
+.panel-premium:hover {
+  border-color: hsl(var(--brand-gold) / 0.4);
+  box-shadow: var(--shadow-purple-glow);
+}
+
+.panel-header {
+  padding: 16px 20px;
+  background: linear-gradient(135deg, hsl(var(--brand-plum)) 0%, hsl(var(--brand-charcoal)) 100%);
+  border-bottom: 1px solid hsl(var(--brand-purple) / 0.4);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.panel-content {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* iPhone CSS Emulator Chassis */
+.iphone-emulator {
+  width: 290px;
+  height: 590px;
+  background-color: #000000;
+  border: 10px solid #1f2937;
+  border-radius: 40px;
+  box-shadow: var(--shadow-premium), 0 0 0 2px #374151;
+  position: relative;
+  margin: 0 auto;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.iphone-notch {
+  width: 110px;
+  height: 18px;
+  background-color: #1f2937;
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+}
+
+.iphone-screen {
+  flex: 1;
+  background-color: hsl(var(--brand-black));
+  overflow-y: auto;
+  padding: 40px 14px 16px 14px; /* notch space */
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Website Canvas Overlays & Fairy Dust Trail */
+.website-canvas-wrapper {
+  position: relative;
+  height: 100%;
+}
+
+.fairy-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 999;
+}
+
+/* Suspension Overlay Blocker */
+.rent-suspend-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(13, 13, 13, 0.95);
+  backdrop-filter: blur(12px);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  text-align: center;
+  animation: fadeIn 0.4s ease;
+}
+
+.rent-lock-shield {
+  animation: pulseGlow 1.8s infinite ease-in-out;
+  color: hsl(var(--status-cancelled));
+  margin-bottom: 20px;
+}
+
+/* Beautiful custom Gold Buttons */
+.btn-brand-gold {
+  background: linear-gradient(135deg, hsl(var(--brand-gold)) 0%, hsl(var(--brand-gold-bronze)) 100%);
+  color: hsl(var(--brand-black));
+  font-family: 'Outfit', sans-serif;
+  font-weight: 700;
+  padding: 12px 24px;
+  border-radius: 10px;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: var(--transition-smooth);
+}
+
+.btn-brand-gold:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-gold-glow);
+  filter: brightness(1.1);
+}
+
+.btn-brand-purple {
+  background: linear-gradient(135deg, hsl(var(--brand-purple)) 0%, hsl(var(--brand-plum)) 100%);
+  color: hsl(var(--brand-cream));
+  font-family: 'Outfit', sans-serif;
+  font-weight: 600;
+  padding: 10px 20px;
+  border-radius: 10px;
+  border: 1px solid hsl(var(--brand-lilac) / 0.3);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: var(--transition-smooth);
+}
+
+.btn-brand-purple:hover {
+  border-color: hsl(var(--brand-lilac));
+  box-shadow: var(--shadow-purple-glow);
+  transform: translateY(-1px);
+}
+
+/* Sleek inputs */
+.brand-input {
+  background-color: hsl(var(--brand-black));
+  border: 1px solid hsl(var(--brand-purple) / 0.5);
+  color: hsl(var(--brand-cream));
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  transition: var(--transition-smooth);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.brand-input:focus {
+  outline: none;
+  border-color: hsl(var(--brand-gold));
+  box-shadow: var(--shadow-gold-glow);
+}
+
+/* Badges */
+.badge-brand {
+  padding: 3px 8px;
+  border-radius: 9999px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.badge-brand.gold { background-color: hsl(var(--brand-gold) / 0.15); color: hsl(var(--brand-gold)); border: 1px solid hsl(var(--brand-gold) / 0.3); }
+.badge-brand.purple { background-color: hsl(var(--brand-purple) / 0.15); color: hsl(var(--brand-lilac)); border: 1px solid hsl(var(--brand-purple) / 0.3); }
+.badge-brand.completed { background-color: hsl(var(--status-completed) / 0.15); color: hsl(var(--status-completed)); border: 1px solid hsl(var(--status-completed) / 0.3); }
+.badge-brand.pending { background-color: hsl(var(--status-pending) / 0.15); color: hsl(var(--status-pending)); border: 1px solid hsl(var(--status-pending) / 0.3); }
+.badge-brand.cancelled { background-color: hsl(var(--status-cancelled) / 0.15); color: hsl(var(--status-cancelled)); border: 1px solid hsl(var(--status-cancelled) / 0.3); }
+
+/* Casino explosion particles */
+.glitter-particle {
+  position: fixed;
+  pointer-events: none;
+  z-index: 10000;
+  animation: glitterFly 1.2s ease-out forwards;
+}
+
+@keyframes glitterFly {
+  0% { transform: translate(0, 0) scale(1) rotate(0deg); opacity: 1; }
+  100% { transform: translate(var(--tx), var(--ty)) scale(0) rotate(var(--rot)); opacity: 0; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes pulseGlow {
+  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 10px rgba(225, 29, 72, 0.4)); }
+  50% { transform: scale(1.08); filter: drop-shadow(0 0 25px rgba(225, 29, 72, 0.8)); }
+}
+
+/* Beautiful conversion indicators */
+.psych-badge {
+  background-color: hsl(var(--status-cancelled) / 0.2);
+  color: hsl(var(--status-cancelled));
+  border: 1px solid hsl(var(--status-cancelled) / 0.4);
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  animation: flashUrgency 2s infinite ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+@keyframes flashUrgency {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.75; }
+}
