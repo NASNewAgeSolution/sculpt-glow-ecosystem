@@ -6,6 +6,29 @@ import {
 } from 'lucide-react';
 import { getTable, addAppointment, addInvoice, addPaymentToInvoice, logAction } from '../db/stateEngine';
 
+const getServiceImage = (srvName) => {
+  const name = srvName.toLowerCase();
+  if (name.includes('treadmill') || name.includes('vacutherm')) {
+    return 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=600';
+  }
+  if (name.includes('roll') || name.includes('roller')) {
+    return 'https://images.unsplash.com/photo-1519823551278-64ac92734fb1?w=600';
+  }
+  if (name.includes('cavitation') || name.includes('sculpting')) {
+    return 'https://images.unsplash.com/photo-1512290923902-8a9f81dc236c?w=600';
+  }
+  if (name.includes('freezing') || name.includes('cryo')) {
+    return 'https://images.unsplash.com/photo-1600334129128-685c5582fd35?w=600';
+  }
+  if (name.includes('facial') || name.includes('corrective')) {
+    return 'https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?w=600';
+  }
+  if (name.includes('3-in-1') || name.includes('nails') || name.includes('hair') || name.includes('feet')) {
+    return 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=600';
+  }
+  return 'https://images.unsplash.com/photo-1600334129128-685c5582fd35?w=600';
+};
+
 export default function ClientWebsite() {
   const [activeTab, setActiveTab] = useState('home');
   const [services, setServices] = useState([]);
@@ -435,6 +458,31 @@ export default function ClientWebsite() {
           pointer-events: none;
           z-index: 999;
         }
+
+        .nav-link-btn {
+          background: none;
+          border: none;
+          cursor: pointer;
+          padding: 8px 16px;
+          border-radius: 8px;
+          transition: all 0.3s ease;
+        }
+        .nav-link-btn:hover {
+          background-color: #6B2C91 !important;
+          color: #FFFFFF !important;
+          box-shadow: 0 0 15px rgba(107, 44, 145, 0.5);
+        }
+
+        .social-hover-btn {
+          transition: all 0.3s ease;
+        }
+        .social-hover-btn:hover {
+          background-color: #6B2C91 !important;
+          border-color: #6B2C91 !important;
+          color: white !important;
+          box-shadow: 0 0 15px rgba(107, 44, 145, 0.6) !important;
+          transform: translateY(-2px);
+        }
       `}</style>
 
       <canvas ref={canvasRef} className="fairy-canvas" />
@@ -442,14 +490,15 @@ export default function ClientWebsite() {
       {/* TOP FLOATING BLENDED HEADER */}
       <header style={{
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        padding: '20px 6%', backgroundColor: 'transparent', zIndex: 1000,
-        position: 'absolute', width: '100%', boxSizing: 'border-box'
+        padding: '12px 6%', backgroundColor: 'rgba(13, 13, 13, 0.9)', backdropFilter: 'blur(10px)',
+        zIndex: 1000, position: 'fixed', top: 0, left: 0, width: '100%', boxSizing: 'border-box',
+        borderBottom: '1px solid rgba(107, 44, 145, 0.15)'
       }}>
         {/* Beautiful Floating Custom Circular Logo */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px', cursor: 'pointer' }} onClick={() => setActiveTab('home')}>
           <div style={{
-            width: '105px',
-            height: '105px',
+            width: '70px',
+            height: '70px',
             borderRadius: '50%',
             backgroundImage: "url('/logo.jpg')",
             backgroundSize: 'cover',
@@ -465,24 +514,24 @@ export default function ClientWebsite() {
           </div>
         </div>
 
-        <nav style={{ display: 'flex', gap: '28px', fontSize: '0.68rem', letterSpacing: '2.5px', textTransform: 'uppercase', fontWeight: 600 }}>
+        <nav style={{ display: 'flex', gap: '20px', fontSize: '0.68rem', letterSpacing: '2.5px', textTransform: 'uppercase', fontWeight: 600 }}>
           {[
             { id: 'home', label: 'Home' },
             { id: 'services', label: 'Treatments' },
             { id: 'products', label: 'Boutique' },
             { id: 'about', label: 'Philosophy' },
-            { id: 'contact', label: 'Concierge' },
+            { id: 'contact', label: 'Contact Us' },
             { id: 'app', label: 'The App' }
           ].map(menuItem => (
             <button
               key={menuItem.id}
               onClick={() => setActiveTab(menuItem.id)}
+              className="nav-link-btn"
               style={{
-                background: 'none', border: 'none', cursor: 'pointer',
                 color: activeTab === menuItem.id ? '#D4AF37' : '#F5EFE6',
                 fontWeight: 700,
                 textShadow: '2px 2px 8px rgba(0,0,0,0.85)',
-                transition: 'all 0.3s ease', fontSize: 'inherit', letterSpacing: 'inherit'
+                fontSize: 'inherit', letterSpacing: 'inherit'
               }}
             >
               {menuItem.label}
@@ -512,7 +561,7 @@ export default function ClientWebsite() {
       </header>
 
       {/* CORE ROUTING SECTION */}
-      <main style={{ boxSizing: 'border-box', minHeight: '85vh' }}>
+      <main style={{ boxSizing: 'border-box', minHeight: '85vh', paddingTop: '100px' }}>
         
         {/* SUBTAB: HOME PAGE */}
         {activeTab === 'home' && (
@@ -528,7 +577,7 @@ export default function ClientWebsite() {
               textAlign: 'center', padding: '0 20px', boxSizing: 'border-box'
             }}>
               <span className="psych-badge" style={{ 
-                position: 'absolute', top: '150px', fontSize: '0.78rem', 
+                fontSize: '0.78rem', marginBottom: '24px',
                 border: '1px solid rgba(212,175,55,0.4)', backgroundColor: 'rgba(46,13,61,0.4)', color: '#D4AF37'
               }}>
                 🔥 Concierge Alert: Only 3 Treatment Slots Remain for Today!
@@ -647,14 +696,28 @@ export default function ClientWebsite() {
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '30px' }}>
               {services.map(srv => (
-                <div key={srv.id} className="luxury-card" style={{ padding: '36px', display: 'flex', flexDirection: 'column', justify: 'space-between', gap: '20px' }}>
+                <div 
+                  key={srv.id} 
+                  className="luxury-card" 
+                  style={{ 
+                    padding: '36px', 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    justify: 'space-between', 
+                    gap: '20px',
+                    backgroundImage: `linear-gradient(rgba(17, 17, 17, 0.8), rgba(17, 17, 17, 0.95)), url(${getServiceImage(srv.name)})`,
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
+                    minHeight: '280px'
+                  }}
+                >
                   <div>
                     <div style={{ display: 'flex', justify: 'space-between', alignItems: 'flex-start' }}>
                       <span className="badge-brand purple" style={{ fontSize: '0.6rem' }}>{srv.category}</span>
                       <strong className="font-luxury-serif" style={{ color: '#D4AF37', fontSize: '1.25rem' }}>R {srv.price.toFixed(2)}</strong>
                     </div>
                     <h3 className="font-luxury-serif" style={{ color: 'white', margin: '14px 0 8px 0', fontSize: '1.2rem', letterSpacing: '2px' }}>{srv.name}</h3>
-                    <p style={{ fontSize: '0.82rem', color: '#A89684', lineHeight: '1.5', margin: 0 }}>{srv.description}</p>
+                    <p style={{ fontSize: '0.82rem', color: '#F5EFE6', lineHeight: '1.5', margin: 0, textShadow: '1px 1px 3px rgba(0,0,0,0.8)' }}>{srv.description}</p>
                   </div>
 
                   <div style={{ borderTop: '1px solid rgba(107, 44, 145, 0.15)', paddingTop: '18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -760,10 +823,54 @@ export default function ClientWebsite() {
                 </div>
               </div>
 
-              <div style={{ display: 'flex', gap: '14px' }}>
-                <a href="https://www.facebook.com/share/1CZEEXWAqv/" target="_blank" rel="noopener noreferrer" className="btn-luxury-purple" style={{ textDecoration: 'none', padding: '10px 20px', fontSize: '0.62rem' }}>Facebook</a>
-                <a href="https://www.tiktok.com/@sculptglow.pta" target="_blank" rel="noopener noreferrer" className="btn-luxury-purple" style={{ textDecoration: 'none', padding: '10px 20px', fontSize: '0.62rem' }}>TikTok</a>
-                <a href="https://www.instagram.com/sculptglow.pta" target="_blank" rel="noopener noreferrer" className="btn-luxury-purple" style={{ textDecoration: 'none', padding: '10px 20px', fontSize: '0.62rem' }}>Instagram</a>
+              <div style={{ display: 'flex', gap: '16px', alignItems: 'center', marginTop: '8px' }}>
+                <a 
+                  href="https://www.instagram.com/sculptglow.pta" 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  style={{ 
+                    width: '44px', height: '44px', borderRadius: '50%', backgroundColor: 'rgba(107, 44, 145, 0.2)',
+                    border: '1px solid #D4AF37', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    color: '#D4AF37', transition: 'all 0.3s ease', boxShadow: '0 0 10px rgba(107, 44, 145, 0.3)'
+                  }}
+                  className="social-hover-btn"
+                >
+                  <svg style={{ width: '20px', height: '20px', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' }} viewBox="0 0 24 24">
+                    <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
+                    <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
+                    <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
+                  </svg>
+                </a>
+                <a 
+                  href="https://www.facebook.com/share/1CZEEXWAqv/" 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  style={{ 
+                    width: '44px', height: '44px', borderRadius: '50%', backgroundColor: 'rgba(107, 44, 145, 0.2)',
+                    border: '1px solid #D4AF37', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    color: '#D4AF37', transition: 'all 0.3s ease', boxShadow: '0 0 10px rgba(107, 44, 145, 0.3)'
+                  }}
+                  className="social-hover-btn"
+                >
+                  <svg style={{ width: '20px', height: '20px', fill: 'currentColor' }} viewBox="0 0 24 24">
+                    <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                  </svg>
+                </a>
+                <a 
+                  href="https://www.tiktok.com/@sculptglow.pta" 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  style={{ 
+                    width: '44px', height: '44px', borderRadius: '50%', backgroundColor: 'rgba(107, 44, 145, 0.2)',
+                    border: '1px solid #D4AF37', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    color: '#D4AF37', transition: 'all 0.3s ease', boxShadow: '0 0 10px rgba(107, 44, 145, 0.3)'
+                  }}
+                  className="social-hover-btn"
+                >
+                  <svg style={{ width: '20px', height: '20px', fill: 'currentColor' }} viewBox="0 0 24 24">
+                    <path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.02 1.59 4.23.94 1.14 2.27 1.94 3.71 2.24v3.83c-1.39-.1-2.74-.63-3.87-1.48-.7-.52-1.28-1.19-1.72-1.95v7.26c.03 1.94-.48 3.88-1.5 5.5-1.57 2.49-4.32 4.09-7.31 4.07-2.91.07-5.74-1.36-7.39-3.77-1.78-2.5-2.07-5.94-.78-8.73C2.4 8.78 5.16 6.84 8.24 6.78c.07 1.34.03 2.68.04 4.02-1.43-.02-2.92.51-3.89 1.59-.99 1.05-1.37 2.6-1.02 4.01.35 1.5 1.51 2.76 2.97 3.19 1.48.47 3.18.1 4.31-.9 1.15-1.01 1.63-2.61 1.57-4.14V.02z"/>
+                  </svg>
+                </a>
               </div>
 
               <button
@@ -832,7 +939,7 @@ export default function ClientWebsite() {
 
         {/* SUBTAB: SHOPPING BAG CART */}
         {activeTab === 'cart' && (
-          <div style={{ padding: '160px 8% 80px 8%', display: 'flex', flexDirection: 'column', gap: '32px', maxWidth: '650px', margin: '0 auto' }}>
+          <div style={{ padding: '160px 8% 80px 8%', display: 'flex', flexDirection: 'column', gap: '32px', maxWidth: '850px', margin: '0 auto' }}>
             <div style={{ textAlign: 'center' }}>
               <span style={{ fontSize: '0.72rem', letterSpacing: '3px', textTransform: 'uppercase', color: '#D4AF37', fontWeight: 600 }}>secured checkout</span>
               <h2 className="font-luxury-serif" style={{ fontSize: '2.2rem', color: 'white', margin: '6px 0 0 0' }}>Shopping Bag</h2>
@@ -849,20 +956,20 @@ export default function ClientWebsite() {
                   <>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                       {cart.map(c => (
-                        <div key={c.id} className="luxury-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px' }}>
-                          <div>
-                            <strong style={{ color: 'white', fontSize: '0.95rem' }}>{c.name}</strong>
+                        <div key={c.id} className="luxury-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', gap: '16px', flexWrap: 'wrap' }}>
+                          <div style={{ flex: '1', minWidth: '220px' }}>
+                            <strong style={{ color: 'white', fontSize: '0.98rem', display: 'block' }}>{c.name}</strong>
                             {c.bookingDetails && (
                               <span style={{ display: 'block', fontSize: '0.75rem', color: '#BFA6D8', marginTop: '4px' }}>
                                 Date: {c.bookingDetails.date} @ {c.bookingDetails.time}
                               </span>
                             )}
                           </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-                            <strong className="font-luxury-serif" style={{ color: '#D4AF37' }}>R {c.price.toFixed(2)}</strong>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '24px', flexWrap: 'nowrap', minWidth: '150px', justifyContent: 'flex-end' }}>
+                            <strong className="font-luxury-serif" style={{ color: '#D4AF37', fontSize: '1.15rem', whiteSpace: 'nowrap' }}>R {c.price.toFixed(2)}</strong>
                             <button 
                               onClick={() => handleRemoveCartItem(c.id)}
-                              style={{ background: 'none', border: 'none', color: '#e11d48', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600 }}
+                              style={{ background: 'none', border: 'none', color: '#e11d48', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600, padding: 0 }}
                             >
                               Remove
                             </button>
@@ -1025,6 +1132,25 @@ export default function ClientWebsite() {
           <p style={{ fontSize: '0.8rem', color: '#A89684', lineHeight: '1.7', maxWidth: '350px' }}>
             A sanctuary of bespoke body shaping, advanced skin mapping, and modern recovery science. Experience cellular transformation in Pretoria East.
           </p>
+          <div style={{ display: 'flex', gap: '16px', marginTop: '24px', alignItems: 'center' }}>
+            <a href="https://www.instagram.com/sculptglow.pta" target="_blank" rel="noopener noreferrer" style={{ color: '#D4AF37', transition: 'all 0.3s ease' }} className="social-hover-btn">
+              <svg style={{ width: '20px', height: '20px', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' }} viewBox="0 0 24 24">
+                <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
+                <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
+                <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
+              </svg>
+            </a>
+            <a href="https://www.facebook.com/share/1CZEEXWAqv/" target="_blank" rel="noopener noreferrer" style={{ color: '#D4AF37', transition: 'all 0.3s ease' }} className="social-hover-btn">
+              <svg style={{ width: '20px', height: '20px', fill: 'currentColor' }} viewBox="0 0 24 24">
+                <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+              </svg>
+            </a>
+            <a href="https://www.tiktok.com/@sculptglow.pta" target="_blank" rel="noopener noreferrer" style={{ color: '#D4AF37', transition: 'all 0.3s ease' }} className="social-hover-btn">
+              <svg style={{ width: '20px', height: '20px', fill: 'currentColor' }} viewBox="0 0 24 24">
+                <path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.02 1.59 4.23.94 1.14 2.27 1.94 3.71 2.24v3.83c-1.39-.1-2.74-.63-3.87-1.48-.7-.52-1.28-1.19-1.72-1.95v7.26c.03 1.94-.48 3.88-1.5 5.5-1.57 2.49-4.32 4.09-7.31 4.07-2.91.07-5.74-1.36-7.39-3.77-1.78-2.5-2.07-5.94-.78-8.73C2.4 8.78 5.16 6.84 8.24 6.78c.07 1.34.03 2.68.04 4.02-1.43-.02-2.92.51-3.89 1.59-.99 1.05-1.37 2.6-1.02 4.01.35 1.5 1.51 2.76 2.97 3.19 1.48.47 3.18.1 4.31-.9 1.15-1.01 1.63-2.61 1.57-4.14V.02z"/>
+              </svg>
+            </a>
+          </div>
         </div>
 
         <div style={{ flex: '1', minWidth: '200px' }}>
