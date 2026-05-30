@@ -1,5 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ShoppingCart, Phone, MapPin, Search, CheckCircle, AlertTriangle, Download, ArrowRight, ChevronLeft, ChevronRight, MessageSquare, ExternalLink, Sparkles } from 'lucide-react';
+import { 
+  ShoppingCart, Phone, MapPin, Search, CheckCircle, 
+  AlertTriangle, Download, ArrowRight, MessageSquare, 
+  Sparkles, Menu, X, Star, CreditCard, Shield 
+} from 'lucide-react';
 import { getTable, addAppointment, addInvoice, addPaymentToInvoice, logAction } from '../db/stateEngine';
 
 export default function ClientWebsite() {
@@ -9,10 +13,13 @@ export default function ClientWebsite() {
   const [settings, setSettings] = useState({});
   const [cart, setCart] = useState([]);
   const [checkoutStep, setCheckoutStep] = useState('cart'); // cart, billing, success
-  const [billingDetails, setBillingDetails] = useState({ name: 'Alice Smith', phone: '+27 (82) 019-2834', email: 'alice.smith@gmail.com', shipping: '12 Glenwood Gardens, Pretoria East' });
+  const [billingDetails, setBillingDetails] = useState({ 
+    name: 'Alice Smith', 
+    phone: '+27 (82) 019-2834', 
+    email: 'alice.smith@gmail.com', 
+    shipping: '12 Glenwood Gardens, Pretoria East' 
+  });
 
-  // Banner and booking wizard states
-  const [specialSlideshowIdx, setSpecialSlideshowIdx] = useState(0);
   const [websiteSelectedService, setWebsiteSelectedService] = useState(null);
   const [websiteBookingDate, setWebsiteBookingDate] = useState('2026-05-30');
   const [websiteBookingTime, setWebsiteBookingTime] = useState('09:00');
@@ -34,13 +41,8 @@ export default function ClientWebsite() {
     const handleSync = () => syncStorefront();
     window.addEventListener('salon_db_sync', handleSync);
 
-    const slideTimer = setInterval(() => {
-      setSpecialSlideshowIdx(prev => (prev === 0 ? 1 : 0));
-    }, 4500);
-
     return () => {
       window.removeEventListener('salon_db_sync', handleSync);
-      clearInterval(slideTimer);
     };
   }, []);
 
@@ -63,12 +65,12 @@ export default function ClientWebsite() {
       constructor(x, y) {
         this.x = x;
         this.y = y;
-        this.size = Math.random() * 6 + 2;
+        this.size = Math.random() * 6 + 3;
         this.speedX = Math.random() * 2 - 1;
         this.speedY = Math.random() * -1.5 - 0.5;
         this.color = Math.random() > 0.5 ? '#D4AF37' : '#BFA6D8'; // gold or lilac
         this.alpha = 1;
-        this.decay = Math.random() * 0.03 + 0.015;
+        this.decay = Math.random() * 0.02 + 0.01;
       }
       update() {
         this.x += this.speedX;
@@ -248,35 +250,229 @@ export default function ClientWebsite() {
     setCheckoutStep('success');
   };
 
+  const handleRemoveCartItem = (id) => {
+    setCart(prev => prev.filter(item => item.id !== id));
+  };
+
   return (
     <div ref={websiteRef} style={{
       minHeight: '100vh', backgroundColor: '#0D0D0D', color: '#F5EFE6',
-      position: 'relative', overflowX: 'hidden'
+      position: 'relative', overflowX: 'hidden', fontFamily: "'Montserrat', sans-serif"
     }}>
+      {/* GOOGLE FONTS & CUSTOM MARQUEE CSS INJECTION */}
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400&family=Montserrat:wght@200;300;400;500;600;700&display=swap');
+        
+        .font-luxury-serif {
+          font-family: 'Cormorant Garamond', serif !important;
+          text-transform: uppercase;
+          letter-spacing: 3px;
+        }
+        
+        .font-luxury-sans {
+          font-family: 'Montserrat', sans-serif !important;
+        }
+
+        .luxury-hero-title {
+          font-family: 'Cormorant Garamond', serif !important;
+          text-transform: uppercase;
+          letter-spacing: 6px;
+          color: #D4AF37;
+          text-shadow: 0px 4px 20px rgba(0, 0, 0, 0.9);
+          line-height: 1.1;
+        }
+
+        /* Marquee Continuous Loop */
+        @keyframes marqueeScroll {
+          0% { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+        
+        .marquee-container {
+          background: #070707;
+          padding: 35px 0;
+          border-top: 1px solid rgba(107, 44, 145, 0.25);
+          border-bottom: 1px solid rgba(107, 44, 145, 0.25);
+          overflow: hidden;
+          position: relative;
+        }
+        
+        .marquee-track {
+          display: flex;
+          width: max-content;
+          animation: marqueeScroll 35s linear infinite;
+        }
+        
+        .marquee-slide {
+          width: 320px;
+          height: 200px;
+          margin: 0 15px;
+          position: relative;
+          flex-shrink: 0;
+          border: 1px solid rgba(212, 175, 55, 0.25);
+          overflow: hidden;
+          border-radius: 12px;
+          box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+        }
+        
+        .marquee-slide img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          opacity: 0.65;
+          transition: all 0.6s ease;
+        }
+        
+        .marquee-slide:hover img {
+          opacity: 0.95;
+          transform: scale(1.1);
+        }
+        
+        .marquee-overlay {
+          position: absolute;
+          bottom: 0;
+          padding: 12px;
+          background: linear-gradient(transparent, rgba(13, 13, 13, 0.95));
+          width: 100%;
+          font-size: 10px;
+          color: #D4AF37;
+          text-align: center;
+          letter-spacing: 2px;
+          font-weight: 600;
+        }
+
+        /* Luxury Gold Buttons */
+        .btn-luxury-gold {
+          background: transparent;
+          color: #D4AF37;
+          border: 1px solid #D4AF37;
+          font-family: 'Montserrat', sans-serif;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 2px;
+          font-size: 0.75rem;
+          padding: 15px 35px;
+          cursor: pointer;
+          transition: all 0.4s ease;
+          display: inline-flex;
+          align-items: center;
+          gap: 10px;
+        }
+
+        .btn-luxury-gold:hover {
+          background: #6B2C91;
+          color: #FFF;
+          border-color: #6B2C91;
+          box-shadow: 0 0 25px rgba(107, 44, 145, 0.6);
+          transform: translateY(-2px);
+        }
+
+        .btn-luxury-purple {
+          background: #6B2C91;
+          color: #FFF;
+          border: 1px solid rgba(107, 44, 145, 0.5);
+          font-family: 'Montserrat', sans-serif;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 2px;
+          font-size: 0.72rem;
+          padding: 14px 30px;
+          cursor: pointer;
+          transition: all 0.4s ease;
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .btn-luxury-purple:hover {
+          background: transparent;
+          color: #D4AF37;
+          border-color: #D4AF37;
+          box-shadow: 0 0 15px rgba(212, 175, 55, 0.2);
+          transform: translateY(-1px);
+        }
+
+        /* Luxury Cards */
+        .luxury-card {
+          background: #111111;
+          border: 1px solid rgba(212, 175, 55, 0.12);
+          border-radius: 16px;
+          transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+          overflow: hidden;
+          position: relative;
+        }
+
+        .luxury-card:hover {
+          border-color: #6B2C91;
+          box-shadow: 0 15px 35px rgba(107, 44, 145, 0.15);
+          transform: translateY(-5px);
+        }
+
+        /* Glass Input Fields */
+        .luxury-input {
+          background: #111 !important;
+          border: 1px solid rgba(107, 44, 145, 0.4) !important;
+          color: #F5EFE6 !important;
+          font-family: 'Montserrat', sans-serif !important;
+          font-size: 0.82rem !important;
+          padding: 14px 18px !important;
+          border-radius: 8px !important;
+          transition: all 0.3s ease !important;
+        }
+
+        .luxury-input:focus {
+          outline: none !important;
+          border-color: #D4AF37 !important;
+          box-shadow: 0 0 15px rgba(212, 175, 55, 0.25) !important;
+        }
+
+        .fairy-canvas {
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          pointer-events: none;
+          z-index: 999;
+        }
+      `}</style>
+
       <canvas ref={canvasRef} className="fairy-canvas" />
 
-      {/* TOP BLENDED HEADER */}
+      {/* TOP FLOATING BLENDED HEADER */}
       <header style={{
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        padding: '24px 40px', backgroundColor: 'transparent', zIndex: 100,
-        borderBottom: '1px solid rgba(107, 44, 145, 0.15)', position: 'relative'
+        padding: '20px 6%', backgroundColor: 'transparent', zIndex: 1000,
+        position: 'absolute', width: '100%', boxSizing: 'border-box'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }} onClick={() => setActiveTab('home')}>
-          <img src="/logo.jpg" style={{ width: '40px', height: '40px', borderRadius: '50%', border: '1px solid #D4AF37' }} alt="Sculpt & Glow" />
-          <div>
-            <h2 style={{ fontSize: '1.2rem', fontWeight: 800, tracking: '0.1em', margin: 0, fontFamily: 'Outfit', color: 'white' }}>SCULPT & GLOW</h2>
-            <span style={{ fontSize: '0.62rem', tracking: '0.15em', textTransform: 'uppercase', color: '#D4AF37', fontWeight: 700 }}>Wellness Ecosystem</span>
+        {/* Beautiful Floating Custom Circular Logo */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', cursor: 'pointer' }} onClick={() => setActiveTab('home')}>
+          <div style={{
+            width: '105px',
+            height: '105px',
+            borderRadius: '50%',
+            backgroundImage: "url('/logo.jpg')",
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat',
+            border: '2px solid #D4AF37',
+            filter: 'drop-shadow(0 0 15px rgba(107, 44, 145, 0.65))',
+            overflow: 'hidden'
+          }} />
+          <div style={{ display: 'none' }}>
+            <h2 className="font-luxury-serif" style={{ fontSize: '1.25rem', fontWeight: 600, margin: 0, color: 'white' }}>SCULPT & GLOW</h2>
+            <span style={{ fontSize: '0.6rem', letterSpacing: '0.2em', textTransform: 'uppercase', color: '#D4AF37' }}>Wellness Studio</span>
           </div>
         </div>
 
-        <nav style={{ display: 'flex', gap: '24px', fontSize: '0.85rem', fontWeight: 600 }}>
+        <nav style={{ display: 'flex', gap: '28px', fontSize: '0.68rem', letterSpacing: '2.5px', textTransform: 'uppercase', fontWeight: 600 }}>
           {[
             { id: 'home', label: 'Home' },
-            { id: 'services', label: 'Treatments Menu' },
-            { id: 'products', label: 'Retail Shop' },
-            { id: 'about', label: 'About Us' },
-            { id: 'contact', label: 'Contact' },
-            { id: 'app', label: 'Download App' }
+            { id: 'services', label: 'Treatments' },
+            { id: 'products', label: 'Boutique' },
+            { id: 'about', label: 'Philosophy' },
+            { id: 'contact', label: 'Concierge' },
+            { id: 'app', label: 'The App' }
           ].map(menuItem => (
             <button
               key={menuItem.id}
@@ -284,8 +480,9 @@ export default function ClientWebsite() {
               style={{
                 background: 'none', border: 'none', cursor: 'pointer',
                 color: activeTab === menuItem.id ? '#D4AF37' : '#F5EFE6',
-                fontWeight: activeTab === menuItem.id ? 700 : 500,
-                transition: 'var(--transition-smooth)', fontSize: 'inherit'
+                fontWeight: 700,
+                textShadow: '2px 2px 8px rgba(0,0,0,0.85)',
+                transition: 'all 0.3s ease', fontSize: 'inherit', letterSpacing: 'inherit'
               }}
             >
               {menuItem.label}
@@ -295,89 +492,142 @@ export default function ClientWebsite() {
 
         <button
           onClick={() => setActiveTab('cart')}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#D4AF37', position: 'relative' }}
+          style={{ 
+            background: 'none', border: 'none', cursor: 'pointer', color: '#D4AF37', 
+            position: 'relative', filter: 'drop-shadow(2px 2px 4px rgba(0,0,0,0.8))'
+          }}
         >
           <ShoppingCart style={{ width: '22px', height: '22px' }} />
           {cart.length > 0 && (
-            <span style={{ position: 'absolute', top: '-6px', right: '-6px', backgroundColor: '#e11d48', color: 'white', fontSize: '0.62rem', width: '14px', height: '14px', borderRadius: '50%', display: 'flex', alignItems: 'center', justify: 'center', fontWeight: 700 }}>
+            <span style={{ 
+              position: 'absolute', top: '-6px', right: '-6px', backgroundColor: '#6B2C91', 
+              color: 'white', fontSize: '0.6rem', width: '15px', height: '15px', 
+              borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', 
+              fontWeight: 700, border: '1px solid #D4AF37'
+            }}>
               {cart.length}
             </span>
           )}
         </button>
       </header>
 
-      {/* CORE CANVAS TAB ROUTING SCREEN */}
-      <main style={{ padding: '40px', boxSizing: 'border-box', maxWidth: '1200px', margin: '0 auto' }}>
+      {/* CORE ROUTING SECTION */}
+      <main style={{ boxSizing: 'border-box', minHeight: '85vh' }}>
         
         {/* SUBTAB: HOME PAGE */}
         {activeTab === 'home' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '40px' }} className="animate-fade-in">
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
             
-            {/* Stunning Cover Hero Block */}
+            {/* Immersive 100vh Luxury Cover Hero Block */}
             <div style={{
-              position: 'relative', height: '400px', borderRadius: '24px',
-              backgroundImage: "linear-gradient(rgba(13, 13, 13, 0.4), rgba(46, 13, 61, 0.9)), url('/cover.jpg')",
+              position: 'relative', height: '92vh',
+              backgroundImage: "linear-gradient(rgba(13, 13, 13, 0.25), rgba(13, 13, 13, 0.95)), url('/cover.jpg')",
               backgroundSize: 'cover', backgroundPosition: 'center', display: 'flex',
-              flexDirection: 'column', justifyContent: 'flex-end', padding: '48px', boxSizing: 'border-box',
-              border: '1px solid rgba(107, 44, 145, 0.3)', boxShadow: 'var(--shadow-premium)'
+              backgroundAttachment: 'fixed',
+              flexDirection: 'column', justifyContent: 'center', alignItems: 'center', 
+              textAlign: 'center', padding: '0 20px', boxSizing: 'border-box'
             }}>
-              <span className="psych-badge" style={{ position: 'absolute', top: '24px', right: '24px', fontSize: '0.85rem' }}>
-                🔥 Urgent: Only 3 Booking Openings Left for Pretoria East Today!
+              <span className="psych-badge" style={{ 
+                position: 'absolute', top: '150px', fontSize: '0.78rem', 
+                border: '1px solid rgba(212,175,55,0.4)', backgroundColor: 'rgba(46,13,61,0.4)', color: '#D4AF37'
+              }}>
+                🔥 Concierge Alert: Only 3 Treatment Slots Remain for Today!
               </span>
-              <h1 className="font-serif" style={{ fontSize: '3rem', margin: 0, fontWeight: 400, color: 'white', lineHeight: '1.2' }}>
-                Three treatments. One appointment.
+              
+              <h1 className="luxury-hero-title" style={{ fontSize: 'clamp(2.4rem, 6.5vw, 5.5rem)', margin: '0 0 15px 0' }}>
+                Three Treatments.<br />One Appointment.
               </h1>
-              <p style={{ color: '#F5EFE6', margin: '12px 0 0 0', fontSize: '1rem', maxWidth: '600px', lineHeight: '1.5' }}>
-                Sculpt & Glow combines targeted infrared-assisted cardio, manual lymphatic rolls, cold fat crystallization, and corrective cosmetic facials to sculpt your curves stronger, lighter, and confident.
+              
+              <p className="font-luxury-serif" style={{ color: '#F5EFE6', fontStyle: 'italic', fontSize: 'clamp(1.1rem, 2vw, 1.6rem)', letterSpacing: '2.5px', margin: 0 }}>
+                All at the same time. Experience the wellness ecosystem.
               </p>
-              <div style={{ marginTop: '20px', display: 'flex', gap: '12px' }}>
-                <button className="btn-brand-gold" onClick={() => setActiveTab('services')}>Book A Treatment <ArrowRight style={{ width: '18px', height: '18px' }} /></button>
-                <button className="btn-brand-purple" onClick={() => setActiveTab('about')}>Map Ecosystem</button>
+              
+              <div style={{ marginTop: '45px' }}>
+                <button className="btn-luxury-gold" onClick={() => setActiveTab('services')}>
+                  Reserve My Transformation <ArrowRight style={{ width: '16px', height: '16px' }} />
+                </button>
               </div>
             </div>
 
-            {/* Specials slide banner ad carousel */}
-            <div>
-              <h3 style={{ fontFamily: 'Outfit', fontSize: '1.25rem', color: '#D4AF37', margin: '0 0 12px 0', display: 'flex', alignItems: 'center', gap: '8px' }}><Sparkles style={{ color: '#D4AF37' }} /> Ecosystem Highlights & Specials</h3>
-              <div style={{
-                position: 'relative', height: '180px', borderRadius: '16px',
-                backgroundImage: `linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.8)), url(${specialSlideshowIdx === 0 ? '/ad1.jpg' : '/ad2.jpg'})`,
-                backgroundSize: 'cover', backgroundPosition: 'center', transition: 'all 0.5s ease',
-                display: 'flex', alignItems: 'center', padding: '32px', border: '1px solid rgba(107, 44, 145, 0.2)'
-              }}>
-                <div>
-                  <span className="badge-brand gold" style={{ marginBottom: '8px' }}>Active Promo</span>
-                  <strong style={{ fontSize: '1.35rem', display: 'block', color: 'white', fontFamily: 'Outfit' }}>
-                    {specialSlideshowIdx === 0 ? 'Vacutherm Infrared Treadmill' : 'Manual Lymphatic Roller Massage'}
-                  </strong>
-                  <span style={{ fontSize: '0.88rem', color: '#BFA6D8', display: 'block', marginTop: '4px', maxWidth: '600px', lineHeight: '1.4' }}>
-                    {specialSlideshowIdx === 0 ? 'Harness vacuum-seal and thermal heat waves to accelerate metabolic sweat levels.' : 'Soothe muscles, sweep water retention, and roll away localized fatigue.'}
-                  </span>
+            {/* Continuous Ad Slider Horizontal Carousel Marquee */}
+            <div className="marquee-container">
+              <div className="marquee-track">
+                {/* Visual Billboard Slides */}
+                <div className="marquee-slide">
+                  <img src="https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?auto=format&fit=crop&q=80&w=400" alt="facial" />
+                  <div className="marquee-overlay">SIGNATURE 24K GOLD FACIALS</div>
+                </div>
+                <div className="marquee-slide">
+                  <img src="https://images.unsplash.com/photo-1512290923902-8a9f81dc236c?auto=format&fit=crop&q=80&w=400" alt="3in1" />
+                  <div className="marquee-overlay">THE 3-IN-1 NAILS & HAIR</div>
+                </div>
+                <div className="marquee-slide">
+                  <img src="https://images.unsplash.com/photo-1616394584738-fc6e612e71b9?auto=format&fit=crop&q=80&w=400" alt="contouring" />
+                  <div className="marquee-overlay">CAVITATION BODY SCULPTING</div>
+                </div>
+                <div className="marquee-slide">
+                  <img src="https://images.unsplash.com/photo-1519823551278-64ac92734fb1?auto=format&fit=crop&q=80&w=400" alt="lymphatic" />
+                  <div className="marquee-overlay">LYMPHATIC DRAINAGE MASSAGE</div>
+                </div>
+                <div className="marquee-slide">
+                  <img src="https://images.unsplash.com/photo-1515377905703-c4788e51af15?auto=format&fit=crop&q=80&w=400" alt="detox" />
+                  <div className="marquee-overlay">DETOX & RECOVERY CELLULITE</div>
+                </div>
+                <div className="marquee-slide">
+                  <img src="https://images.unsplash.com/photo-1600334129128-685c5582fd35?auto=format&fit=crop&q=80&w=400" alt="cryo" />
+                  <div className="marquee-overlay">CRYO 360 FAT FREEZING</div>
+                </div>
+
+                {/* Duplicated track for endless loop scroll */}
+                <div className="marquee-slide">
+                  <img src="https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?auto=format&fit=crop&q=80&w=400" alt="facial" />
+                  <div className="marquee-overlay">SIGNATURE 24K GOLD FACIALS</div>
+                </div>
+                <div className="marquee-slide">
+                  <img src="https://images.unsplash.com/photo-1512290923902-8a9f81dc236c?auto=format&fit=crop&q=80&w=400" alt="3in1" />
+                  <div className="marquee-overlay">THE 3-IN-1 NAILS & HAIR</div>
+                </div>
+                <div className="marquee-slide">
+                  <img src="https://images.unsplash.com/photo-1616394584738-fc6e612e71b9?auto=format&fit=crop&q=80&w=400" alt="contouring" />
+                  <div className="marquee-overlay">CAVITATION BODY SCULPTING</div>
+                </div>
+                <div className="marquee-slide">
+                  <img src="https://images.unsplash.com/photo-1519823551278-64ac92734fb1?auto=format&fit=crop&q=80&w=400" alt="lymphatic" />
+                  <div className="marquee-overlay">LYMPHATIC DRAINAGE MASSAGE</div>
                 </div>
               </div>
             </div>
 
-            {/* Psychological conversion boosters grids */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
+            {/* Premium Gold Feature Cards */}
+            <div style={{ padding: '100px 8%', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '30px', background: '#090909' }}>
               
-              <div style={{ backgroundColor: '#1A1A1A', border: '1px solid rgba(107, 44, 145, 0.3)', padding: '24px', borderRadius: '16px' }}>
-                <h4 style={{ fontFamily: 'Outfit', color: '#D4AF37', margin: '0 0 8px 0', fontSize: '1.05rem' }}>Glow Points Reward Club</h4>
-                <p style={{ fontSize: '0.85rem', color: '#A89684', lineHeight: '1.5' }}>
-                  Every R100 spent automatically awards Glow Points. Redeem points to claim complimentary rollers, cryo angel sculpts or R500 credit vouchers!
+              <div className="luxury-card" style={{ padding: '36px' }}>
+                <div style={{ width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #D4AF37', borderRadius: '50%', marginBottom: '24px', color: '#D4AF37' }}>
+                  <Star style={{ width: '18px', height: '18px' }} />
+                </div>
+                <h3 className="font-luxury-serif" style={{ fontSize: '1.25rem', color: '#D4AF37', margin: '0 0 12px 0' }}>Bespoke Wellness Ecosystem</h3>
+                <p style={{ fontSize: '0.85rem', color: '#A89684', lineHeight: '1.7', margin: 0 }}>
+                  More than a beauty salon, Sculpt & Glow is a premium health sanctuary. Our methods combine advanced biological tissue drainage rolls with state-of-the-art infrared vacuum heat.
                 </p>
               </div>
 
-              <div style={{ backgroundColor: '#1A1A1A', border: '1px solid rgba(107, 44, 145, 0.3)', padding: '24px', borderRadius: '16px' }}>
-                <h4 style={{ fontFamily: 'Outfit', color: '#D4AF37', margin: '0 0 8px 0', fontSize: '1.05rem' }}>Korean Glass Skin Correctives</h4>
-                <p style={{ fontSize: '0.85rem', color: '#A89684', lineHeight: '1.5' }}>
-                  Advanced skin mapping consultations and corrective peptide matrix peels direct from Seoul. Formulated to restore cellular glassglow.
+              <div className="luxury-card" style={{ padding: '36px' }}>
+                <div style={{ width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #D4AF37', borderRadius: '50%', marginBottom: '24px', color: '#D4AF37' }}>
+                  <CreditCard style={{ width: '18px', height: '18px' }} />
+                </div>
+                <h3 className="font-luxury-serif" style={{ fontSize: '1.25rem', color: '#D4AF37', margin: '0 0 12px 0' }}>Loyalty Glow Point Club</h3>
+                <p style={{ fontSize: '0.85rem', color: '#A89684', lineHeight: '1.7', margin: 0 }}>
+                  Earn loyalty Glow points automatically for every R100 spent. Track balances live via your branded smartphone companion app and unlock VIP rewards.
                 </p>
               </div>
 
-              <div style={{ backgroundColor: '#1A1A1A', border: '1px solid rgba(107, 44, 145, 0.3)', padding: '24px', borderRadius: '16px' }}>
-                <h4 style={{ fontFamily: 'Outfit', color: '#D4AF37', margin: '0 0 8px 0', fontSize: '1.05rem' }}>Fat Freezing 360 Cryo</h4>
-                <p style={{ fontSize: '0.85rem', color: '#A89684', lineHeight: '1.5' }}>
-                  Targeted non-invasive localized thermal cooling to crystallize and eliminate fat bulge layers comfortably and safely.
+              <div className="luxury-card" style={{ padding: '36px' }}>
+                <div style={{ width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #D4AF37', borderRadius: '50%', marginBottom: '24px', color: '#D4AF37' }}>
+                  <Shield style={{ width: '18px', height: '18px' }} />
+                </div>
+                <h3 className="font-luxury-serif" style={{ fontSize: '1.25rem', color: '#D4AF37', margin: '0 0 12px 0' }}>Clinical Grade Artistry</h3>
+                <p style={{ fontSize: '0.85rem', color: '#A89684', lineHeight: '1.7', margin: 0 }}>
+                  Every formula is dermatologically approved. We source corrective peptide-matrix solutions directly from leading laboratories in Seoul, Korea, for high-impact glass skin.
                 </p>
               </div>
 
@@ -388,32 +638,33 @@ export default function ClientWebsite() {
 
         {/* SUBTAB: SERVICES MENU */}
         {activeTab === 'services' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }} className="animate-fade-in">
-            <div>
-              <h2 style={{ fontFamily: 'Outfit', fontSize: '2rem', color: 'white', margin: 0 }}>Ecosystem Clinical Menu</h2>
-              <p style={{ color: '#BFA6D8', margin: '4px 0 0 0', fontSize: '0.9rem' }}>Choose your specialized body shaping or wellness treatment below and secure your slot instantly.</p>
+          <div style={{ padding: '160px 8% 80px 8%', display: 'flex', flexDirection: 'column', gap: '48px' }}>
+            <div style={{ textAlign: 'center' }}>
+              <span style={{ fontSize: '0.72rem', letterSpacing: '3px', textTransform: 'uppercase', color: '#D4AF37', fontWeight: 600 }}>bespoke offerings</span>
+              <h2 className="font-luxury-serif" style={{ fontSize: '2.5rem', color: 'white', margin: '8px 0 0 0' }}>Ecosystem Clinical Menu</h2>
+              <div style={{ width: '60px', height: '1px', backgroundColor: '#D4AF37', margin: '18px auto 0 auto' }}></div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '30px' }}>
               {services.map(srv => (
-                <div key={srv.id} style={{ display: 'flex', flexDirection: 'column', justify: 'space-between', padding: '24px', backgroundColor: '#1A1A1A', borderRadius: '16px', border: '1px solid rgba(107, 44, 145, 0.3)', gap: '16px' }}>
+                <div key={srv.id} className="luxury-card" style={{ padding: '36px', display: 'flex', flexDirection: 'column', justify: 'space-between', gap: '20px' }}>
                   <div>
                     <div style={{ display: 'flex', justify: 'space-between', alignItems: 'flex-start' }}>
-                      <span className="badge-brand purple" style={{ fontSize: '0.62rem' }}>{srv.category}</span>
-                      <strong style={{ color: '#D4AF37', fontSize: '1.25rem', fontFamily: 'Outfit' }}>R {srv.price.toFixed(2)}</strong>
+                      <span className="badge-brand purple" style={{ fontSize: '0.6rem' }}>{srv.category}</span>
+                      <strong className="font-luxury-serif" style={{ color: '#D4AF37', fontSize: '1.25rem' }}>R {srv.price.toFixed(2)}</strong>
                     </div>
-                    <h3 style={{ fontFamily: 'Outfit', color: 'white', margin: '10px 0 6px 0', fontSize: '1.15rem' }}>{srv.name}</h3>
-                    <p style={{ fontSize: '0.82rem', color: '#F5EFE6', lineHeight: '1.4', margin: 0 }}>{srv.description}</p>
+                    <h3 className="font-luxury-serif" style={{ color: 'white', margin: '14px 0 8px 0', fontSize: '1.2rem', letterSpacing: '2px' }}>{srv.name}</h3>
+                    <p style={{ fontSize: '0.82rem', color: '#A89684', lineHeight: '1.5', margin: 0 }}>{srv.description}</p>
                   </div>
 
-                  <div style={{ borderTop: '1px solid rgba(107, 44, 145, 0.15)', paddingTop: '12px', display: 'flex', justify: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '0.78rem', color: '#A89684' }}>⌛ Duration: {srv.duration} mins</span>
+                  <div style={{ borderTop: '1px solid rgba(107, 44, 145, 0.15)', paddingTop: '18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.78rem', color: '#A89684', fontWeight: 500 }}>⌛ Session: {srv.duration} Mins</span>
                     <button
                       onClick={() => handleWebsiteBookService(srv)}
-                      className="btn-brand-gold"
-                      style={{ padding: '8px 16px', fontSize: '0.78rem' }}
+                      className="btn-luxury-gold"
+                      style={{ padding: '10px 20px', fontSize: '0.68rem', letterSpacing: '1px' }}
                     >
-                      Book Appointment
+                      Book Session
                     </button>
                   </div>
                 </div>
@@ -424,35 +675,43 @@ export default function ClientWebsite() {
 
         {/* SUBTAB: PRODUCTS PHARMACY */}
         {activeTab === 'products' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }} className="animate-fade-in">
-            <div>
-              <h2 style={{ fontFamily: 'Outfit', fontSize: '2rem', color: 'white', margin: 0 }}>Retail Wellness Pharmacy</h2>
-              <p style={{ color: '#BFA6D8', margin: '4px 0 0 0', fontSize: '0.9rem' }}>Seoul glass skin formulas and advanced fat burner proteins synced in real-time.</p>
+          <div style={{ padding: '160px 8% 80px 8%', display: 'flex', flexDirection: 'column', gap: '48px' }}>
+            <div style={{ textAlign: 'center' }}>
+              <span style={{ fontSize: '0.72rem', letterSpacing: '3px', textTransform: 'uppercase', color: '#D4AF37', fontWeight: 600 }}>atelier shop</span>
+              <h2 className="font-luxury-serif" style={{ fontSize: '2.5rem', color: 'white', margin: '8px 0 0 0' }}>Boutique Collections</h2>
+              <div style={{ width: '60px', height: '1px', backgroundColor: '#D4AF37', margin: '18px auto 0 auto' }}></div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '24px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '30px' }}>
               {products.map(prod => (
-                <div key={prod.id} style={{ backgroundColor: '#1A1A1A', borderRadius: '16px', border: '1px solid rgba(107, 44, 145, 0.3)', overflow: 'hidden', display: 'flex', flexDirection: 'column', justify: 'space-between' }}>
-                  <img src={prod.image} style={{ width: '100%', height: '150px', objectFit: 'cover' }} alt={prod.name} />
-                  <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    <strong style={{ fontSize: '0.92rem', color: 'white', display: 'block' }}>{prod.name}</strong>
-                    <span style={{ fontSize: '0.72rem', color: '#BFA6D8' }}>{prod.category}</span>
-                    <p style={{ fontSize: '0.75rem', color: '#A89684', margin: 0, lineHeight: '1.4' }}>{prod.description}</p>
+                <div key={prod.id} className="luxury-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                  <div style={{ overflow: 'hidden', height: '220px', position: 'relative' }}>
+                    <img src={prod.image} style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'all 0.6s' }} className="prod-img" alt={prod.name} />
+                    <div style={{ position: 'absolute', top: '16px', right: '16px' }}>
+                      <span className={`badge-brand ${prod.stock <= 0 ? 'cancelled' : 'gold'}`} style={{ fontSize: '0.58rem' }}>
+                        {prod.stock <= 0 ? 'Sold Out' : `Only ${prod.stock} Left`}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <div>
+                      <span style={{ fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '1px', color: '#BFA6D8' }}>{prod.category}</span>
+                      <h3 className="font-luxury-serif" style={{ fontSize: '1rem', color: 'white', margin: '6px 0 0 0', letterSpacing: '1.5px' }}>{prod.name}</h3>
+                    </div>
+                    <p style={{ fontSize: '0.78rem', color: '#A89684', margin: 0, lineHeight: '1.4' }}>{prod.description}</p>
                     
                     <div style={{ display: 'flex', justify: 'space-between', alignItems: 'center', marginTop: '6px' }}>
-                      <strong style={{ color: '#D4AF37', fontSize: '1.1rem' }}>R {prod.price}</strong>
-                      <span className={`badge-brand ${prod.stock <= 0 ? 'cancelled' : 'gold'}`} style={{ fontSize: '0.55rem' }}>
-                        {prod.stock <= 0 ? 'Sold Out' : `Stock: ${prod.stock}`}
-                      </span>
+                      <strong className="font-luxury-serif" style={{ color: '#D4AF37', fontSize: '1.2rem' }}>R {prod.price.toFixed(2)}</strong>
                     </div>
 
                     <button
                       onClick={() => handleAddProductToCart(prod)}
                       disabled={prod.stock <= 0}
-                      className="btn-brand-gold"
-                      style={{ width: '100%', padding: '10px', fontSize: '0.8rem', justifyContent: 'center', marginTop: '8px' }}
+                      className="btn-luxury-gold"
+                      style={{ width: '100%', justifyContent: 'center', marginTop: '10px' }}
                     >
-                      Add to Cart
+                      Purchase Now
                     </button>
                   </div>
                 </div>
@@ -461,144 +720,201 @@ export default function ClientWebsite() {
           </div>
         )}
 
-        {/* SUBTAB: ABOUT US */}
+        {/* SUBTAB: Philosophy */}
         {activeTab === 'about' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', maxWidth: '800px' }} className="animate-fade-in">
-            <h2 style={{ fontFamily: 'Outfit', fontSize: '2rem', color: 'white', margin: 0 }}>Ecosystem & Philosophy</h2>
+          <div style={{ padding: '160px 8% 80px 8%', display: 'flex', flexDirection: 'column', gap: '32px', maxWidth: '800px', margin: '0 auto' }}>
+            <span style={{ fontSize: '0.72rem', letterSpacing: '3px', textTransform: 'uppercase', color: '#D4AF37', fontWeight: 600 }}>studio history</span>
+            <h2 className="font-luxury-serif" style={{ fontSize: '2.5rem', color: 'white', margin: 0 }}>Ecosystem & Philosophy</h2>
             
             <blockquote style={{
-              borderLeft: '4px solid #D4AF37', paddingLeft: '16px', fontStyle: 'italic',
-              fontSize: '1.1rem', color: '#BFA6D8', margin: 0, lineHeight: '1.5'
+              borderLeft: '2px solid #D4AF37', paddingLeft: '24px', fontStyle: 'italic',
+              fontSize: '1.25rem', color: '#BFA6D8', margin: '20px 0', lineHeight: '1.6',
+              fontFamily: "'Cormorant Garamond', serif"
             }}>
               "Sculpt & Glow is a dedicated body shaping and wellness studio combining infrared-assisted cardio, lymphatic rollers, body contouring, and advanced skin wellness treatments designed to help women feel stronger, lighter, sculpted, and confident in their bodies."
             </blockquote>
 
-            <p style={{ fontSize: '0.92rem', lineHeight: '1.6', color: '#F5EFE6' }}>
+            <p style={{ fontSize: '0.9rem', lineHeight: '1.8', color: '#F5EFE6' }}>
               We believe in a holistic, biological approach to wellness. We don't just sell standard salon services—we map advanced vacuum treadmills, targeted cold-lipolysis fat freezing, and custom corrective peptide peeling direct from Seoul, Korea, to generate real physiological tissue results. Settle your booking online and claim your Gold loyalty progression!
             </p>
           </div>
         )}
 
-        {/* SUBTAB: CONTACT DETAILS */}
+        {/* SUBTAB: CONTACT DETAILS (CONCIERGE) */}
         {activeTab === 'contact' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px' }} className="animate-fade-in">
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              <h2 style={{ fontFamily: 'Outfit', fontSize: '2rem', color: 'white', margin: 0 }}>Pretoria East Studio</h2>
+          <div style={{ padding: '160px 8% 80px 8%', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '50px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
+              <div>
+                <span style={{ fontSize: '0.72rem', letterSpacing: '3px', textTransform: 'uppercase', color: '#D4AF37', fontWeight: 600 }}>concierge bureau</span>
+                <h2 className="font-luxury-serif" style={{ fontSize: '2.5rem', color: 'white', margin: '6px 0 0 0' }}>Pretoria East</h2>
+              </div>
               
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '0.9rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <MapPin style={{ color: '#D4AF37', width: '20px', height: '20px' }} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '18px', fontSize: '0.85rem', lineHeight: '1.6' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px' }}>
+                  <MapPin style={{ color: '#D4AF37', width: '20px', height: '20px', flexShrink: 0, marginTop: '2px' }} />
                   <span>Shop 5, Glenwood Galleria, Garstfontein Rd, Pretoria East</span>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <Phone style={{ color: '#D4AF37', width: '20px', height: '20px' }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                  <Phone style={{ color: '#D4AF37', width: '20px', height: '20px', flexShrink: 0 }} />
                   <span>+27 (12) 998-2020</span>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
-                <a href="https://www.facebook.com/share/1CZEEXWAqv/" target="_blank" rel="noopener noreferrer" className="btn-brand-purple" style={{ textDecoration: 'none', fontSize: '0.8rem' }}>Facebook</a>
-                <a href="https://www.tiktok.com/@sculptglow.pta" target="_blank" rel="noopener noreferrer" className="btn-brand-purple" style={{ textDecoration: 'none', fontSize: '0.8rem' }}>TikTok</a>
-                <a href="https://www.instagram.com/sculptglow.pta" target="_blank" rel="noopener noreferrer" className="btn-brand-purple" style={{ textDecoration: 'none', fontSize: '0.8rem' }}>Instagram</a>
+              <div style={{ display: 'flex', gap: '14px' }}>
+                <a href="https://www.facebook.com/share/1CZEEXWAqv/" target="_blank" rel="noopener noreferrer" className="btn-luxury-purple" style={{ textDecoration: 'none', padding: '10px 20px', fontSize: '0.62rem' }}>Facebook</a>
+                <a href="https://www.tiktok.com/@sculptglow.pta" target="_blank" rel="noopener noreferrer" className="btn-luxury-purple" style={{ textDecoration: 'none', padding: '10px 20px', fontSize: '0.62rem' }}>TikTok</a>
+                <a href="https://www.instagram.com/sculptglow.pta" target="_blank" rel="noopener noreferrer" className="btn-luxury-purple" style={{ textDecoration: 'none', padding: '10px 20px', fontSize: '0.62rem' }}>Instagram</a>
               </div>
 
               <button
                 onClick={() => window.open('https://wa.me/27129982020', '_blank')}
-                className="btn-brand-gold"
-                style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: '8px' }}
+                className="btn-luxury-gold"
+                style={{ alignSelf: 'flex-start' }}
               >
-                <MessageSquare style={{ width: '18px', height: '18px' }} /> Chat on WhatsApp
+                <MessageSquare style={{ width: '16px', height: '16px' }} /> Chat on WhatsApp
               </button>
             </div>
 
-            <div className="card-premium">
-              <h3 style={{ fontFamily: 'Outfit', color: 'white', marginBottom: '16px', fontSize: '1.1rem' }}>Settle a Query</h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <input type="text" placeholder="Full Name" className="brand-input" />
-                <input type="email" placeholder="Email Address" className="brand-input" />
-                <textarea placeholder="Write message..." className="brand-input" rows={3} />
-                <button onClick={() => alert('Query captured successfully!')} className="btn-brand-gold" style={{ alignSelf: 'flex-start' }}>Send Inquiry</button>
+            <div className="luxury-card" style={{ padding: '40px' }}>
+              <h3 className="font-luxury-serif" style={{ color: 'white', marginBottom: '24px', fontSize: '1.25rem', letterSpacing: '2px' }}>Concierge Desk Inquiry</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <input type="text" placeholder="Full Name" className="luxury-input" />
+                <input type="email" placeholder="Email Address" className="luxury-input" />
+                <textarea placeholder="Tell us about your wellness goals..." className="luxury-input" rows={3} />
+                <button onClick={() => alert('Query captured successfully!')} className="btn-luxury-gold" style={{ width: '100%', justifyContent: 'center' }}>Submit Query</button>
               </div>
             </div>
           </div>
         )}
 
-        {/* SUBTAB: DOWNLOAD MOBILE APP */}
+        {/* SUBTAB: DOWNLOAD MOBILE APP (Radial purple and gold visual showcase) */}
         {activeTab === 'app' && (
-          <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '20px', alignItems: 'center' }} className="animate-fade-in">
-            <h2 style={{ fontFamily: 'Outfit', fontSize: '2rem', color: 'white', margin: 0 }}>Get Branded Sculpt App</h2>
-            <p style={{ color: '#BFA6D8', maxWidth: '500px', margin: 0, fontSize: '0.92rem', lineHeight: '1.5' }}>
-              Download our mobile application to claim your custom loyalty vouchers, track weekly measurements, and settle invoice deposits.
-            </p>
-            <img src="/logo.jpg" style={{ width: '120px', height: '120px', borderRadius: '50%', border: '2px solid #D4AF37', boxShadow: 'var(--shadow-premium)' }} alt="Sculpt app" />
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-              <button onClick={() => alert('iOS download mock fired!')} className="btn-brand-gold" style={{ fontSize: '0.85rem' }}><Download style={{ width: '16px', height: '16px' }} /> Apple App Store</button>
-              <button onClick={() => alert('Android APK download mock fired!')} className="btn-brand-purple" style={{ fontSize: '0.85rem' }}><Download style={{ width: '16px', height: '16px' }} /> Google Play Store</button>
+          <div style={{ 
+            padding: '160px 8% 80px 8%', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', 
+            gap: '60px', alignItems: 'center', background: 'linear-gradient(to top, #0D0D0D, #1A0A24)' 
+          }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
+              <div>
+                <span style={{ fontSize: '0.72rem', letterSpacing: '3px', textTransform: 'uppercase', color: '#D4AF37', fontWeight: 600 }}>concierge on demand</span>
+                <h2 className="font-luxury-serif" style={{ fontSize: '2.5rem', color: 'white', margin: '6px 0 0 0' }}>Luxury At Your Fingertips</h2>
+              </div>
+              
+              <p style={{ color: '#A89684', fontSize: '0.9rem', lineHeight: '1.7', margin: 0 }}>
+                The Sculpt & Glow Client App acts as your private digital gateway. Specially developed for our members to ensure complete schedule convenience and loyalty progression.
+              </p>
+
+              <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '14px', fontSize: '0.85rem' }}>
+                <li style={{ display: 'flex', alignItems: 'center', gap: '12px' }}><Sparkles style={{ color: '#D4AF37', width: '16px', height: '16px' }} /> TRACK LOYALTY POINTS & REDEEM REWARDS</li>
+                <li style={{ display: 'flex', alignItems: 'center', gap: '12px' }}><Sparkles style={{ color: '#D4AF37', width: '16px', height: '16px' }} /> ORDER RETAIL PRODUCTS TO PRETORIA EAST</li>
+                <li style={{ display: 'flex', alignItems: 'center', gap: '12px' }}><Sparkles style={{ color: '#D4AF37', width: '16px', height: '16px' }} /> INSTANT BOOKING, RESCHEDULING & CANCELS</li>
+                <li style={{ display: 'flex', alignItems: 'center', gap: '12px' }}><Sparkles style={{ color: '#D4AF37', width: '16px', height: '16px' }} /> LOG MEASUREMENTS & SCALE GOALS LIVE</li>
+              </ul>
+
+              <div style={{ display: 'flex', gap: '14px' }}>
+                <button onClick={() => alert('iOS download fired!')} className="btn-luxury-gold"><Download style={{ width: '14px', height: '14px' }} /> App Store</button>
+                <button onClick={() => alert('Android APK download fired!')} className="btn-luxury-purple"><Download style={{ width: '14px', height: '14px' }} /> Google Play</button>
+              </div>
+            </div>
+
+            <div style={{ textAlign: 'center' }}>
+              <img 
+                src="/logo.jpg" 
+                style={{ 
+                  width: '260px', height: '260px', borderRadius: '50%', 
+                  border: '3px solid #D4AF37', filter: 'drop-shadow(0 0 25px rgba(107, 44, 145, 0.7))',
+                  animation: 'glitterFly 3s infinite alternate ease-in-out'
+                }} 
+                alt="Sculpt app logo" 
+              />
             </div>
           </div>
         )}
 
         {/* SUBTAB: SHOPPING BAG CART */}
         {activeTab === 'cart' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }} className="animate-fade-in">
-            <h2 style={{ fontFamily: 'Outfit', fontSize: '2rem', color: 'white', margin: 0 }}>Shopping Bag Checkout</h2>
+          <div style={{ padding: '160px 8% 80px 8%', display: 'flex', flexDirection: 'column', gap: '32px', maxWidth: '650px', margin: '0 auto' }}>
+            <div style={{ textAlign: 'center' }}>
+              <span style={{ fontSize: '0.72rem', letterSpacing: '3px', textTransform: 'uppercase', color: '#D4AF37', fontWeight: 600 }}>secured checkout</span>
+              <h2 className="font-luxury-serif" style={{ fontSize: '2.2rem', color: 'white', margin: '6px 0 0 0' }}>Shopping Bag</h2>
+              <div style={{ width: '40px', height: '1px', backgroundColor: '#D4AF37', margin: '14px auto 0 auto' }}></div>
+            </div>
 
             {checkoutStep === 'cart' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                 {cart.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: '36px', border: '1px dashed rgba(107, 44, 145, 0.3)', borderRadius: '16px', color: '#A89684' }}>Your cart bag is currently empty.</div>
+                  <div className="luxury-card" style={{ padding: '40px', textAlign: 'center', color: '#A89684', borderStyle: 'dashed' }}>
+                    Your shopping bag is currently empty. Visit our boutique to start your transformation.
+                  </div>
                 ) : (
                   <>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                       {cart.map(c => (
-                        <div key={c.id} style={{ display: 'flex', justify: 'space-between', padding: '16px', backgroundColor: '#1A1A1A', borderRadius: '12px', border: '1px solid rgba(107, 44, 145, 0.2)' }}>
+                        <div key={c.id} className="luxury-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px' }}>
                           <div>
-                            <strong style={{ color: 'white' }}>{c.name}</strong>
-                            {c.bookingDetails && <span style={{ display: 'block', fontSize: '0.72rem', color: '#BFA6D8', marginTop: '4px' }}>Date: {c.bookingDetails.date} @ {c.bookingDetails.time}</span>}
+                            <strong style={{ color: 'white', fontSize: '0.95rem' }}>{c.name}</strong>
+                            {c.bookingDetails && (
+                              <span style={{ display: 'block', fontSize: '0.75rem', color: '#BFA6D8', marginTop: '4px' }}>
+                                Date: {c.bookingDetails.date} @ {c.bookingDetails.time}
+                              </span>
+                            )}
                           </div>
-                          <strong>R {c.price.toFixed(2)}</strong>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+                            <strong className="font-luxury-serif" style={{ color: '#D4AF37' }}>R {c.price.toFixed(2)}</strong>
+                            <button 
+                              onClick={() => handleRemoveCartItem(c.id)}
+                              style={{ background: 'none', border: 'none', color: '#e11d48', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600 }}
+                            >
+                              Remove
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>
 
-                    <div className="psych-badge" style={{ alignSelf: 'center', width: '100%', justifyContent: 'center' }}>
-                      ⚠️ Cart Scarcity Alert: Booking slots are selling out! Settle invoice checkout inside 3 minutes to secure free VIP Glow points upgrades.
+                    <div className="psych-badge" style={{ width: '100%', justifyContent: 'center', boxSizing: 'border-box' }}>
+                      ⚠️ Scarcity Lock: Slot secured for 3 minutes! Settle checkout now to retain Gold multi-point tokens.
                     </div>
 
-                    <div style={{ display: 'flex', justify: 'space-between', borderTop: '1px solid rgba(107, 44, 145, 0.2)', paddingTop: '16px' }}>
-                      <span>Subtotal:</span>
-                      <strong style={{ fontSize: '1.25rem', color: '#D4AF37' }}>R {cart.reduce((acc, c) => acc + c.price, 0).toFixed(2)}</strong>
+                    <div style={{ display: 'flex', justify: 'space-between', borderTop: '1px solid rgba(212, 175, 55, 0.15)', paddingTop: '20px', fontSize: '1.1rem' }}>
+                      <span>Subtotal Sum:</span>
+                      <strong className="font-luxury-serif" style={{ color: '#D4AF37', fontSize: '1.35rem' }}>
+                        R {cart.reduce((acc, c) => acc + c.price, 0).toFixed(2)}
+                      </strong>
                     </div>
 
-                    <button onClick={() => setCheckoutStep('billing')} className="btn-brand-gold" style={{ width: '100%', justifyContent: 'center' }}>Settle Checkout Info</button>
+                    <button onClick={() => setCheckoutStep('billing')} className="btn-luxury-gold" style={{ width: '100%', justifyContent: 'center' }}>
+                      Confirm Checkout Particulars
+                    </button>
                   </>
                 )}
               </div>
             )}
 
             {checkoutStep === 'billing' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '500px', margin: '0 auto' }}>
-                <h3 style={{ fontFamily: 'Outfit', color: 'white' }}>Checkout Particulars</h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  <input type="text" placeholder="Full Name" className="brand-input" value={billingDetails.name} onChange={(e) => setBillingDetails(prev => ({ ...prev, name: e.target.value }))} />
-                  <input type="text" placeholder="Contact Phone" className="brand-input" value={billingDetails.phone} onChange={(e) => setBillingDetails(prev => ({ ...prev, phone: e.target.value }))} />
-                  <input type="email" placeholder="Email Address" className="brand-input" value={billingDetails.email} onChange={(e) => setBillingDetails(prev => ({ ...prev, email: e.target.value }))} />
-                  <input type="text" placeholder="Shipping Address (for retail products)" className="brand-input" value={billingDetails.shipping} onChange={(e) => setBillingDetails(prev => ({ ...prev, shipping: e.target.value }))} />
+              <div className="luxury-card" style={{ padding: '40px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                <h3 className="font-luxury-serif" style={{ color: 'white', fontSize: '1.25rem', letterSpacing: '2px', margin: 0 }}>Billing & Shipping Particulars</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  <input type="text" placeholder="Full Name" className="luxury-input" value={billingDetails.name} onChange={(e) => setBillingDetails(prev => ({ ...prev, name: e.target.value }))} />
+                  <input type="text" placeholder="Contact Phone" className="luxury-input" value={billingDetails.phone} onChange={(e) => setBillingDetails(prev => ({ ...prev, phone: e.target.value }))} />
+                  <input type="email" placeholder="Email Address" className="luxury-input" value={billingDetails.email} onChange={(e) => setBillingDetails(prev => ({ ...prev, email: e.target.value }))} />
+                  <input type="text" placeholder="Shipping Address (for retail items)" className="luxury-input" value={billingDetails.shipping} onChange={(e) => setBillingDetails(prev => ({ ...prev, shipping: e.target.value }))} />
                 </div>
-                <button onClick={handleCartCheckoutSubmit} className="btn-brand-gold" style={{ width: '100%', justifyContent: 'center', marginTop: '10px' }}>🚀 Confirm Payment & Settle Slot</button>
+                <button onClick={handleCartCheckoutSubmit} className="btn-luxury-purple" style={{ width: '100%', justifyContent: 'center', marginTop: '10px' }}>
+                  🚀 Authorize Payment & Settle Slot
+                </button>
               </div>
             )}
 
             {checkoutStep === 'success' && (
-              <div style={{ textAlign: 'center', padding: '40px', display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'center' }}>
-                <div style={{ width: '60px', height: '60px', borderRadius: '50%', backgroundColor: 'rgba(52, 211, 153, 0.1)', color: '#34d399', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <CheckCircle style={{ width: '36px', height: '36px' }} />
+              <div className="luxury-card" style={{ padding: '50px', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '20px', alignItems: 'center' }}>
+                <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: 'rgba(52, 211, 153, 0.1)', color: '#34d399', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #34d399' }}>
+                  <CheckCircle style={{ width: '28px', height: '28px' }} />
                 </div>
-                <h2 style={{ color: '#D4AF37', fontFamily: 'Outfit' }}>Checkout Victory Completed!</h2>
-                <p style={{ fontSize: '0.9rem', color: '#A89684', maxWidth: '500px', lineHeight: '1.5' }}>
-                  Thank you! Your transaction settled successfully. Your **Glow Points** rewards balance is updated. Check your smartphone client app to track your measurements!
+                <h2 className="font-luxury-serif" style={{ color: '#D4AF37', fontSize: '1.75rem', letterSpacing: '2px', margin: 0 }}>Transaction Approved</h2>
+                <p style={{ fontSize: '0.85rem', color: '#A89684', lineHeight: '1.6', margin: 0 }}>
+                   Belles-lettres receipt sent! Your slots are registered on our reception calendar. Points have been successfully credited to your companion app.
                 </p>
-                <button onClick={() => setActiveTab('home')} className="btn-brand-purple">Return Home</button>
+                <button onClick={() => setActiveTab('home')} className="btn-luxury-purple">Return to Atelier</button>
               </div>
             )}
 
@@ -607,60 +923,66 @@ export default function ClientWebsite() {
 
       </main>
 
-      {/* MODAL: WEBSITE BOOKING SLOTS CALENDAR DIALOGUE */}
+      {/* LUXURY RESERVATION BOOKING MODAL */}
       {showWebsiteBookingModal && websiteSelectedService && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100000 }}>
-          <div className="card-premium animate-fade-in" style={{ width: '400px' }}>
-            <h3 style={{ fontFamily: 'Outfit', color: '#D4AF37', marginBottom: '16px' }}>Select Booking Date & Time</h3>
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.9)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100000 }}>
+          <div className="luxury-card animate-fade-in" style={{ width: '420px', padding: '40px', border: '1px solid #D4AF37' }}>
+            <div style={{ display: 'flex', justify: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+              <span className="font-luxury-serif" style={{ fontSize: '0.78rem', color: '#D4AF37', letterSpacing: '2px' }}>reservation card</span>
+              <button onClick={() => setShowWebsiteBookingModal(false)} style={{ background: 'none', border: 'none', color: '#A89684', cursor: 'pointer' }}>
+                <X style={{ width: '20px', height: '20px' }} />
+              </button>
+            </div>
             
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div>
-                <strong style={{ fontSize: '0.9rem', color: 'white' }}>{websiteSelectedService.name}</strong>
-                <span style={{ display: 'block', fontSize: '0.78rem', color: '#D4AF37', marginTop: '2px' }}>Fee: R {websiteSelectedService.price}</span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+              <div style={{ borderBottom: '1px solid rgba(212,175,55,0.15)', paddingBottom: '16px' }}>
+                <h4 className="font-luxury-serif" style={{ fontSize: '1.15rem', color: 'white', margin: '0 0 6px 0', letterSpacing: '1px' }}>{websiteSelectedService.name}</h4>
+                <strong className="font-luxury-serif" style={{ color: '#D4AF37', fontSize: '1.1rem' }}>R {websiteSelectedService.price.toFixed(2)}</strong>
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Select Date:</label>
+                <label style={{ display: 'block', fontSize: '0.72rem', letterSpacing: '1.5px', textTransform: 'uppercase', color: '#A89684', marginBottom: '8px' }}>Select Date:</label>
                 <input
                   type="date"
-                  className="brand-input"
+                  className="luxury-input"
                   value={websiteBookingDate}
                   onChange={(e) => setWebsiteBookingDate(e.target.value)}
+                  style={{ width: '100%' }}
                 />
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Select Available Slot:</label>
+                <label style={{ display: 'block', fontSize: '0.72rem', letterSpacing: '1.5px', textTransform: 'uppercase', color: '#A89684', marginBottom: '8px' }}>Select Time Slot:</label>
                 <select
-                  className="brand-input"
+                  className="luxury-input"
                   value={websiteBookingTime}
                   onChange={(e) => setWebsiteBookingTime(e.target.value)}
+                  style={{ width: '100%' }}
                 >
-                  <option value="09:00">09:00 AM</option>
+                  <option value="09:00">09:00 AM (Early Glow)</option>
                   <option value="10:30">10:30 AM</option>
-                  <option value="12:00">12:00 PM</option>
+                  <option value="12:00">12:00 PM (Midday Rest)</option>
                   <option value="13:30">13:30 PM</option>
                   <option value="15:00">15:00 PM</option>
-                  <option value="16:30">16:30 PM</option>
+                  <option value="16:30">16:30 PM (Sunset Roll)</option>
                 </select>
               </div>
 
-              <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
+              <div style={{ display: 'flex', gap: '14px', marginTop: '16px' }}>
                 <button
                   onClick={handleConfirmWebsiteBooking}
-                  className="btn-brand-gold"
+                  className="btn-luxury-gold"
                   style={{ width: '100%', justifyContent: 'center' }}
                 >
-                  Add to Cart
+                  Secure Slot
                 </button>
-                <button onClick={() => setShowWebsiteBookingModal(false)} className="btn-brand-purple" style={{ width: '100%', justifyContent: 'center' }}>Cancel</button>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* RENDER EXPLOSION CONFETTI PARTICLES */}
+      {/* RENDER CONFETTI CHASSIS */}
       {glitters.map(gp => (
         <div
           key={gp.id}
@@ -678,6 +1000,52 @@ export default function ClientWebsite() {
           }}
         />
       ))}
+
+      {/* BESPOKE LUXURY FOOTER */}
+      <footer style={{
+        padding: '80px 8%',
+        backgroundColor: '#050505',
+        borderTop: '1px solid rgba(107, 44, 145, 0.25)',
+        display: 'flex',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: '40px'
+      }}>
+        <div style={{ flex: '1.8', minWidth: '280px' }}>
+          <div style={{
+            width: '80px',
+            height: '80px',
+            borderRadius: '50%',
+            backgroundImage: "url('/logo.jpg')",
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            border: '2px solid #D4AF37',
+            marginBottom: '24px'
+          }} />
+          <p style={{ fontSize: '0.8rem', color: '#A89684', lineHeight: '1.7', maxWidth: '350px' }}>
+            A sanctuary of bespoke body shaping, advanced skin mapping, and modern recovery science. Experience cellular transformation in Pretoria East.
+          </p>
+        </div>
+
+        <div style={{ flex: '1', minWidth: '200px' }}>
+          <h4 className="font-luxury-serif" style={{ color: '#D4AF37', fontSize: '0.9rem', marginBottom: '20px', letterSpacing: '2px' }}>The Atelier</h4>
+          <p style={{ fontSize: '0.78rem', color: '#A89684', lineHeight: '2' }}>
+            Shop 5, Glenwood Galleria<br />
+            Pretoria East, ZA<br />
+            Mon - Fri: 08:00 - 18:00<br />
+            Sat - Sun: 09:00 - 14:00
+          </p>
+        </div>
+
+        <div style={{ flex: '1', minWidth: '200px' }}>
+          <h4 className="font-luxury-serif" style={{ color: '#D4AF37', fontSize: '0.9rem', marginBottom: '20px', letterSpacing: '2px' }}>Concierge</h4>
+          <p style={{ fontSize: '0.78rem', color: '#A89684', lineHeight: '2' }}>
+            T: +27 (12) 998-2020<br />
+            E: info@sculptglow.co.za<br />
+            WhatsApp: +27 (12) 998-2020
+          </p>
+        </div>
+      </footer>
 
     </div>
   );
