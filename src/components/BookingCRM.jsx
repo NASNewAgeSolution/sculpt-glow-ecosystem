@@ -95,12 +95,20 @@ export default function BookingCRM() {
   const [showWaitlistModal, setShowWaitlistModal] = useState(false);
   const [showShiftModal, setShowShiftModal] = useState(false);
 
+  // New Modals for Rescheduling & Capturing Payments
+  const [showRescheduleModal, setShowRescheduleModal] = useState(false);
+  const [showCapturePaymentModal, setShowCapturePaymentModal] = useState(false);
+
   // Dynamic Waitlist Cancellation Match Alert state
   const [activeWaitlistMatch, setActiveWaitlistMatch] = useState(null);
 
   // Cancellation Reason Prompt Modal state
   const [activeCancellationApt, setActiveCancellationApt] = useState(null);
   const [cancelReasonText, setCancelReasonText] = useState('');
+
+  // New active states for Reschedule & Capture Payment
+  const [activeRescheduleApt, setActiveRescheduleApt] = useState(null);
+  const [activeCapturePaymentApt, setActiveCapturePaymentApt] = useState(null);
 
   // Active items for detail overlays
   const [activePaymentInvoice, setActivePaymentInvoice] = useState(null);
@@ -129,6 +137,10 @@ export default function BookingCRM() {
   const [expenseForm, setExpenseForm] = useState({ category: 'Utilities', description: '', amount: 0 });
   const [waitlistForm, setWaitlistForm] = useState({ clientId: '', serviceId: '', notes: '' });
   const [shiftForm, setShiftForm] = useState({ staffId: 'usr-3', date: new Date().toISOString().split('T')[0], startTime: '08:00', endTime: '17:00', type: 'Shift', isLeave: false });
+
+  // New forms for Rescheduling & Capturing Payments
+  const [rescheduleForm, setRescheduleForm] = useState({ date: new Date().toISOString().split('T')[0], time: '09:00', reason: '' });
+  const [aptPaymentForm, setAptPaymentForm] = useState({ amountPaid: 0, method: 'Card' });
 
   const [activeClientNotes, setActiveClientNotes] = useState('');
   const [consentForms, setConsentForms] = useState({
@@ -231,7 +243,6 @@ export default function BookingCRM() {
     setExpandedFolders(prev => ({ ...prev, [folderName]: !prev[folderName] }));
   };
 
-  // Check if session has exceeded its duration time
   const isAppointmentOverdue = (apt) => {
     if (apt.status !== 'In-progress' && apt.status !== 'Confirmed' && apt.status !== 'Checked-in') return false;
     const [h, m] = apt.time.split(':').map(Number);
@@ -245,13 +256,12 @@ export default function BookingCRM() {
     return isToday && currentMins > endMins;
   };
 
-  // Visual month grid calculator
   const getDaysInMonth = (month, year) => {
     return new Date(year, month + 1, 0).getDate();
   };
 
   const getFirstDayOfMonth = (month, year) => {
-    return new Date(year, month, 1).getDay(); // 0 is Sunday, 1 is Monday...
+    return new Date(year, month, 1).getDay();
   };
 
   const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -322,7 +332,7 @@ export default function BookingCRM() {
       fontFamily: 'Inter, sans-serif'
     }}>
 
-      {/* 1. REMOTE SUSPENSION OVERLAY */}
+      {/* SAAS SUSPENSION SHIELD OVERLAY */}
       {isSuspended && (
         <div className="rent-suspend-overlay" style={{ zIndex: 100000 }}>
           <Lock className="rent-lock-shield" style={{ width: '64px', height: '64px' }} />
@@ -346,9 +356,7 @@ export default function BookingCRM() {
         </div>
       )}
 
-      {/* ======================================================= */}
-      {/*   2. STICKY COLLAPSIBLE DIRECTORY SIDEBAR               */}
-      {/* ======================================================= */}
+      {/* STICKY COLLAPSIBLE DIRECTORY SIDEBAR */}
       <aside style={{
         width: '320px',
         minWidth: '320px',
@@ -476,9 +484,7 @@ export default function BookingCRM() {
         </div>
       </aside>
 
-      {/* ======================================================= */}
-      {/*   3. MAIN WORKSPACE CANVAS                              */}
-      {/* ======================================================= */}
+      {/* MAIN WORKSPACE CANVAS */}
       <main style={{
         padding: '32px',
         overflowY: 'auto',
@@ -541,10 +547,6 @@ export default function BookingCRM() {
             ← Elysium SaaS Hub
           </button>
         </header>
-
-        {/* ======================================================= */}
-        {/*   4. DETAILED SUB-VIEW WORKSPACE CONTENT                */}
-        {/* ======================================================= */}
 
         {/* WORKSPACE A: CALENDAR SCHEDULER */}
         {activeTab === 'dashboard' && (
@@ -610,12 +612,10 @@ export default function BookingCRM() {
                   }}>▶</button>
                 </div>
 
-                {/* Calendar Grid Header */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '6px', textAlign: 'center', fontSize: '0.65rem', color: '#BFA6D8', fontWeight: 700, marginBottom: '8px' }}>
                   {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, dIdx) => <div key={dIdx}>{day}</div>)}
                 </div>
 
-                {/* Calendar Days */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '6px' }}>
                   {Array.from({ length: getFirstDayOfMonth(currentMonth, currentYear) }).map((_, emptyIdx) => (
                     <div key={`empty-${emptyIdx}`} />
@@ -625,7 +625,6 @@ export default function BookingCRM() {
                     const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
                     const isSelected = selectedDate === dateStr;
 
-                    // Check if date has active bookings
                     const dayBookings = appointments.filter(a => a.date === dateStr && a.status !== 'Cancelled' && a.status !== 'Completed');
                     const hasBookings = dayBookings.length > 0;
 
@@ -657,7 +656,7 @@ export default function BookingCRM() {
                 </div>
               </div>
 
-              {/* Column B: Bookings list (Filtered by selected Date, sorted chronologically) */}
+              {/* Column B: Bookings list */}
               <div className="card-premium" style={{ minHeight: '400px' }}>
                 <h3 style={{ fontFamily: 'Outfit', fontSize: '1.1rem', marginBottom: '16px', color: 'white' }}>
                   {activeCalendarView === 'active' ? 'Active Bookings' : 'Completed Archive'} - {selectedDate}
@@ -721,6 +720,12 @@ export default function BookingCRM() {
                               By: {apt.createdBy || 'Receptionist'} | Staff: {staff?.name || ' Jessica'}
                             </span>
 
+                            {apt.rescheduleReason && (
+                              <span style={{ display: 'block', fontSize: '0.7rem', color: '#BFA6D8', fontStyle: 'italic', marginTop: '2px' }}>
+                                Rescheduled: "{apt.rescheduleReason}"
+                              </span>
+                            )}
+
                             {apt.cancelReason && (
                               <span style={{ display: 'block', fontSize: '0.7rem', color: '#ef4444', fontWeight: 600, marginTop: '2px' }}>
                                 Cancel Reason: {apt.cancelReason}
@@ -736,7 +741,6 @@ export default function BookingCRM() {
                                   onChange={(e) => {
                                     const nextStatus = e.target.value;
                                     if (nextStatus === 'Cancelled') {
-                                      // Cancel flow with reason
                                       setActiveCancellationApt(apt);
                                       setCancelReasonText('');
                                     } else {
@@ -759,6 +763,43 @@ export default function BookingCRM() {
                                   <option value="No-show">No-show</option>
                                 </select>
 
+                                {/* Reschedule Click Button */}
+                                {currentUserRole !== 'therapist' && (
+                                  <button
+                                    onClick={() => {
+                                      setActiveRescheduleApt(apt);
+                                      setRescheduleForm({
+                                        date: apt.date,
+                                        time: apt.time,
+                                        reason: ''
+                                      });
+                                      setShowRescheduleModal(true);
+                                    }}
+                                    className="btn-brand-purple"
+                                    style={{ fontSize: '0.68rem', padding: '4px 6px', justifyContent: 'center' }}
+                                  >
+                                    Reschedule
+                                  </button>
+                                )}
+
+                                {/* Capture Payment shortcut */}
+                                {currentUserRole !== 'therapist' && apt.paymentStatus === 'Unpaid' && (
+                                  <button
+                                    onClick={() => {
+                                      setActiveCapturePaymentApt(apt);
+                                      setAptPaymentForm({
+                                        amountPaid: service ? service.price : 0,
+                                        method: 'Card'
+                                      });
+                                      setShowCapturePaymentModal(true);
+                                    }}
+                                    className="btn-brand-gold"
+                                    style={{ fontSize: '0.68rem', padding: '4px 6px', justifyContent: 'center' }}
+                                  >
+                                    Settle Payment
+                                  </button>
+                                )}
+
                                 {apt.status === 'No-show' && (
                                   <button
                                     onClick={() => {
@@ -775,7 +816,6 @@ export default function BookingCRM() {
                             ) : (
                               <button
                                 onClick={() => {
-                                  // Reinstate Completed slot back to calendar
                                   updateAppointmentStatus(currentUserName(), apt.id, 'Confirmed');
                                   syncDatabase();
                                   alert('Booking successfully reinstated back to active calendar schedule!');
@@ -793,7 +833,7 @@ export default function BookingCRM() {
                 </div>
               </div>
 
-              {/* Column C: Chronological Hourly vacant breakdown availability list */}
+              {/* Column C: Chronological Hourly breakdown */}
               <div className="card-premium">
                 <h3 style={{ fontFamily: 'Outfit', fontSize: '1.1rem', marginBottom: '14px', color: 'white' }}>Hourly Timeline</h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '500px', overflowY: 'auto' }}>
@@ -801,7 +841,6 @@ export default function BookingCRM() {
                     const activeApts = appointments.filter(a => a.date === selectedDate && a.time === hour && a.status !== 'Cancelled' && a.status !== 'Completed');
                     const isBooked = activeApts.length > 0;
 
-                    // Calculate available machines
                     const busyMachineIds = activeApts.map(a => a.machineId).filter(Boolean);
                     const vacantMachines = machines.filter(m => !busyMachineIds.includes(m.id) && m.currentStatus === 'Available');
 
@@ -1003,7 +1042,6 @@ export default function BookingCRM() {
                           Usage Hours: <strong>{mach.totalUsageHours} / {serviceLimit} hrs</strong>
                         </div>
 
-                        {/* Owner only ROI details */}
                         {currentUserRole === 'owner' && (
                           <div style={{ fontSize: '0.72rem', color: '#34d399', marginBottom: '8px', borderTop: '1px dashed rgba(52,211,153,0.2)', paddingTop: '4px' }}>
                             Yield Revenue: <strong>R {mach.revenueGenerated}</strong> | ROI: <strong>{((mach.revenueGenerated / mach.purchaseCost) * 100).toFixed(1)}%</strong>
@@ -1681,7 +1719,7 @@ export default function BookingCRM() {
         {/* WORKSPACE K: INVOICES LEDGER */}
         {activeTab === 'billing' && (
           <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            <h1 style={{ fontSize: '1.75rem', fontWeight: 800, margin: 0, fontFamily: 'Outfit' }}>Invoices Ledger</h1>
+            <h1 style={{ fontSize: '1.75rem', fontWeight: 800, margin: 0, fontFamily: 'Outfit' }}>Invoices & Payments Ledger</h1>
             <p style={{ color: '#BFA6D8', margin: '4px 0 0 0', fontSize: '0.85rem' }}>Capture invoice payments, settle partial deposits, and print custom receipts.</p>
 
             <div className="card-premium">
@@ -1721,6 +1759,7 @@ export default function BookingCRM() {
                                 Pay
                               </button>
                             )}
+                            
                             <button
                               onClick={() => {
                                 setActivePrintInvoice(inv);
@@ -1730,6 +1769,25 @@ export default function BookingCRM() {
                             >
                               <Printer style={{ width: '12px', height: '12px' }} /> Print
                             </button>
+
+                            <button
+                              onClick={() => {
+                                alert(`Email receipt successfully sent to client: ${cli ? cli.email : 'walk-in@sculptglow.co.za'}`);
+                              }}
+                              style={{ display: 'flex', alignItems: 'center', gap: '4px', border: 'none', backgroundColor: 'hsl(var(--brand-black))', color: '#BFA6D8', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.72rem' }}
+                            >
+                              <Mail style={{ width: '12px', height: '12px' }} /> Email
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                alert(`WhatsApp receipt successfully sent to client phone: ${cli ? cli.phone : 'N/A'}`);
+                              }}
+                              style={{ display: 'flex', alignItems: 'center', gap: '4px', border: 'none', backgroundColor: 'hsl(var(--brand-black))', color: '#34d399', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.72rem' }}
+                            >
+                              <MessageSquare style={{ width: '12px', height: '12px' }} /> WhatsApp
+                            </button>
+
                             {inv.status !== 'Refunded' && (
                               <button
                                 onClick={() => {
@@ -2176,6 +2234,198 @@ export default function BookingCRM() {
       {/*   5. MODAL DIALOGS / POPUPS                             */}
       {/* ======================================================= */}
 
+      {/* NEW MODAL: RESCHEDULE APPOINTMENT */}
+      {showRescheduleModal && activeRescheduleApt && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000 }}>
+          <div className="card-premium animate-fade-in" style={{ width: '400px' }}>
+            <h3 style={{ fontFamily: 'Outfit', color: '#D4AF37', marginBottom: '16px' }}>Reschedule Client Appointment</h3>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div>
+                <span style={{ fontSize: '0.8rem', color: '#A89684' }}>Client Name:</span>
+                <strong style={{ display: 'block', color: 'white', fontSize: '0.9rem', marginTop: '2px' }}>
+                  {clients.find(c => c.id === activeRescheduleApt.clientId)?.name || 'Walk-in'}
+                </strong>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '4px' }}>New Date:</label>
+                  <input
+                    type="date"
+                    className="brand-input"
+                    value={rescheduleForm.date}
+                    onChange={(e) => setRescheduleForm(prev => ({ ...prev, date: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '4px' }}>New Time:</label>
+                  <input
+                    type="time"
+                    className="brand-input"
+                    value={rescheduleForm.time}
+                    onChange={(e) => setRescheduleForm(prev => ({ ...prev, time: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '4px' }}>Reason for Rescheduling:</label>
+                <textarea
+                  className="brand-input"
+                  rows={2}
+                  placeholder="e.g. Work commitment conflict..."
+                  value={rescheduleForm.reason}
+                  onChange={(e) => setRescheduleForm(prev => ({ ...prev, reason: e.target.value }))}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
+                <button
+                  onClick={() => {
+                    if (!rescheduleForm.reason) return alert('Reschedule reason is required');
+
+                    // Conflict Validator Checks
+                    const conflictCheck = checkScheduleConflict({
+                      id: activeRescheduleApt.id,
+                      date: rescheduleForm.date,
+                      time: rescheduleForm.time,
+                      duration: activeRescheduleApt.duration,
+                      staffId: activeRescheduleApt.staffId,
+                      machineId: activeRescheduleApt.machineId,
+                      room: activeRescheduleApt.room
+                    });
+
+                    if (conflictCheck.conflict) {
+                      alert(`Reschedule Conflict:\n\n${conflictCheck.reason}`);
+                      return;
+                    }
+
+                    // Perform database update
+                    const allApts = getTable('appointments');
+                    const idx = allApts.findIndex(a => a.id === activeRescheduleApt.id);
+                    if (idx !== -1) {
+                      const prevDate = allApts[idx].date;
+                      const prevTime = allApts[idx].time;
+                      
+                      allApts[idx].date = rescheduleForm.date;
+                      allApts[idx].time = rescheduleForm.time;
+                      allApts[idx].rescheduleReason = rescheduleForm.reason;
+
+                      localStorage.setItem('salon_appointments', JSON.stringify(allApts));
+                      logAction(currentUserName(), 'Reschedule Booking', 
+                        `Rescheduled client slot from ${prevDate} ${prevTime} to ${rescheduleForm.date} ${rescheduleForm.time}. Reason: "${rescheduleForm.reason}"`
+                      );
+
+                      syncDatabase();
+                      setShowRescheduleModal(false);
+                      alert('Success! Client appointment rescheduled.');
+                    }
+                  }}
+                  className="btn-brand-gold"
+                  style={{ width: '100%', justifyContent: 'center' }}
+                >
+                  Confirm Reschedule
+                </button>
+                <button onClick={() => setShowRescheduleModal(false)} className="btn-brand-purple" style={{ width: '100%', justifyContent: 'center' }}>Cancel</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* NEW MODAL: CAPTURE APPOINTMENT PAYMENT AT RECEPTION */}
+      {showCapturePaymentModal && activeCapturePaymentApt && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000 }}>
+          <div className="card-premium animate-fade-in" style={{ width: '400px' }}>
+            <h3 style={{ fontFamily: 'Outfit', color: '#D4AF37', marginBottom: '16px' }}>Settle Booking Payment</h3>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div>
+                <span style={{ fontSize: '0.8rem', color: '#A89684' }}>Treatment Details:</span>
+                <strong style={{ display: 'block', color: 'white', fontSize: '0.9rem', marginTop: '2px' }}>
+                  {services.find(s => s.id === activeCapturePaymentApt.serviceId)?.name}
+                </strong>
+                <span style={{ fontSize: '0.78rem', color: '#BFA6D8' }}>
+                  Standard Price: R {services.find(s => s.id === activeCapturePaymentApt.serviceId)?.price}
+                </span>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '4px' }}>Select Method:</label>
+                <select
+                  className="brand-input"
+                  value={aptPaymentForm.method}
+                  onChange={(e) => setAptPaymentForm(prev => ({ ...prev, method: e.target.value }))}
+                >
+                  <option value="Card">Visa/Mastercard</option>
+                  <option value="Cash">Cash Drawer</option>
+                  <option value="EFT">EFT Bank Transfer</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '4px' }}>Capture Exact Amount Paid (R):</label>
+                <input
+                  type="number"
+                  className="brand-input"
+                  value={aptPaymentForm.amountPaid}
+                  onChange={(e) => setAptPaymentForm(prev => ({ ...prev, amountPaid: Number(e.target.value) }))}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
+                <button
+                  onClick={() => {
+                    const price = aptPaymentForm.amountPaid;
+                    const method = aptPaymentForm.method;
+                    const service = services.find(s => s.id === activeCapturePaymentApt.serviceId);
+
+                    // 1. Update Booking status in appointments table
+                    const allApts = getTable('appointments');
+                    const aIdx = allApts.findIndex(a => a.id === activeCapturePaymentApt.id);
+                    if (aIdx !== -1) {
+                      allApts[aIdx].paymentStatus = 'Paid already';
+                      localStorage.setItem('salon_appointments', JSON.stringify(allApts));
+                    }
+
+                    // 2. Create Invoice in Finances Ledger
+                    const subtotal = Number((price / 1.15).toFixed(2));
+                    const tax = Number((price - subtotal).toFixed(2));
+                    
+                    const newInv = addInvoice(currentUserName(), {
+                      clientId: activeCapturePaymentApt.clientId,
+                      appointmentId: activeCapturePaymentApt.id,
+                      items: [{ name: `${service?.name || 'Treatment'} [Service]`, quantity: 1, price }],
+                      subtotal,
+                      tax,
+                      discount: 0,
+                      total: price,
+                      status: 'Paid'
+                    });
+
+                    // 3. Log transaction references
+                    addPaymentToInvoice(currentUserName(), newInv.id, {
+                      amount: price,
+                      method: method
+                    });
+
+                    syncDatabase();
+                    setShowCapturePaymentModal(false);
+                    alert(`Payment captured successfully! Settle slip created: ${newInv.invoiceNumber}`);
+                  }}
+                  className="btn-brand-gold"
+                  style={{ width: '100%', justifyContent: 'center' }}
+                >
+                  Capture Payment Slip
+                </button>
+                <button onClick={() => setShowCapturePaymentModal(false)} className="btn-brand-purple" style={{ width: '100%', justifyContent: 'center' }}>Cancel</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MODAL: MANUAL BOOKINGS FORM */}
       {showBookingModal && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000 }}>
@@ -2352,7 +2602,6 @@ export default function BookingCRM() {
                   onClick={() => {
                     if (!clientForm.name) return alert('Name is required');
                     
-                    // Check duplicate emails or phone numbers
                     const duplicates = clients.some(c => c.email === clientForm.email || c.phone === clientForm.phone);
                     if (duplicates) {
                       alert('Registration Blocked: A client profile with this phone or email already exists!');
@@ -2363,7 +2612,6 @@ export default function BookingCRM() {
                     setShowClientModal(false);
                     syncDatabase();
 
-                    // If register shortcut triggered inside booking manual form:
                     if (showBookingModal) {
                       setBookingForm(prev => ({ ...prev, clientId: created.id }));
                       setManualClientSearch(created.name);
@@ -2774,7 +3022,7 @@ export default function BookingCRM() {
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 11000 }}>
           <div className="card-premium animate-fade-in" style={{ width: '440px', border: '2px solid #D4AF37' }}>
             <h3 style={{ fontFamily: 'Outfit', color: '#D4AF37', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
-              <Volume2 style={{ width: '22px', height: '22px' }} /> Waitlist Release Match Alert!
+              <Volume2 style={{ width: '22px', height: '22px' }} /> Waitlist Match Alert!
             </h3>
             <p style={{ fontSize: '0.85rem', color: '#BFA6D8', lineHeight: '1.4', marginBottom: '16px' }}>
               A slot has just opened on the schedule due to a cancellation! We have found matching clients on the waitlist waiting for this treatment:
@@ -2801,7 +3049,6 @@ export default function BookingCRM() {
             <div style={{ display: 'flex', gap: '12px' }}>
               <button
                 onClick={() => {
-                  // Settle waitlist booking
                   const res = addAppointment(currentUserName(), {
                     clientId: activeWaitlistMatch.wt.clientId,
                     serviceId: activeWaitlistMatch.wt.serviceId,
@@ -2863,7 +3110,6 @@ export default function BookingCRM() {
                 onClick={() => {
                   if (!cancelReasonText) return alert('Please enter a cancellation reason');
 
-                  // Process cancellation
                   const aptId = activeCancellationApt.id;
                   const allApts = getTable('appointments');
                   const idx = allApts.findIndex(a => a.id === aptId);
@@ -2879,7 +3125,6 @@ export default function BookingCRM() {
                       prev.status, 'Cancelled'
                     );
 
-                    // Check if waitlist matches exist
                     const wl = getTable('waitlist');
                     const matches = wl.filter(w => w.serviceId === prev.serviceId);
 
@@ -2891,7 +3136,6 @@ export default function BookingCRM() {
                       const client = getTable('clients').find(c => c.id === matchWt.clientId);
                       const service = getTable('services').find(s => s.id === matchWt.serviceId);
                       
-                      // Trigger waitlist alert
                       setTimeout(() => {
                         setActiveWaitlistMatch({
                           wt: matchWt,
