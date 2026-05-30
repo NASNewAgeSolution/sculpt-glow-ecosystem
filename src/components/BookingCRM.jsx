@@ -43,6 +43,7 @@ export default function BookingCRM() {
   const [isSuspended, setIsSuspended] = useState(false);
   const [currentUserRole, setCurrentUserRole] = useState('owner'); // owner, receptionist, therapist
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeCalendarView, setActiveCalendarView] = useState('active'); // active, completed
 
   // Shared database tables
   const [clients, setClients] = useState([]);
@@ -58,6 +59,17 @@ export default function BookingCRM() {
   const [auditLogs, setAuditLogs] = useState([]);
   const [settings, setSettings] = useState({});
   const [shifts, setShifts] = useState([]);
+
+  // Dynamic Rooms State configuration
+  const [rooms, setRooms] = useState(() => {
+    const data = localStorage.getItem('salon_rooms');
+    return data ? JSON.parse(data) : ['Treatment Room 1', 'Treatment Room 2', 'Atelier Face Room'];
+  });
+
+  // Calendar click filter state
+  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
+  const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
 
   // Sidebar Accordion Folding State
   const [expandedFolders, setExpandedFolders] = useState({
@@ -79,27 +91,33 @@ export default function BookingCRM() {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [showExpenseModal, setShowExpenseModal] = useState(false);
-  const [showRefundModal, setShowRefundModal] = useState(false);
   const [showQuoteModal, setShowQuoteModal] = useState(false);
   const [showWaitlistModal, setShowWaitlistModal] = useState(false);
   const [showShiftModal, setShowShiftModal] = useState(false);
 
+  // Dynamic Waitlist Cancellation Match Alert state
+  const [activeWaitlistMatch, setActiveWaitlistMatch] = useState(null);
+
+  // Cancellation Reason Prompt Modal state
+  const [activeCancellationApt, setActiveCancellationApt] = useState(null);
+  const [cancelReasonText, setCancelReasonText] = useState('');
+
   // Active items for detail overlays
   const [activePaymentInvoice, setActivePaymentInvoice] = useState(null);
   const [activePrintInvoice, setActivePrintInvoice] = useState(null);
-  const [activeRefundInvoice, setActiveRefundInvoice] = useState(null);
   const [selectedClient, setSelectedClient] = useState(null);
 
   // Dynamic filter lists
   const [clientSearch, setClientSearch] = useState('');
-  const [invoiceSearch, setInvoiceSearch] = useState('');
   const [auditSearch, setAuditSearch] = useState('');
 
   // Form states
   const [bookingForm, setBookingForm] = useState({
-    clientId: '', serviceId: '', staffId: 'usr-3', room: 'Treatment Room 1',
-    machineId: '', date: new Date().toISOString().split('T')[0], time: '09:00', duration: 30, notes: ''
+    clientId: '', serviceId: '', staffId: 'usr-3', room: '',
+    machineId: '', date: new Date().toISOString().split('T')[0], time: '09:00', duration: 30, notes: '',
+    paymentStatus: 'Unpaid' // Unpaid, Paid already, Loyalty Promo
   });
+  const [manualClientSearch, setManualClientSearch] = useState('');
   const [clientForm, setClientForm] = useState({
     name: '', email: '', phone: '', dob: '1995-01-01', gender: 'Female',
     allergies: '', medical: '', preferredStaff: 'Jessica Laser', notes: ''
@@ -109,10 +127,8 @@ export default function BookingCRM() {
   });
   const [paymentForm, setPaymentForm] = useState({ amount: 0, method: 'Card' });
   const [expenseForm, setExpenseForm] = useState({ category: 'Utilities', description: '', amount: 0 });
-  const [refundForm, setRefundForm] = useState({ reason: '' });
   const [waitlistForm, setWaitlistForm] = useState({ clientId: '', serviceId: '', notes: '' });
   const [shiftForm, setShiftForm] = useState({ staffId: 'usr-3', date: new Date().toISOString().split('T')[0], startTime: '08:00', endTime: '17:00', type: 'Shift', isLeave: false });
-  const [campaignForm, setCampaignForm] = useState({ type: 'WhatsApp', message: 'Winter Glow Special! Get 20% off Cryo Fat Freezing this weekend. Book now!' });
 
   const [activeClientNotes, setActiveClientNotes] = useState('');
   const [consentForms, setConsentForms] = useState({
@@ -128,10 +144,6 @@ export default function BookingCRM() {
   const [quoteItems, setQuoteItems] = useState([{ name: '', quantity: 1, price: 0 }]);
   const [quoteDiscount, setQuoteDiscount] = useState(0);
   const [quoteClient, setQuoteClient] = useState('');
-
-  // Bulk WhatsApp Blaster simulation states
-  const [blastingActive, setBlastingActive] = useState(false);
-  const [blastingProgress, setBlastingProgress] = useState(0);
 
   const syncDatabase = () => {
     // Check SaaS rent lock status
@@ -163,6 +175,16 @@ export default function BookingCRM() {
       setBookingForm(prev => ({ ...prev, serviceId: activeServices[0].id, duration: activeServices[0].duration }));
       setWaitlistForm(prev => ({ ...prev, serviceId: activeServices[0].id }));
     }
+    const activeRooms = localStorage.getItem('salon_rooms');
+    if (activeRooms) {
+      const parsedRooms = JSON.parse(activeRooms);
+      setRooms(parsedRooms);
+      if (parsedRooms.length > 0 && !bookingForm.room) {
+        setBookingForm(prev => ({ ...prev, room: parsedRooms[0] }));
+      }
+    } else {
+      localStorage.setItem('salon_rooms', JSON.stringify(rooms));
+    }
   };
 
   useEffect(() => {
@@ -182,7 +204,7 @@ export default function BookingCRM() {
   // Restrict access depending on simulated role boundaries
   useEffect(() => {
     const safeTabsByRole = {
-      owner: ['dashboard', 'waitlist', 'rooms', 'crm', 'loyalty', 'gallery', 'billing', 'quotes', 'expenses', 'payments', 'services', 'products', 'inventory', 'therapist', 'commissions', 'settings', 'audit', 'campaigns'],
+      owner: ['dashboard', 'waitlist', 'rooms', 'crm', 'loyalty', 'gallery', 'billing', 'quotes', 'expenses', 'payments', 'services', 'products', 'inventory', 'therapist', 'commissions', 'settings', 'audit'],
       receptionist: ['dashboard', 'waitlist', 'rooms', 'crm', 'loyalty', 'gallery', 'billing', 'quotes', 'payments', 'services', 'products', 'inventory', 'therapist', 'commissions'],
       therapist: ['dashboard', 'crm', 'gallery', 'therapist', 'commissions']
     };
@@ -209,7 +231,32 @@ export default function BookingCRM() {
     setExpandedFolders(prev => ({ ...prev, [folderName]: !prev[folderName] }));
   };
 
-  // Directory Folders configurations mapped with permissions and labels
+  // Check if session has exceeded its duration time
+  const isAppointmentOverdue = (apt) => {
+    if (apt.status !== 'In-progress' && apt.status !== 'Confirmed' && apt.status !== 'Checked-in') return false;
+    const [h, m] = apt.time.split(':').map(Number);
+    const startMins = h * 60 + m;
+    const endMins = startMins + Number(apt.duration);
+    
+    const now = new Date();
+    const currentMins = now.getHours() * 60 + now.getMinutes();
+    const isToday = apt.date === now.toISOString().split('T')[0];
+    
+    return isToday && currentMins > endMins;
+  };
+
+  // Visual month grid calculator
+  const getDaysInMonth = (month, year) => {
+    return new Date(year, month + 1, 0).getDate();
+  };
+
+  const getFirstDayOfMonth = (month, year) => {
+    return new Date(year, month, 1).getDay(); // 0 is Sunday, 1 is Monday...
+  };
+
+  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+  // Sidebar Navigation Config
   const sidebarNavigation = {
     core: {
       label: 'Operations & Booking',
@@ -261,8 +308,7 @@ export default function BookingCRM() {
       icon: Settings,
       items: [
         { id: 'settings', label: 'Salon Settings', roles: ['owner'] },
-        { id: 'audit', label: 'Security Audits', roles: ['owner'] },
-        { id: 'campaigns', label: 'Notification Campaigns', roles: ['owner'] }
+        { id: 'audit', label: 'Security Audits', roles: ['owner'] }
       ]
     }
   };
@@ -276,7 +322,7 @@ export default function BookingCRM() {
       fontFamily: 'Inter, sans-serif'
     }}>
 
-      {/* 1. REMOTE SUSPENSION SHIELD OVERLAY */}
+      {/* 1. REMOTE SUSPENSION OVERLAY */}
       {isSuspended && (
         <div className="rent-suspend-overlay" style={{ zIndex: 100000 }}>
           <Lock className="rent-lock-shield" style={{ width: '64px', height: '64px' }} />
@@ -340,7 +386,7 @@ export default function BookingCRM() {
               className="brand-input"
               style={{ paddingLeft: '32px', fontSize: '0.78rem', height: '32px' }}
               value={sidebarSearch}
-              onChange={(e) => setsidebarSearch(e.target.value)}
+              onChange={(e) => setSidebarSearch(e.target.value)}
             />
           </div>
 
@@ -350,14 +396,12 @@ export default function BookingCRM() {
               const folder = sidebarNavigation[folderKey];
               const FolderIcon = folder.icon;
 
-              // Filter sub-items by role and search query
               const filteredItems = folder.items.filter(item => {
                 const matchesRole = item.roles.includes(currentUserRole);
                 const matchesSearch = item.label.toLowerCase().includes(sidebarSearch.toLowerCase());
                 return matchesRole && matchesSearch;
               });
 
-              // Hide folder if it contains no relevant items for this role/search
               if (filteredItems.length === 0) return null;
 
               const isExpanded = expandedFolders[folderKey] || sidebarSearch.length > 0;
@@ -507,8 +551,8 @@ export default function BookingCRM() {
           <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             <div style={{ display: 'flex', justify: 'space-between', alignItems: 'center' }}>
               <div>
-                <h1 style={{ fontSize: '1.75rem', fontWeight: 800, margin: 0, fontFamily: 'Outfit' }}>Calendar & Booking Grid</h1>
-                <p style={{ color: '#BFA6D8', margin: '4px 0 0 0', fontSize: '0.85rem' }}>Receptionist calendar grids with smart double-booking validation controls.</p>
+                <h1 style={{ fontSize: '1.75rem', fontWeight: 800, margin: 0, fontFamily: 'Outfit' }}>Clinical Scheduling Ledger</h1>
+                <p style={{ color: '#BFA6D8', margin: '4px 0 0 0', fontSize: '0.85rem' }}>Select dates via monthly click calendar. Sorted chronologically with overdue alerts.</p>
               </div>
               {currentUserRole !== 'therapist' && (
                 <button className="btn-brand-gold" onClick={() => setShowBookingModal(true)}>
@@ -517,108 +561,280 @@ export default function BookingCRM() {
               )}
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '3fr 1fr', gap: '24px' }}>
-              {/* Upcoming Appointments Table */}
-              <div className="card-premium" style={{ height: 'fit-content' }}>
-                <h3 style={{ fontFamily: 'Outfit', fontSize: '1.1rem', marginBottom: '16px', color: 'white' }}>Active Booking Schedule</h3>
+            {/* TAB SELECTOR: ACTIVE OR COMPLETED ARCHIVE */}
+            <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid rgba(107, 44, 145, 0.2)', paddingBottom: '10px' }}>
+              <button
+                onClick={() => setActiveCalendarView('active')}
+                style={{
+                  backgroundColor: activeCalendarView === 'active' ? 'hsl(var(--brand-purple))' : 'transparent',
+                  color: activeCalendarView === 'active' ? 'white' : '#BFA6D8',
+                  border: 'none', padding: '8px 16px', borderRadius: '8px', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer'
+                }}
+              >
+                Active Schedule
+              </button>
+              <button
+                onClick={() => setActiveCalendarView('completed')}
+                style={{
+                  backgroundColor: activeCalendarView === 'completed' ? 'hsl(var(--brand-purple))' : 'transparent',
+                  color: activeCalendarView === 'completed' ? 'white' : '#BFA6D8',
+                  border: 'none', padding: '8px 16px', borderRadius: '8px', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer'
+                }}
+              >
+                Completed Archive Tab
+              </button>
+            </div>
+
+            {/* Core Scheduler view breakdown */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 2fr 1.2fr', gap: '20px', alignItems: 'start' }}>
+              
+              {/* Column A: Visual Month Click Grid calendar */}
+              <div className="card-premium">
+                <div style={{ display: 'flex', justify: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                  <button style={{ background: 'none', border: 'none', color: '#D4AF37', cursor: 'pointer', fontWeight: 'bold' }} onClick={() => {
+                    if (currentMonth === 0) {
+                      setCurrentMonth(11);
+                      setCurrentYear(prev => prev - 1);
+                    } else {
+                      setCurrentMonth(prev => prev - 1);
+                    }
+                  }}>◀</button>
+                  <strong style={{ fontSize: '0.9rem', color: 'white' }}>{monthNames[currentMonth]} {currentYear}</strong>
+                  <button style={{ background: 'none', border: 'none', color: '#D4AF37', cursor: 'pointer', fontWeight: 'bold' }} onClick={() => {
+                    if (currentMonth === 11) {
+                      setCurrentMonth(0);
+                      setCurrentYear(prev => prev + 1);
+                    } else {
+                      setCurrentMonth(prev => prev + 1);
+                    }
+                  }}>▶</button>
+                </div>
+
+                {/* Calendar Grid Header */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '6px', textAlign: 'center', fontSize: '0.65rem', color: '#BFA6D8', fontWeight: 700, marginBottom: '8px' }}>
+                  {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, dIdx) => <div key={dIdx}>{day}</div>)}
+                </div>
+
+                {/* Calendar Days */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '6px' }}>
+                  {Array.from({ length: getFirstDayOfMonth(currentMonth, currentYear) }).map((_, emptyIdx) => (
+                    <div key={`empty-${emptyIdx}`} />
+                  ))}
+                  {Array.from({ length: getDaysInMonth(currentMonth, currentYear) }).map((_, dayIdx) => {
+                    const dayNum = dayIdx + 1;
+                    const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+                    const isSelected = selectedDate === dateStr;
+
+                    // Check if date has active bookings
+                    const dayBookings = appointments.filter(a => a.date === dateStr && a.status !== 'Cancelled' && a.status !== 'Completed');
+                    const hasBookings = dayBookings.length > 0;
+
+                    return (
+                      <button
+                        key={`day-${dayNum}`}
+                        onClick={() => setSelectedDate(dateStr)}
+                        style={{
+                          backgroundColor: isSelected ? 'hsl(var(--brand-purple))' : 'hsl(var(--brand-black))',
+                          border: isSelected ? '1px solid hsl(var(--brand-gold))' : '1px solid transparent',
+                          borderRadius: '8px', color: isSelected ? 'white' : '#A89684',
+                          fontSize: '0.78rem', padding: '6px 0', cursor: 'pointer', fontWeight: 600,
+                          display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative'
+                        }}
+                      >
+                        {dayNum}
+                        {hasBookings && (
+                          <span style={{
+                            width: '4px', height: '4px', borderRadius: '50%',
+                            backgroundColor: '#D4AF37', position: 'absolute', bottom: '2px'
+                          }} />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div style={{ fontSize: '0.7rem', color: '#A89684', marginTop: '14px', fontStyle: 'italic', textAlign: 'center' }}>
+                  Selected Target Date: <strong style={{ color: '#D4AF37' }}>{selectedDate}</strong>
+                </div>
+              </div>
+
+              {/* Column B: Bookings list (Filtered by selected Date, sorted chronologically) */}
+              <div className="card-premium" style={{ minHeight: '400px' }}>
+                <h3 style={{ fontFamily: 'Outfit', fontSize: '1.1rem', marginBottom: '16px', color: 'white' }}>
+                  {activeCalendarView === 'active' ? 'Active Bookings' : 'Completed Archive'} - {selectedDate}
+                </h3>
+
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  {appointments.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: '40px', color: '#A89684', fontSize: '0.85rem' }}>No bookings recorded for today.</div>
-                  ) : (
-                    appointments.map(apt => {
+                  {appointments
+                    .filter(apt => {
+                      if (apt.date !== selectedDate) return false;
+                      const isCompletedTab = apt.status === 'Completed';
+                      return activeCalendarView === 'active' ? !isCompletedTab : isCompletedTab;
+                    })
+                    .sort((a, b) => a.time.localeCompare(b.time))
+                    .map(apt => {
                       const client = clients.find(c => c.id === apt.clientId);
                       const service = services.find(s => s.id === apt.serviceId);
-
-                      // Therapist restriction: only see own appointments
-                      if (currentUserRole === 'therapist' && apt.staffId !== 'usr-3') return null;
+                      const staff = getTable('users').find(u => u.id === apt.staffId);
+                      const isOverdue = isAppointmentOverdue(apt);
 
                       return (
                         <div key={apt.id} style={{
                           display: 'flex', justify: 'space-between', alignItems: 'center', padding: '14px',
-                          backgroundColor: 'hsl(var(--brand-black))', borderRadius: '10px',
-                          borderLeft: `4px solid hsl(var(--status-${apt.status.toLowerCase()}))`,
-                          borderRight: '1px solid rgba(107, 44, 145, 0.15)',
-                          borderTop: '1px solid rgba(107, 44, 145, 0.15)',
-                          borderBottom: '1px solid rgba(107, 44, 145, 0.15)'
+                          backgroundColor: 'hsl(var(--brand-black))', borderRadius: '12px',
+                          borderLeft: `4px solid ${isOverdue ? 'gold' : `hsl(var(--status-${apt.status.toLowerCase()}))`}`,
+                          border: isOverdue ? '1px solid gold' : '1px solid rgba(107, 44, 145, 0.15)',
+                          position: 'relative'
                         }}>
+                          {isOverdue && (
+                            <span style={{
+                              position: 'absolute', top: '-10px', right: '14px',
+                              backgroundColor: 'gold', color: 'black', fontSize: '0.62rem',
+                              fontWeight: 800, padding: '2px 6px', borderRadius: '4px',
+                              animation: 'pulseGlow 1.5s infinite ease-in-out'
+                            }}>
+                              ⚠️ OVERDUE SESSION
+                            </span>
+                          )}
+
                           <div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                               <span style={{ color: '#D4AF37', fontWeight: 700, fontSize: '0.9rem' }}>{apt.time}</span>
                               <strong style={{ fontSize: '0.9rem', color: 'white' }}>{client?.name || 'Walk-in'}</strong>
                               <span className={`badge-brand ${apt.status.toLowerCase()}`} style={{ fontSize: '0.55rem' }}>{apt.status}</span>
                             </div>
-                            <span style={{ display: 'block', fontSize: '0.75rem', color: '#BFA6D8', marginTop: '4px' }}>
-                              {service?.name} ({apt.room}) {apt.machineId ? `• [${apt.machineId}]` : ''}
+
+                            <span style={{ display: 'block', fontSize: '0.78rem', color: '#BFA6D8', marginTop: '4px' }}>
+                              {service?.name} ({apt.room}) • {apt.duration}m
                             </span>
-                            {apt.notes && (
-                              <span style={{ display: 'block', fontSize: '0.7rem', color: '#A89684', fontStyle: 'italic', marginTop: '4px' }}>
-                                Notes: {apt.notes}
+
+                            {/* Client contact info */}
+                            <span style={{ display: 'block', fontSize: '0.72rem', color: '#A89684', marginTop: '2px' }}>
+                              📞 {client?.phone || 'No phone'} | ✉ {client?.email || 'No email'}
+                            </span>
+
+                            {/* Paid indicators */}
+                            <span style={{ display: 'block', fontSize: '0.7rem', color: '#34d399', marginTop: '2px', fontWeight: 600 }}>
+                              Status: {apt.paymentStatus === 'Paid already' ? '✓ Paid' : apt.paymentStatus === 'Loyalty Promo' ? '⚡ Loyalty Promo used' : '✗ Unpaid'}
+                            </span>
+
+                            <span style={{ display: 'block', fontSize: '0.65rem', color: '#A89684', fontStyle: 'italic', marginTop: '4px' }}>
+                              By: {apt.createdBy || 'Receptionist'} | Staff: {staff?.name || ' Jessica'}
+                            </span>
+
+                            {apt.cancelReason && (
+                              <span style={{ display: 'block', fontSize: '0.7rem', color: '#ef4444', fontWeight: 600, marginTop: '2px' }}>
+                                Cancel Reason: {apt.cancelReason}
                               </span>
                             )}
                           </div>
 
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <select
-                              value={apt.status}
-                              onChange={(e) => {
-                                updateAppointmentStatus(currentUserName(), apt.id, e.target.value);
-                                syncDatabase();
-                              }}
-                              style={{
-                                backgroundColor: 'hsl(var(--brand-charcoal))', color: 'white',
-                                border: '1px solid rgba(107, 44, 145, 0.3)', borderRadius: '6px',
-                                fontSize: '0.72rem', padding: '4px'
-                              }}
-                            >
-                              <option value="Pending">Pending</option>
-                              <option value="Confirmed">Confirmed</option>
-                              <option value="Checked-in">Checked-in</option>
-                              <option value="In-progress">In-progress</option>
-                              <option value="Completed">Completed</option>
-                              <option value="Cancelled">Cancelled</option>
-                            </select>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            {activeCalendarView === 'active' ? (
+                              <>
+                                <select
+                                  value={apt.status}
+                                  onChange={(e) => {
+                                    const nextStatus = e.target.value;
+                                    if (nextStatus === 'Cancelled') {
+                                      // Cancel flow with reason
+                                      setActiveCancellationApt(apt);
+                                      setCancelReasonText('');
+                                    } else {
+                                      updateAppointmentStatus(currentUserName(), apt.id, nextStatus);
+                                      syncDatabase();
+                                    }
+                                  }}
+                                  style={{
+                                    backgroundColor: 'hsl(var(--brand-charcoal))', color: 'white',
+                                    border: '1px solid rgba(107, 44, 145, 0.3)', borderRadius: '6px',
+                                    fontSize: '0.72rem', padding: '4px'
+                                  }}
+                                >
+                                  <option value="Pending">Pending</option>
+                                  <option value="Confirmed">Confirmed</option>
+                                  <option value="Checked-in">Checked-in</option>
+                                  <option value="In-progress">In-progress</option>
+                                  <option value="Completed">Completed</option>
+                                  <option value="Cancelled">Cancelled</option>
+                                  <option value="No-show">No-show</option>
+                                </select>
+
+                                {apt.status === 'No-show' && (
+                                  <button
+                                    onClick={() => {
+                                      logAction('System', 'No-Show Alert Blast', `Sent bulk WhatsApp reminder to ${client?.name}`);
+                                      alert(`whatsapp sent to ${client?.name}:\n\n"${settings.noShowTemplate || 'We missed you at your appointment! Please contact us to reschedule.'}"`);
+                                    }}
+                                    className="btn-brand-gold"
+                                    style={{ fontSize: '0.65rem', padding: '3px 6px' }}
+                                  >
+                                    Send No-Show WhatsApp
+                                  </button>
+                                )}
+                              </>
+                            ) : (
+                              <button
+                                onClick={() => {
+                                  // Reinstate Completed slot back to calendar
+                                  updateAppointmentStatus(currentUserName(), apt.id, 'Confirmed');
+                                  syncDatabase();
+                                  alert('Booking successfully reinstated back to active calendar schedule!');
+                                }}
+                                className="btn-brand-gold"
+                                style={{ fontSize: '0.72rem', padding: '4px 8px' }}
+                              >
+                                Reinstate Booking
+                              </button>
+                            )}
                           </div>
                         </div>
                       );
-                    })
-                  )}
+                    })}
                 </div>
               </div>
 
-              {/* Quick statistics sidebar */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                <div className="card-premium">
-                  <h4 style={{ fontFamily: 'Outfit', color: '#D4AF37', margin: '0 0 12px 0', fontSize: '0.9rem' }}>Today's Overview</h4>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.78rem' }}>
-                    <div style={{ display: 'flex', justify: 'space-between' }}>
-                      <span>Total Booked:</span>
-                      <strong>{appointments.length} appointments</strong>
-                    </div>
-                    <div style={{ display: 'flex', justify: 'space-between' }}>
-                      <span>Checked-in/In-Progress:</span>
-                      <strong style={{ color: '#34d399' }}>
-                        {appointments.filter(a => ['Checked-in', 'In-progress'].includes(a.status)).length}
-                      </strong>
-                    </div>
-                    <div style={{ display: 'flex', justify: 'space-between' }}>
-                      <span>Pending Confirmation:</span>
-                      <strong style={{ color: 'orange' }}>
-                        {appointments.filter(a => a.status === 'Pending').length}
-                      </strong>
-                    </div>
-                  </div>
-                </div>
+              {/* Column C: Chronological Hourly vacant breakdown availability list */}
+              <div className="card-premium">
+                <h3 style={{ fontFamily: 'Outfit', fontSize: '1.1rem', marginBottom: '14px', color: 'white' }}>Hourly Timeline</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '500px', overflowY: 'auto' }}>
+                  {['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00'].map(hour => {
+                    const activeApts = appointments.filter(a => a.date === selectedDate && a.time === hour && a.status !== 'Cancelled' && a.status !== 'Completed');
+                    const isBooked = activeApts.length > 0;
 
-                <div className="card-premium">
-                  <h4 style={{ fontFamily: 'Outfit', color: '#BFA6D8', margin: '0 0 12px 0', fontSize: '0.9rem' }}>Quick Actions</h4>
-                  <button onClick={() => setActiveTab('waitlist')} className="btn-brand-purple" style={{ width: '100%', fontSize: '0.75rem', justifyContent: 'center', marginBottom: '8px' }}>
-                    Open Waitlist Roster
-                  </button>
-                  <button onClick={() => setActiveTab('rooms')} className="btn-brand-purple" style={{ width: '100%', fontSize: '0.75rem', justifyContent: 'center' }}>
-                    Inspect Room Slots
-                  </button>
+                    // Calculate available machines
+                    const busyMachineIds = activeApts.map(a => a.machineId).filter(Boolean);
+                    const vacantMachines = machines.filter(m => !busyMachineIds.includes(m.id) && m.currentStatus === 'Available');
+
+                    return (
+                      <div key={hour} style={{
+                        padding: '10px', borderRadius: '10px',
+                        backgroundColor: isBooked ? 'rgba(107, 44, 145, 0.15)' : 'rgba(52, 211, 153, 0.05)',
+                        border: isBooked ? '1px solid rgba(107, 44, 145, 0.3)' : '1px solid rgba(52, 211, 153, 0.15)'
+                      }}>
+                        <div style={{ display: 'flex', justify: 'space-between', fontSize: '0.78rem', fontWeight: 700 }}>
+                          <span style={{ color: '#D4AF37' }}>{hour}</span>
+                          <span style={{ color: isBooked ? '#BFA6D8' : '#34d399' }}>{isBooked ? 'BOOKED' : 'VACANT'}</span>
+                        </div>
+                        {isBooked ? (
+                          activeApts.map(apt => {
+                            const cli = clients.find(c => c.id === apt.clientId);
+                            return (
+                              <div key={apt.id} style={{ fontSize: '0.72rem', color: 'white', marginTop: '4px' }}>
+                                👤 {cli?.name} ({cli?.phone || 'No phone'})
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <div style={{ fontSize: '0.68rem', color: '#A89684', marginTop: '2px' }}>
+                            Machines available: {vacantMachines.map(m => m.name).join(', ') || 'None'}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
+
             </div>
           </div>
         )}
@@ -628,7 +844,7 @@ export default function BookingCRM() {
           <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
             <div style={{ display: 'flex', justify: 'space-between', alignItems: 'center' }}>
               <div>
-                <h1 style={{ fontSize: '1.75rem', fontWeight: 800, margin: 0, fontFamily: 'Outfit' }}>Roster Waitlist System</h1>
+                <h1 style={{ fontSize: '1.75rem', fontWeight: 800, margin: 0, fontFamily: 'Outfit' }}>Roster Waitlist</h1>
                 <p style={{ color: '#BFA6D8', margin: '4px 0 0 0', fontSize: '0.85rem' }}>Auto-release and manual queues if clients cancel active slots.</p>
               </div>
               <button onClick={() => setShowWaitlistModal(true)} className="btn-brand-gold">
@@ -636,80 +852,81 @@ export default function BookingCRM() {
               </button>
             </div>
 
-            <div className="card-premium">
-              <h3 style={{ fontFamily: 'Outfit', fontSize: '1.1rem', marginBottom: '16px', color: 'white' }}>Waitlisted Clients Queue</h3>
+            <div className="card-premium" style={{ padding: '24px' }}>
+              <h3 style={{ fontFamily: 'Outfit', fontSize: '1.1rem', marginBottom: '20px', color: 'white' }}>Waitlisted Clients Queue</h3>
               {waitlist.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '40px', color: '#A89684', fontSize: '0.85rem' }}>
                   The waitlist is currently empty.
                 </div>
               ) : (
-                <table className="table-premium">
-                  <thead>
-                    <tr>
-                      <th>Date</th>
-                      <th>Client Name</th>
-                      <th>Service Needed</th>
-                      <th>Notes</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {waitlist.map(wt => {
-                      const client = clients.find(c => c.id === wt.clientId);
-                      const service = services.find(s => s.id === wt.serviceId);
-                      return (
-                        <tr key={wt.id}>
-                          <td>{wt.date}</td>
-                          <td><strong>{client?.name || 'Walk-in'}</strong></td>
-                          <td>{service?.name}</td>
-                          <td><span style={{ fontSize: '0.78rem', color: '#A89684' }}>{wt.notes || 'None'}</span></td>
-                          <td>
-                            <div style={{ display: 'flex', gap: '8px' }}>
-                              <button
-                                onClick={() => {
-                                  // Clear waitlist and add slot
-                                  const confirmAssign = window.confirm(`Release waitlist for ${client?.name || 'Client'} and convert to active appointment?`);
-                                  if (confirmAssign) {
-                                    const res = addAppointment(currentUserName(), {
-                                      clientId: wt.clientId,
-                                      serviceId: wt.serviceId,
-                                      staffId: wt.preferredStaffId || 'usr-3',
-                                      room: 'Treatment Room 1',
-                                      machineId: service?.requiredMachine || '',
-                                      date: new Date().toISOString().split('T')[0],
-                                      time: '12:00',
-                                      duration: service?.duration || 30,
-                                      notes: 'Released from waitlist queue'
-                                    });
-                                    if (res.success) {
-                                      deleteFromWaitlist(currentUserName(), wt.id);
-                                      syncDatabase();
-                                      alert('Success! Waitlisted client allocated to active schedule.');
-                                    } else {
-                                      alert(`Allocation conflict! ${res.error}`);
-                                    }
-                                  }
-                                }}
-                                style={{ border: 'none', backgroundColor: '#34d39933', color: '#34d399', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 700 }}
-                              >
-                                Release Slot
-                              </button>
-                              <button
-                                onClick={() => {
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  {waitlist.map(wt => {
+                    const client = clients.find(c => c.id === wt.clientId);
+                    const service = services.find(s => s.id === wt.serviceId);
+                    return (
+                      <div key={wt.id} style={{
+                        display: 'flex', justify: 'space-between', alignItems: 'center', padding: '20px',
+                        backgroundColor: 'hsl(var(--brand-black))', borderRadius: '16px',
+                        border: '1px solid rgba(107, 44, 145, 0.2)', boxShadow: '0 4px 10px rgba(0,0,0,0.3)'
+                      }}>
+                        <div>
+                          <strong style={{ fontSize: '1.05rem', color: '#D4AF37', display: 'block', marginBottom: '4px' }}>{client?.name || 'Walk-in'}</strong>
+                          <span style={{ display: 'block', fontSize: '0.82rem', color: 'white', marginBottom: '2px' }}>
+                            Needs Treatment: <strong>{service?.name}</strong>
+                          </span>
+                          <span style={{ display: 'block', fontSize: '0.78rem', color: '#A89684' }}>
+                            📞 Phone: {client?.phone || 'No phone'} | Join Date: {wt.date}
+                          </span>
+                          {wt.notes && (
+                            <div style={{ marginTop: '8px', padding: '6px 10px', backgroundColor: 'hsl(var(--brand-charcoal))', borderRadius: '8px', fontSize: '0.75rem', color: '#BFA6D8', fontStyle: 'italic' }}>
+                              Notes: "{wt.notes}"
+                            </div>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                          <button
+                            onClick={() => {
+                              const confirmAssign = window.confirm(`Release waitlist for ${client?.name || 'Client'} and convert to active appointment?`);
+                              if (confirmAssign) {
+                                const res = addAppointment(currentUserName(), {
+                                  clientId: wt.clientId,
+                                  serviceId: wt.serviceId,
+                                  staffId: wt.preferredStaffId || 'usr-3',
+                                  room: 'Treatment Room 1',
+                                  machineId: service?.requiredMachine || '',
+                                  date: new Date().toISOString().split('T')[0],
+                                  time: '12:00',
+                                  duration: service?.duration || 30,
+                                  notes: 'Released from waitlist queue'
+                                });
+                                if (res.success) {
                                   deleteFromWaitlist(currentUserName(), wt.id);
                                   syncDatabase();
-                                }}
-                                style={{ border: 'none', backgroundColor: '#ef444433', color: '#ef4444', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 700 }}
-                              >
-                                Remove
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                                  alert('Success! Waitlisted client allocated to active schedule.');
+                                } else {
+                                  alert(`Allocation conflict! ${res.error}`);
+                                }
+                              }
+                            }}
+                            className="btn-brand-gold"
+                            style={{ fontSize: '0.78rem', padding: '8px 16px' }}
+                          >
+                            Release Slot
+                          </button>
+                          <button
+                            onClick={() => {
+                              deleteFromWaitlist(currentUserName(), wt.id);
+                              syncDatabase();
+                            }}
+                            style={{ border: 'none', backgroundColor: '#ef444433', color: '#ef4444', padding: '8px 16px', borderRadius: '10px', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 700 }}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               )}
             </div>
           </div>
@@ -728,8 +945,8 @@ export default function BookingCRM() {
               <div className="card-premium">
                 <h3 style={{ fontFamily: 'Outfit', fontSize: '1.1rem', marginBottom: '16px', color: 'white' }}>Clinical Treatment Rooms</h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  {['Treatment Room 1', 'Treatment Room 2', 'Atelier Face Room'].map(room => {
-                    const activeApts = appointments.filter(a => a.room === room && a.status !== 'Cancelled');
+                  {rooms.map(room => {
+                    const activeApts = appointments.filter(a => a.room === room && a.status !== 'Cancelled' && a.status !== 'Completed');
                     return (
                       <div key={room} style={{ backgroundColor: 'hsl(var(--brand-black))', padding: '14px', borderRadius: '12px', border: '1px solid rgba(107, 44, 145, 0.15)' }}>
                         <div style={{ display: 'flex', justify: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
@@ -761,21 +978,46 @@ export default function BookingCRM() {
                 <h3 style={{ fontFamily: 'Outfit', fontSize: '1.1rem', marginBottom: '16px', color: 'white' }}>Clinical Hardware Allocations</h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                   {machines.map(mach => {
-                    const activeApts = appointments.filter(a => a.machineId === mach.id && a.status !== 'Cancelled');
+                    const activeApts = appointments.filter(a => a.machineId === mach.id && a.status !== 'Cancelled' && a.status !== 'Completed');
+                    const serviceLimit = mach.serviceInterval || 50;
+                    const isDueForService = mach.totalUsageHours >= serviceLimit;
+
                     return (
                       <div key={mach.id} style={{ backgroundColor: 'hsl(var(--brand-black))', padding: '14px', borderRadius: '12px', border: '1px solid rgba(107, 44, 145, 0.15)' }}>
                         <div style={{ display: 'flex', justify: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                           <strong style={{ color: 'white' }}>{mach.name}</strong>
-                          <span className="badge-brand gold" style={{ fontSize: '0.6rem' }}>{mach.currentStatus}</span>
+                          <div style={{ display: 'flex', gap: '6px' }}>
+                            {isDueForService && (
+                              <span style={{
+                                backgroundColor: '#ef4444', color: 'white', fontSize: '0.58rem',
+                                fontWeight: 800, padding: '2px 6px', borderRadius: '4px'
+                              }}>
+                                ⚠️ DUE FOR SERVICE!
+                              </span>
+                            )}
+                            <span className="badge-brand gold" style={{ fontSize: '0.6rem' }}>{mach.currentStatus}</span>
+                          </div>
                         </div>
+                        
+                        <div style={{ fontSize: '0.75rem', color: '#BFA6D8', marginBottom: '8px' }}>
+                          Usage Hours: <strong>{mach.totalUsageHours} / {serviceLimit} hrs</strong>
+                        </div>
+
+                        {/* Owner only ROI details */}
+                        {currentUserRole === 'owner' && (
+                          <div style={{ fontSize: '0.72rem', color: '#34d399', marginBottom: '8px', borderTop: '1px dashed rgba(52,211,153,0.2)', paddingTop: '4px' }}>
+                            Yield Revenue: <strong>R {mach.revenueGenerated}</strong> | ROI: <strong>{((mach.revenueGenerated / mach.purchaseCost) * 100).toFixed(1)}%</strong>
+                          </div>
+                        )}
+
                         {activeApts.length === 0 ? (
-                          <span style={{ fontSize: '0.75rem', color: '#A89684' }}>No bookings utilizing this unit today.</span>
+                          <span style={{ fontSize: '0.72rem', color: '#A89684' }}>No active bookings utilizing this unit now.</span>
                         ) : (
                           activeApts.map(apt => {
                             const cli = clients.find(c => c.id === apt.clientId);
                             return (
-                              <div key={apt.id} style={{ fontSize: '0.75rem', color: '#BFA6D8', marginTop: '4px' }}>
-                                ⚡ {apt.time} - <strong>{cli?.name}</strong> using Cryo/Treadmill
+                              <div key={apt.id} style={{ fontSize: '0.72rem', color: '#BFA6D8', marginTop: '4px' }}>
+                                ⚡ {apt.time} - <strong>{cli?.name}</strong> using Treadmill/Cryo
                               </div>
                             );
                           })
@@ -1165,7 +1407,7 @@ export default function BookingCRM() {
                     border: '1px solid rgba(107, 44, 145, 0.15)'
                   }}>
                     <div>
-                      <strong style={{ display: 'block', fontSize: '0.82rem', color: 'white' }}>Cryo 360 Fat Freeze Waiver</strong>
+                      <strong style={{ display: 'block', fontSize: '0.82rem', color: 'white' }}>Cryo 360 Waiver</strong>
                       <span style={{ fontSize: '0.7rem', color: '#A89684' }}>Thermal crystallization authorization</span>
                     </div>
                     <button
@@ -1216,7 +1458,7 @@ export default function BookingCRM() {
               <table className="table-premium">
                 <thead>
                   <tr>
-                    <th>Service details</th>
+                    <th>Service name</th>
                     <th>Required hardware</th>
                     <th>VAT & Cost</th>
                     <th>Standard Price</th>
@@ -1734,54 +1976,147 @@ export default function BookingCRM() {
 
         {/* WORKSPACE P: GLOBAL SALON SETTINGS */}
         {activeTab === 'settings' && currentUserRole === 'owner' && (
-          <div className="card-premium animate-fade-in">
-            <h3 style={{ fontFamily: 'Outfit', color: 'white', marginBottom: '16px' }}>Global Salon Settings</h3>
-            <p style={{ fontSize: '0.8rem', color: '#BFA6D8', marginBottom: '20px' }}>Setup business details, VAT rates, and reception parameters.</p>
+          <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            <div className="card-premium">
+              <h3 style={{ fontFamily: 'Outfit', color: 'white', marginBottom: '16px' }}>Global Salon Settings</h3>
+              <p style={{ fontSize: '0.8rem', color: '#BFA6D8', marginBottom: '20px' }}>Setup business details, VAT rates, and WhatsApp reminder lead times.</p>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.78rem', color: '#A89684', marginBottom: '6px' }}>Salon Name:</label>
-                  <input type="text" className="brand-input" id="cfgSalonName" defaultValue={settings.salonName} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.78rem', color: '#A89684', marginBottom: '6px' }}>Salon Name:</label>
+                    <input type="text" className="brand-input" id="cfgSalonName" defaultValue={settings.salonName} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.78rem', color: '#A89684', marginBottom: '6px' }}>VAT Rate (%):</label>
+                    <input type="number" className="brand-input" id="cfgVat" defaultValue={settings.vatRate} />
+                  </div>
                 </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.78rem', color: '#A89684', marginBottom: '6px' }}>VAT Rate (%):</label>
-                  <input type="number" className="brand-input" id="cfgVat" defaultValue={settings.vatRate} />
+                
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.78rem', color: '#A89684', marginBottom: '6px' }}>WhatsApp Reminder Lead Time:</label>
+                    <select className="brand-input" id="cfgReminderLeadTime" defaultValue={settings.reminderLeadTime || '2 Hours before session'}>
+                      <option value="1 Hour before session">1 Hour before session</option>
+                      <option value="2 Hours before session">2 Hours before session</option>
+                      <option value="12 Hours before session">12 Hours before session</option>
+                      <option value="24 Hours before session">24 Hours before session</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.78rem', color: '#A89684', marginBottom: '6px' }}>Telephone:</label>
+                    <input type="text" className="brand-input" id="cfgPhone" defaultValue={settings.phone} />
+                  </div>
                 </div>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.78rem', color: '#A89684', marginBottom: '6px' }}>Telephone:</label>
-                  <input type="text" className="brand-input" id="cfgPhone" defaultValue={settings.phone} />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.78rem', color: '#A89684', marginBottom: '6px' }}>Email Address:</label>
-                  <input type="text" className="brand-input" id="cfgEmail" defaultValue={settings.email} />
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  const sName = document.getElementById('cfgSalonName').value;
-                  const vat = document.getElementById('cfgVat').value;
-                  const phone = document.getElementById('cfgPhone').value;
-                  const email = document.getElementById('cfgEmail').value;
 
-                  const newSettings = {
-                    salonName: sName,
-                    vatRate: Number(vat),
-                    phone,
-                    email,
-                    address: settings.address
-                  };
-                  updateSettings(currentUserName(), newSettings);
-                  syncDatabase();
-                  alert('Parameters saved successfully!');
-                }}
-                className="btn-brand-gold"
-                style={{ alignSelf: 'flex-start', marginTop: '10px' }}
-              >
-                Save parameters
-              </button>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.78rem', color: '#A89684', marginBottom: '6px' }}>No-Show WhatsApp Template Text:</label>
+                  <textarea
+                    className="brand-input"
+                    id="cfgNoShowTemplate"
+                    rows={3}
+                    defaultValue={settings.noShowTemplate || "We missed you at your appointment! Please contact Sculpt & Glow Pretoria East to reschedule."}
+                  />
+                </div>
+
+                <button
+                  onClick={() => {
+                    const sName = document.getElementById('cfgSalonName').value;
+                    const vat = document.getElementById('cfgVat').value;
+                    const phone = document.getElementById('cfgPhone').value;
+                    const leadTime = document.getElementById('cfgReminderLeadTime').value;
+                    const noShowTpl = document.getElementById('cfgNoShowTemplate').value;
+
+                    const newSettings = {
+                      ...settings,
+                      salonName: sName,
+                      vatRate: Number(vat),
+                      phone,
+                      reminderLeadTime: leadTime,
+                      noShowTemplate: noShowTpl
+                    };
+                    updateSettings(currentUserName(), newSettings);
+                    syncDatabase();
+                    alert('Parameters saved successfully!');
+                  }}
+                  className="btn-brand-gold"
+                  style={{ alignSelf: 'flex-start', marginTop: '10px' }}
+                >
+                  Save parameters
+                </button>
+              </div>
+            </div>
+
+            {/* DYNAMIC ROOMS & MACHINES CRUD PANEL */}
+            <div className="card-premium">
+              <h3 style={{ fontFamily: 'Outfit', color: 'white', marginBottom: '16px' }}>Dynamic Rooms & Equipment Management</h3>
+              
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '24px' }}>
+                
+                {/* Rooms CRUD */}
+                <div>
+                  <h4 style={{ color: '#D4AF37', fontSize: '0.9rem', marginBottom: '10px' }}>Clinic Treatment Rooms</h4>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '12px' }}>
+                    {rooms.map(rm => (
+                      <div key={rm} style={{ display: 'flex', justify: 'space-between', padding: '8px 12px', backgroundColor: 'hsl(var(--brand-black))', borderRadius: '8px', fontSize: '0.78rem' }}>
+                        <span>{rm}</span>
+                        <button onClick={() => {
+                          const updated = rooms.filter(r => r !== rm);
+                          setRooms(updated);
+                          localStorage.setItem('salon_rooms', JSON.stringify(updated));
+                        }} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}>✕</button>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input type="text" className="brand-input" id="newRoomInput" placeholder="Add room..." style={{ height: '32px', fontSize: '0.78rem' }} />
+                    <button onClick={() => {
+                      const inp = document.getElementById('newRoomInput');
+                      if (inp.value) {
+                        const updated = [...rooms, inp.value];
+                        setRooms(updated);
+                        localStorage.setItem('salon_rooms', JSON.stringify(updated));
+                        inp.value = '';
+                      }
+                    }} className="btn-brand-gold" style={{ padding: '6px 12px', fontSize: '0.75rem' }}>Add</button>
+                  </div>
+                </div>
+
+                {/* Machines CRUD & Maintenance Hours config */}
+                <div>
+                  <h4 style={{ color: '#D4AF37', fontSize: '0.9rem', marginBottom: '10px' }}>Clinical Hardware & Service Parameters</h4>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '12px' }}>
+                    {machines.map(mach => (
+                      <div key={mach.id} style={{ padding: '10px', backgroundColor: 'hsl(var(--brand-black))', borderRadius: '8px', fontSize: '0.78rem' }}>
+                        <div style={{ display: 'flex', justify: 'space-between' }}>
+                          <strong>{mach.name}</strong>
+                          <button onClick={() => {
+                            const newHours = prompt(`Enter service interval hours for ${mach.name}:`, mach.serviceInterval || 50);
+                            if (newHours) {
+                              const updated = machines.map(m => m.id === mach.id ? { ...m, serviceInterval: Number(newHours) } : m);
+                              localStorage.setItem('salon_machines', JSON.stringify(updated));
+                              syncDatabase();
+                            }
+                          }} style={{ background: 'none', border: 'none', color: '#D4AF37', cursor: 'pointer', fontSize: '0.7rem' }}>
+                            Edit Service Limit ({mach.serviceInterval || 50}h)
+                          </button>
+                        </div>
+                        <div style={{ display: 'flex', justify: 'space-between', fontSize: '0.7rem', color: '#A89684', marginTop: '4px' }}>
+                          <span>Hours running: {mach.totalUsageHours}h</span>
+                          <button onClick={() => {
+                            logMachineMaintenance(currentUserName(), mach.id, 'Reset usage hours after servicing');
+                            syncDatabase();
+                            alert('Machine flagged as Serviced! Usage hours reset.');
+                          }} style={{ border: 'none', backgroundColor: '#34d39933', color: '#34d399', padding: '2px 6px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.65rem' }}>
+                            Flag Serviced ✓
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+              </div>
             </div>
           </div>
         )}
@@ -1835,86 +2170,6 @@ export default function BookingCRM() {
           </div>
         )}
 
-        {/* WORKSPACE R: NOTIFICATION SMS/WHATSAPP CAMPAIGNS */}
-        {activeTab === 'campaigns' && currentUserRole === 'owner' && (
-          <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            <div>
-              <h1 style={{ fontSize: '1.75rem', fontWeight: 800, margin: 0, fontFamily: 'Outfit' }}>Marketing Campaign Suite</h1>
-              <p style={{ color: '#BFA6D8', margin: '4px 0 0 0', fontSize: '0.85rem' }}>Bulk WhatsApp promotion campaigns and feedback requests.</p>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '24px' }}>
-              <div className="card-premium">
-                <h3 style={{ fontFamily: 'Outfit', fontSize: '1.1rem', marginBottom: '16px', color: 'white' }}>WhatsApp Promotion Blaster</h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Campaign Template text:</label>
-                    <textarea
-                      className="brand-input"
-                      rows={5}
-                      value={campaignForm.message}
-                      onChange={(e) => setCampaignForm(prev => ({ ...prev, message: e.target.value }))}
-                    />
-                  </div>
-
-                  {blastingActive && (
-                    <div style={{ backgroundColor: 'hsl(var(--brand-black))', padding: '14px', borderRadius: '10px' }}>
-                      <div style={{ display: 'flex', justify: 'space-between', fontSize: '0.78rem', color: '#BFA6D8', marginBottom: '6px' }}>
-                        <span>Blasting campaign to client directory...</span>
-                        <strong>{blastingProgress}%</strong>
-                      </div>
-                      <div style={{ width: '100%', height: '6px', backgroundColor: 'hsl(var(--brand-charcoal))', borderRadius: '3px', overflow: 'hidden' }}>
-                        <div style={{ width: `${blastingProgress}%`, height: '100%', backgroundColor: '#34d399', borderRadius: '3px', transition: 'width 0.3s' }} />
-                      </div>
-                    </div>
-                  )}
-
-                  <button
-                    onClick={() => {
-                      if (blastingActive) return;
-                      setBlastingActive(true);
-                      setBlastingProgress(0);
-
-                      const timer = setInterval(() => {
-                        setBlastingProgress(prev => {
-                          if (prev >= 100) {
-                            clearInterval(timer);
-                            setBlastingActive(false);
-                            logAction(currentUserName(), 'Marketing Blast', `Sent bulk marketing text: "${campaignForm.message}"`);
-                            alert('Success! WhatsApp Bulk Promotion campaign finished sending.');
-                            return 100;
-                          }
-                          return prev + 20;
-                        });
-                      }, 400);
-                    }}
-                    className="btn-brand-gold"
-                    style={{ width: '100%', justifyContent: 'center' }}
-                  >
-                    Blast Bulk Campaign
-                  </button>
-                </div>
-              </div>
-
-              {/* Feedback requests */}
-              <div className="card-premium">
-                <h3 style={{ fontFamily: 'Outfit', fontSize: '1.1rem', marginBottom: '16px', color: '#D4AF37' }}>Google Review Requests</h3>
-                <p style={{ fontSize: '0.78rem', color: '#BFA6D8', marginBottom: '16px' }}>Automatically request Google reviews from completed appointments.</p>
-                <button
-                  onClick={() => {
-                    logAction('System', 'Google Review Campaign', 'Sent bulk Google Review request forms to all VIP clients.');
-                    alert('Feedback links blasted successfully!');
-                  }}
-                  className="btn-brand-purple"
-                  style={{ width: '100%', justifyContent: 'center' }}
-                >
-                  Send Bulk Review Invites
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
       </main>
 
       {/* ======================================================= */}
@@ -1924,15 +2179,64 @@ export default function BookingCRM() {
       {/* MODAL: MANUAL BOOKINGS FORM */}
       {showBookingModal && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000 }}>
-          <div className="card-premium animate-fade-in" style={{ width: '400px' }}>
+          <div className="card-premium animate-fade-in" style={{ width: '420px' }}>
             <h3 style={{ fontFamily: 'Outfit', color: '#D4AF37', marginBottom: '16px' }}>Manual Booking</h3>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              
+              {/* Search client by name input */}
               <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Select Client:</label>
-                <select className="brand-input" onChange={(e) => setBookingForm(prev => ({ ...prev, clientId: e.target.value }))}>
-                  {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Search Client Name:</label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input
+                    type="text"
+                    className="brand-input"
+                    placeholder="Search by name..."
+                    value={manualClientSearch}
+                    onChange={(e) => setManualClientSearch(e.target.value)}
+                  />
+                </div>
+
+                {/* Seeding matching search options */}
+                {manualClientSearch.length > 0 && (
+                  <div style={{
+                    maxHeight: '120px', overflowY: 'auto', backgroundColor: 'hsl(var(--brand-black))',
+                    borderRadius: '8px', border: '1px solid rgba(107, 44, 145, 0.3)', marginTop: '4px', padding: '6px'
+                  }}>
+                    {clients
+                      .filter(c => c.name.toLowerCase().includes(manualClientSearch.toLowerCase()))
+                      .map(c => (
+                        <button
+                          key={c.id}
+                          onClick={() => {
+                            setBookingForm(prev => ({ ...prev, clientId: c.id }));
+                            setManualClientSearch(c.name);
+                          }}
+                          style={{
+                            display: 'block', width: '100%', background: 'none', border: 'none',
+                            color: 'white', padding: '6px', textAlign: 'left', cursor: 'pointer', fontSize: '0.8rem'
+                          }}
+                        >
+                          {c.name} ({c.phone})
+                        </button>
+                      ))}
+                    {clients.filter(c => c.name.toLowerCase().includes(manualClientSearch.toLowerCase())).length === 0 && (
+                      <div style={{ padding: '6px' }}>
+                        <span style={{ fontSize: '0.75rem', color: '#ef4444', display: 'block', marginBottom: '6px' }}>No client found.</span>
+                        <button
+                          onClick={() => {
+                            setClientForm(prev => ({ ...prev, name: manualClientSearch }));
+                            setShowClientModal(true);
+                          }}
+                          className="btn-brand-gold"
+                          style={{ fontSize: '0.7rem', padding: '4px 8px' }}
+                        >
+                          + Add New Client Shortcut
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div>
@@ -1948,6 +2252,23 @@ export default function BookingCRM() {
                 }}>
                   {services.map(s => <option key={s.id} value={s.id}>{s.name} (R {s.price})</option>)}
                 </select>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Select Room:</label>
+                  <select className="brand-input" onChange={(e) => setBookingForm(prev => ({ ...prev, room: e.target.value }))}>
+                    {rooms.map(r => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Payment Indicators:</label>
+                  <select className="brand-input" onChange={(e) => setBookingForm(prev => ({ ...prev, paymentStatus: e.target.value }))}>
+                    <option value="Unpaid">✗ Unpaid</option>
+                    <option value="Paid already">✓ Paid already</option>
+                    <option value="Loyalty Promo">⚡ Loyalty Reward Promo</option>
+                  </select>
+                </div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
@@ -1969,6 +2290,7 @@ export default function BookingCRM() {
                       alert(`Allocation Overlap:\n\n${res.error}`);
                     } else {
                       setShowBookingModal(false);
+                      setManualClientSearch('');
                       syncDatabase();
                     }
                   }}
@@ -1977,7 +2299,7 @@ export default function BookingCRM() {
                 >
                   Settle Schedule
                 </button>
-                <button onClick={() => setShowBookingModal(false)} className="btn-brand-purple" style={{ width: '100%', justifyContent: 'center' }}>Cancel</button>
+                <button onClick={() => { setShowBookingModal(false); setManualClientSearch(''); }} className="btn-brand-purple" style={{ width: '100%', justifyContent: 'center' }}>Cancel</button>
               </div>
             </div>
           </div>
@@ -1989,6 +2311,7 @@ export default function BookingCRM() {
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000 }}>
           <div className="card-premium animate-fade-in" style={{ width: '420px' }}>
             <h3 style={{ fontFamily: 'Outfit', color: '#D4AF37', marginBottom: '16px' }}>Register CRM Profile</h3>
+            
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxHeight: '80vh', overflowY: 'auto', paddingRight: '4px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.78rem', color: '#A89684', marginBottom: '4px' }}>Full Name:</label>
@@ -2028,9 +2351,23 @@ export default function BookingCRM() {
                 <button
                   onClick={() => {
                     if (!clientForm.name) return alert('Name is required');
-                    addClient(currentUserName(), clientForm);
+                    
+                    // Check duplicate emails or phone numbers
+                    const duplicates = clients.some(c => c.email === clientForm.email || c.phone === clientForm.phone);
+                    if (duplicates) {
+                      alert('Registration Blocked: A client profile with this phone or email already exists!');
+                      return;
+                    }
+
+                    const created = addClient(currentUserName(), clientForm);
                     setShowClientModal(false);
                     syncDatabase();
+
+                    // If register shortcut triggered inside booking manual form:
+                    if (showBookingModal) {
+                      setBookingForm(prev => ({ ...prev, clientId: created.id }));
+                      setManualClientSearch(created.name);
+                    }
                   }}
                   className="btn-brand-gold"
                   style={{ width: '100%', justifyContent: 'center' }}
@@ -2370,7 +2707,7 @@ export default function BookingCRM() {
                       }}
                     >
                       <option value="">-- Choose Treatment --</option>
-                      {services.map(s => <option key={s.id} value={srv => srv.name}>{s.name}</option>)}
+                      {services.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
                     </select>
                     <input
                       type="number"
@@ -2427,6 +2764,160 @@ export default function BookingCRM() {
                 </button>
                 <button onClick={() => setShowQuoteModal(false)} className="btn-brand-purple" style={{ width: '100%', justifyContent: 'center' }}>Cancel</button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* POPUP MODAL: DYNAMIC WAITLIST MATCH CONFIRMATION */}
+      {activeWaitlistMatch && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 11000 }}>
+          <div className="card-premium animate-fade-in" style={{ width: '440px', border: '2px solid #D4AF37' }}>
+            <h3 style={{ fontFamily: 'Outfit', color: '#D4AF37', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
+              <Volume2 style={{ width: '22px', height: '22px' }} /> Waitlist Release Match Alert!
+            </h3>
+            <p style={{ fontSize: '0.85rem', color: '#BFA6D8', lineHeight: '1.4', marginBottom: '16px' }}>
+              A slot has just opened on the schedule due to a cancellation! We have found matching clients on the waitlist waiting for this treatment:
+            </p>
+
+            <div style={{
+              backgroundColor: 'hsl(var(--brand-black))', padding: '16px', borderRadius: '12px',
+              border: '1px solid rgba(107, 44, 145, 0.25)', marginBottom: '20px'
+            }}>
+              <strong style={{ fontSize: '1.05rem', color: 'white', display: 'block', marginBottom: '4px' }}>
+                {activeWaitlistMatch.client?.name}
+              </strong>
+              <div style={{ fontSize: '0.82rem', color: '#BFA6D8' }}>
+                📞 Telephone: <strong style={{ color: '#D4AF37' }}>{activeWaitlistMatch.client?.phone}</strong>
+              </div>
+              <div style={{ fontSize: '0.82rem', color: '#BFA6D8', marginTop: '2px' }}>
+                ✉ Email: {activeWaitlistMatch.client?.email}
+              </div>
+              <div style={{ fontSize: '0.82rem', color: '#BFA6D8', marginTop: '2px' }}>
+                💆 Treatment: {activeWaitlistMatch.service?.name}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                onClick={() => {
+                  // Settle waitlist booking
+                  const res = addAppointment(currentUserName(), {
+                    clientId: activeWaitlistMatch.wt.clientId,
+                    serviceId: activeWaitlistMatch.wt.serviceId,
+                    staffId: activeWaitlistMatch.wt.preferredStaffId || 'usr-3',
+                    room: 'Treatment Room 1',
+                    machineId: activeWaitlistMatch.service?.requiredMachine || '',
+                    date: activeWaitlistMatch.aptDate,
+                    time: activeWaitlistMatch.aptTime,
+                    duration: activeWaitlistMatch.service?.duration || 30,
+                    notes: 'Automatically allocated via cancellation waitlist releasing'
+                  });
+
+                  if (res.success) {
+                    deleteFromWaitlist(currentUserName(), activeWaitlistMatch.wt.id);
+                    syncDatabase();
+                    setActiveWaitlistMatch(null);
+                    alert('Success! Canceled slot successfully allocated to waitlisted client.');
+                  } else {
+                    alert(`Conflict error allocating slot: ${res.error}`);
+                  }
+                }}
+                className="btn-brand-gold"
+                style={{ width: '100%', justifyContent: 'center' }}
+              >
+                Confirm Spot & Allocate
+              </button>
+              <button
+                onClick={() => setActiveWaitlistMatch(null)}
+                className="btn-brand-purple"
+                style={{ width: '100%', justifyContent: 'center' }}
+              >
+                Dismiss Alert
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* POPUP MODAL: CANCELLATION REASON PROMPT */}
+      {activeCancellationApt && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 11000 }}>
+          <div className="card-premium animate-fade-in" style={{ width: '400px' }}>
+            <h3 style={{ fontFamily: 'Outfit', color: '#ef4444', marginBottom: '14px' }}>Provide Cancellation Reason</h3>
+            <p style={{ fontSize: '0.8rem', color: '#BFA6D8', marginBottom: '12px' }}>
+              Please explain why this slot is being canceled. This will be recorded in the database audit log.
+            </p>
+            
+            <textarea
+              className="brand-input"
+              rows={3}
+              placeholder="e.g. Client called to cancel due to weather delays..."
+              value={cancelReasonText}
+              onChange={(e) => setCancelReasonText(e.target.value)}
+              style={{ marginBottom: '16px' }}
+            />
+
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                onClick={() => {
+                  if (!cancelReasonText) return alert('Please enter a cancellation reason');
+
+                  // Process cancellation
+                  const aptId = activeCancellationApt.id;
+                  const allApts = getTable('appointments');
+                  const idx = allApts.findIndex(a => a.id === aptId);
+                  
+                  if (idx !== -1) {
+                    const prev = allApts[idx];
+                    allApts[idx].status = 'Cancelled';
+                    allApts[idx].cancelReason = cancelReasonText;
+                    localStorage.setItem('salon_appointments', JSON.stringify(allApts));
+                    
+                    logAction(currentUserName(), 'Cancel Booking', 
+                      `Cancelled appointment ID ${aptId}. Reason: "${cancelReasonText}"`, 
+                      prev.status, 'Cancelled'
+                    );
+
+                    // Check if waitlist matches exist
+                    const wl = getTable('waitlist');
+                    const matches = wl.filter(w => w.serviceId === prev.serviceId);
+
+                    syncDatabase();
+                    setActiveCancellationApt(null);
+
+                    if (matches.length > 0) {
+                      const matchWt = matches[0];
+                      const client = getTable('clients').find(c => c.id === matchWt.clientId);
+                      const service = getTable('services').find(s => s.id === matchWt.serviceId);
+                      
+                      // Trigger waitlist alert
+                      setTimeout(() => {
+                        setActiveWaitlistMatch({
+                          wt: matchWt,
+                          client,
+                          service,
+                          aptDate: prev.date,
+                          aptTime: prev.time
+                        });
+                      }, 400);
+                    } else {
+                      alert('Appointment canceled successfully.');
+                    }
+                  }
+                }}
+                className="btn-brand-gold"
+                style={{ width: '100%', justifyContent: 'center', backgroundColor: '#ef4444' }}
+              >
+                Cancel Booking
+              </button>
+              <button
+                onClick={() => setActiveCancellationApt(null)}
+                className="btn-brand-purple"
+                style={{ width: '100%', justifyContent: 'center' }}
+              >
+                Dismiss
+              </button>
             </div>
           </div>
         </div>
