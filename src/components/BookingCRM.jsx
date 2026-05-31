@@ -55,7 +55,8 @@ import {
   submitLoanRequest,
   approveLoanRequest,
   addSalaryAdjustment,
-  finalizeStaffPayslip
+  finalizeStaffPayslip,
+  markNotificationAsRead
 } from '../db/stateEngine';
 
 export default function BookingCRM() {
@@ -219,6 +220,10 @@ export default function BookingCRM() {
   const [showRefundLetterModal, setShowRefundLetterModal] = useState(false);
   const [activeRefundInvoice, setActiveRefundInvoice] = useState(null);
   
+  // Persistent Notifications system states
+  const [notifications, setNotifications] = useState([]);
+  const [showNotifDropdown, setShowNotifDropdown] = useState(false);
+  
   // Custom Search & Whitelists
   const [invoiceSearchQuery, setInvoiceSearchQuery] = useState('');
   const [quoteSearchQuery, setQuoteSearchQuery] = useState('');
@@ -340,6 +345,7 @@ export default function BookingCRM() {
     setShifts(getTable('staffShifts'));
     setUsers(getTable('users'));
     setArchiveList(JSON.parse(localStorage.getItem('salon_archive') || '[]'));
+    setNotifications(getTable('notifications') || []);
 
     // Automatically set default items inside dropdown modals
     if (activeClients.length > 0 && !bookingForm.clientId) {
@@ -367,7 +373,11 @@ export default function BookingCRM() {
     syncDatabase();
     const handleSync = () => syncDatabase();
     window.addEventListener('salon_db_sync', handleSync);
-    return () => window.removeEventListener('salon_db_sync', handleSync);
+    window.addEventListener('salon_notification_update', handleSync);
+    return () => {
+      window.removeEventListener('salon_db_sync', handleSync);
+      window.removeEventListener('salon_notification_update', handleSync);
+    };
   }, []);
 
   // Update notes if selected client changes
@@ -920,16 +930,173 @@ export default function BookingCRM() {
             </div>
           </div>
 
-          <button
-            onClick={() => {
-              window.history.pushState({}, '', '/');
-              window.dispatchEvent(new PopStateEvent('popstate'));
-            }}
-            className="btn-brand-purple"
-            style={{ padding: '6px 12px', fontSize: '0.75rem' }}
-          >
-            ← Elysium SaaS Hub
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', position: 'relative' }}>
+            {/* DYNAMIC PERSISTENT NOTIFICATION CENTER */}
+            {(() => {
+              const activeUsername = currentUserRole === 'receptionist' ? 'receptionist' : currentUserRole === 'therapist' ? 'therapist' : 'owner';
+              const activeUserObj = users.find(u => u.username === activeUsername);
+              const activeUserId = activeUserObj ? activeUserObj.id : null;
+
+              const activeNotifications = notifications.filter(n => 
+                currentUserRole === 'owner' ? n.recipientId === 'owner' : activeUserId && n.recipientId === activeUserId
+              );
+
+              return (
+                <div style={{ position: 'relative' }}>
+                  <button
+                    onClick={() => setShowNotifDropdown(!showNotifDropdown)}
+                    style={{
+                      background: 'rgba(107, 44, 145, 0.15)',
+                      border: '1px solid rgba(107, 44, 145, 0.3)',
+                      color: 'white',
+                      padding: '8px',
+                      borderRadius: '50%',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      position: 'relative',
+                      transition: 'all 0.2s',
+                    }}
+                    title="View System & HR Notifications"
+                  >
+                    <Bell style={{ width: '16px', height: '16px', color: activeNotifications.length > 0 ? '#D4AF37' : '#BFA6D8' }} />
+                    {activeNotifications.length > 0 && (
+                      <span
+                        style={{
+                          position: 'absolute',
+                          top: '-4px',
+                          right: '-4px',
+                          backgroundColor: '#ef4444',
+                          color: 'white',
+                          fontSize: '0.62rem',
+                          fontWeight: 'bold',
+                          borderRadius: '50%',
+                          width: '16px',
+                          height: '16px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          boxShadow: '0 0 6px #ef4444',
+                        }}
+                      >
+                        {activeNotifications.length}
+                      </span>
+                    )}
+                  </button>
+
+                  {/* Dropdown Panel */}
+                  {showNotifDropdown && (
+                    <div
+                      className="card-premium animate-fade-in"
+                      style={{
+                        position: 'absolute',
+                        right: 0,
+                        top: '40px',
+                        width: '320px',
+                        zIndex: 20000,
+                        backgroundColor: '#1C1525',
+                        border: '1px solid rgba(107, 44, 145, 0.4)',
+                        boxShadow: 'var(--shadow-premium)',
+                        padding: '16px',
+                        borderRadius: '12px',
+                        color: 'white',
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '8px', marginBottom: '10px' }}>
+                        <span style={{ fontWeight: 700, fontSize: '0.82rem', color: '#D4AF37' }}>HR & Payroll Notifications</span>
+                        <span style={{ fontSize: '0.68rem', color: '#A89684' }}>{activeNotifications.length} Pending</span>
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '250px', overflowY: 'auto' }}>
+                        {activeNotifications.length === 0 ? (
+                          <div style={{ textAlign: 'center', color: '#BFA6D8', fontSize: '0.78rem', padding: '16px 0' }}>
+                            No new active notifications.
+                          </div>
+                        ) : (
+                          activeNotifications.map(n => (
+                            <div
+                              key={n.id}
+                              style={{
+                                backgroundColor: 'rgba(255,255,255,0.02)',
+                                border: '1px solid rgba(255,255,255,0.04)',
+                                padding: '10px',
+                                borderRadius: '8px',
+                                fontSize: '0.75rem',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '4px',
+                              }}
+                            >
+                              <div style={{ display: 'flex', justify: 'space-between', alignItems: 'flex-start' }}>
+                                <span style={{ fontWeight: 'bold', color: 'white' }}>{n.title}</span>
+                                <span style={{ fontSize: '0.6rem', color: '#A89684' }}>
+                                  {new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              </div>
+                              <p style={{ margin: 0, color: '#BFA6D8', lineHeight: '1.3' }}>{n.message}</p>
+                              
+                              <div style={{ display: 'flex', gap: '8px', marginTop: '6px', justifyContent: 'flex-end' }}>
+                                {currentUserRole === 'owner' ? (
+                                  <button
+                                    onClick={() => {
+                                      setActiveTab('staff');
+                                      if (n.type === 'leave_request') {
+                                        setSelectedStaffDossierTab('leave');
+                                      } else if (n.type === 'claim_request') {
+                                        setSelectedStaffDossierTab('claims');
+                                      } else if (n.type === 'loan_request') {
+                                        setSelectedStaffDossierTab('loans');
+                                      }
+                                      const relatedUser = users.find(u => 
+                                        (u.leaveRequests || []).some(r => r.id === n.relatedId) ||
+                                        (u.claims || []).some(c => c.id === n.relatedId) ||
+                                        (u.loans || []).some(l => l.id === n.relatedId)
+                                      );
+                                      if (relatedUser) {
+                                        setSelectedStaffId(relatedUser.id);
+                                      }
+                                      setShowNotifDropdown(false);
+                                    }}
+                                    className="badge-brand gold"
+                                    style={{ border: 'none', padding: '2px 8px', fontSize: '0.62rem', cursor: 'pointer', borderRadius: '4px' }}
+                                  >
+                                    Review Request
+                                  </button>
+                                ) : (
+                                  <button
+                                    onClick={() => {
+                                      markNotificationAsRead(activeUserId, n.id);
+                                      syncDatabase();
+                                    }}
+                                    className="badge-brand purple"
+                                    style={{ border: 'none', padding: '2px 8px', fontSize: '0.62rem', cursor: 'pointer', borderRadius: '4px' }}
+                                  >
+                                    Dismiss
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            <button
+              onClick={() => {
+                window.history.pushState({}, '', '/');
+                window.dispatchEvent(new PopStateEvent('popstate'));
+              }}
+              className="btn-brand-purple"
+              style={{ padding: '6px 12px', fontSize: '0.75rem' }}
+            >
+              ← Elysium SaaS Hub
+            </button>
+          </div>
         </header>
 
         {/* WORKSPACE A: CALENDAR SCHEDULER */}

@@ -1375,6 +1375,9 @@ export const submitLeaveRequest = (username, staffId, leaveReq) => {
   users[idx] = { ...user, leaveRequests: [...reqs, newReq] };
   saveTable('users', users);
 
+  // Notification hook: Notify Owner of New Leave Request
+  addNotification('owner', 'leave_request', 'New Leave Request', `${user.name} requested ${leaveReq.days} days of ${leaveReq.type} Leave (${leaveReq.startDate} to ${leaveReq.endDate}).`, newReq.id);
+
   let warning = '';
   let balance = user.leaveBalance;
   if (leaveReq.type === 'Sick') balance = user.sickLeaveBalance;
@@ -1431,6 +1434,11 @@ export const approveLeaveRequest = (username, staffId, requestId, status) => {
   
   users[idx] = { ...user, leaveRequests: reqs };
   saveTable('users', users);
+  
+  // Notification hook: Clear Owner's notification & Notify Staff member
+  clearNotification('owner', requestId);
+  addNotification(staffId, `leave_${status}`, `Leave Request ${status === 'approved' ? 'Approved' : 'Declined'}`, `Your request for ${req.days} days of ${req.type} Leave has been ${status === 'approved' ? 'approved' : 'declined'}.`, requestId);
+  
   logAction(username, status === 'approved' ? 'Approve Leave Request' : 'Reject Leave Request', `${status.toUpperCase()}ED ${req.days} days ${req.type} Leave for ${user.name}`);
   return true;
 };
@@ -1454,6 +1462,10 @@ export const submitStaffClaim = (username, staffId, claimData) => {
   
   users[idx] = { ...user, claims: [...claims, newClaim] };
   saveTable('users', users);
+
+  // Notification hook: Notify Owner of New Claim Request
+  addNotification('owner', 'claim_request', 'New Expense Claim', `${user.name} submitted a R${newClaim.amount} ${claimData.type} claim.`, newClaim.id);
+
   logAction(username, 'Submit Claim', `${user.name} submitted a ${claimData.type} claim of R${newClaim.amount}`);
   return users[idx];
 };
@@ -1471,6 +1483,11 @@ export const approveStaffClaim = (username, staffId, claimId, status) => {
   claims[cIdx].status = status;
   users[idx] = { ...user, claims };
   saveTable('users', users);
+
+  // Notification hook: Clear Owner's notification & Notify Staff member
+  clearNotification('owner', claimId);
+  addNotification(staffId, `claim_${status}`, `Expense Claim ${status === 'approved' ? 'Approved' : 'Declined'}`, `Your ${claims[cIdx].type} claim of R${claims[cIdx].amount} has been ${status === 'approved' ? 'approved' : 'declined'}.`, claimId);
+
   logAction(username, status === 'approved' ? 'Approve Claim' : 'Reject Claim', `${status.toUpperCase()}ED claim for ${user.name}: R${claims[cIdx].amount}`);
   return true;
 };
@@ -1494,6 +1511,10 @@ export const submitLoanRequest = (username, staffId, loanData) => {
   
   users[idx] = { ...user, loans: [...loans, newLoan] };
   saveTable('users', users);
+
+  // Notification hook: Notify Owner of New Loan Request
+  addNotification('owner', 'loan_request', 'New Emergency Loan Request', `${user.name} requested a R${newLoan.amount} loan to repay over ${newLoan.months} months.`, newLoan.id);
+
   logAction(username, 'Request Loan', `${user.name} requested R${loanData.amount} loan to repay over ${loanData.months} months.`);
   return users[idx];
 };
@@ -1511,6 +1532,11 @@ export const approveLoanRequest = (username, staffId, loanId, status) => {
   loans[lIdx].status = status;
   users[idx] = { ...user, loans };
   saveTable('users', users);
+
+  // Notification hook: Clear Owner's notification & Notify Staff member
+  clearNotification('owner', loanId);
+  addNotification(staffId, `loan_${status}`, `Loan Request ${status === 'approved' ? 'Approved' : 'Declined'}`, `Your emergency loan request for R${loans[lIdx].amount} has been ${status === 'approved' ? 'approved' : 'declined'}.`, loanId);
+
   logAction(username, status === 'approved' ? 'Approve Loan Request' : 'Reject Loan Request', `${status.toUpperCase()}ED R${loans[lIdx].amount} loan request for ${user.name}`);
   return true;
 };
@@ -1616,5 +1642,51 @@ export const finalizeStaffPayslip = (username, staffId, monthName) => {
   });
   
   logAction(username, 'Finalize Payroll Payslip', `Processed monthly payroll for ${user.name} (${monthName}). Total Paid: R${netSalary}`);
+  
+  // Notification hook:
+  addNotification(staffId, 'payslip_available', 'New Payslip Available', `Your payslip for ${monthName} is now available in your Vault!`, payslipItem.id);
+  
   return { success: true, payslip: payslipItem };
+};
+
+// Persistent Notifications System
+export const addNotification = (recipientId, type, title, message, relatedId) => {
+  const notifs = getTable('notifications') || [];
+  const newNotif = {
+    id: `notif-${Date.now()}-${Math.floor(Math.random()*1000)}`,
+    recipientId,
+    type,
+    title,
+    message,
+    relatedId,
+    read: false,
+    createdAt: new Date().toISOString()
+  };
+  notifs.unshift(newNotif);
+  saveTable('notifications', notifs);
+  window.dispatchEvent(new CustomEvent('salon_notification_update'));
+  return newNotif;
+};
+
+export const clearNotification = (recipientId, relatedId) => {
+  const notifs = getTable('notifications') || [];
+  const filtered = notifs.filter(n => !(n.recipientId === recipientId && n.relatedId === relatedId));
+  if (filtered.length !== notifs.length) {
+    saveTable('notifications', filtered);
+    window.dispatchEvent(new CustomEvent('salon_notification_update'));
+    return true;
+  }
+  return false;
+};
+
+export const markNotificationAsRead = (recipientId, notifId) => {
+  const notifs = getTable('notifications') || [];
+  const idx = notifs.findIndex(n => n.id === notifId && n.recipientId === recipientId);
+  if (idx !== -1) {
+    notifs.splice(idx, 1);
+    saveTable('notifications', notifs);
+    window.dispatchEvent(new CustomEvent('salon_notification_update'));
+    return true;
+  }
+  return false;
 };
