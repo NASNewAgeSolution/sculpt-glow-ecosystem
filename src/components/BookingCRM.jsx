@@ -2420,8 +2420,7 @@ export default function BookingCRM() {
                                 setActiveServiceForm(srv);
                                 setShowServiceModal(true);
                               }}
-                              className="btn-brand-purple"
-                              style={{ padding: '4px 8px', fontSize: '0.7rem', height: '26px' }}
+                              style={{ border: 'none', backgroundColor: 'rgba(96, 165, 250, 0.1)', color: '#60a5fa', padding: '4px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.7rem', height: '26px' }}
                             >
                               Edit
                             </button>
@@ -2432,7 +2431,7 @@ export default function BookingCRM() {
                                   syncDatabase();
                                 }
                               }}
-                              style={{ border: 'none', backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', padding: '4px 8px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.7rem', height: '26px' }}
+                              style={{ border: 'none', backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', padding: '4px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.7rem', height: '26px' }}
                             >
                               Delete
                             </button>
@@ -2533,7 +2532,7 @@ export default function BookingCRM() {
                                 setCustomCategoryText('');
                                 setShowProductModal(true);
                               }}
-                              style={{ border: 'none', backgroundColor: 'hsl(var(--brand-black))', color: 'white', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.72rem' }}
+                              style={{ border: 'none', backgroundColor: 'rgba(96, 165, 250, 0.1)', color: '#60a5fa', padding: '4px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.7rem', height: '26px' }}
                             >
                               Edit
                             </button>
@@ -2544,9 +2543,9 @@ export default function BookingCRM() {
                               }}
                               style={{
                                 border: 'none',
-                                backgroundColor: prod.stock === 0 ? '#34d39933' : '#ef444433',
+                                backgroundColor: prod.stock === 0 ? 'rgba(52, 211, 153, 0.1)' : 'rgba(239, 68, 68, 0.1)',
                                 color: prod.stock === 0 ? '#34d399' : '#ef4444',
-                                padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.72rem'
+                                padding: '4px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.7rem', height: '26px'
                               }}
                             >
                               {prod.stock === 0 ? 'In-Stock' : 'Out-Stock'}
@@ -2558,7 +2557,7 @@ export default function BookingCRM() {
                                   syncDatabase();
                                 }
                               }}
-                              style={{ border: 'none', backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.72rem' }}
+                              style={{ border: 'none', backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', padding: '4px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.7rem', height: '26px' }}
                             >
                               Delete
                             </button>
@@ -2682,8 +2681,7 @@ export default function BookingCRM() {
                                   setStockAdjustForm({ type: 'add', amount: '', reason: '' });
                                   setShowStockAdjustModal(true);
                                 }}
-                                className="btn-brand-purple"
-                                style={{ padding: '4px 8px', fontSize: '0.72rem', height: '26px' }}
+                                style={{ border: 'none', backgroundColor: 'rgba(212, 175, 55, 0.1)', color: '#D4AF37', padding: '4px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.7rem', height: '26px' }}
                               >
                                 Adjust Stock
                               </button>
@@ -2701,8 +2699,7 @@ export default function BookingCRM() {
                                   });
                                   setShowInventoryModal(true);
                                 }}
-                                className="btn-brand-purple"
-                                style={{ padding: '4px 8px', fontSize: '0.72rem', height: '26px', backgroundColor: 'rgba(96, 165, 250, 0.1)', color: '#60a5fa', border: '1px solid rgba(96,165,250,0.3)' }}
+                                style={{ border: 'none', backgroundColor: 'rgba(96, 165, 250, 0.1)', color: '#60a5fa', padding: '4px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.7rem', height: '26px' }}
                               >
                                 Edit
                               </button>
@@ -2713,8 +2710,7 @@ export default function BookingCRM() {
                                     syncDatabase();
                                   }
                                 }}
-                                className="btn-brand-purple"
-                                style={{ padding: '4px 8px', fontSize: '0.72rem', height: '26px', backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.3)' }}
+                                style={{ border: 'none', backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', padding: '4px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.7rem', height: '26px' }}
                               >
                                 Delete
                               </button>
@@ -3336,7 +3332,7 @@ export default function BookingCRM() {
                                     });
                                     setShowExpenseModal(true);
                                   }}
-                                  style={{ border: 'none', backgroundColor: 'rgba(255, 255, 255, 0.05)', color: 'white', padding: '2px 6px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.65rem' }}
+                                  style={{ border: 'none', backgroundColor: 'rgba(96, 165, 250, 0.1)', color: '#60a5fa', padding: '4px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.7rem', height: '26px' }}
                                 >
                                   Edit
                                 </button>
@@ -3347,7 +3343,7 @@ export default function BookingCRM() {
                                       syncDatabase();
                                     }
                                   }}
-                                  style={{ border: 'none', backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', padding: '2px 6px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.65rem' }}
+                                  style={{ border: 'none', backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', padding: '4px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.7rem', height: '26px' }}
                                 >
                                   Delete
                                 </button>
