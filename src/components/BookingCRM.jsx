@@ -96,6 +96,65 @@ export default function BookingCRM() {
   const [showShiftModal, setShowShiftModal] = useState(false);
   const [isSidebarMinimized, setIsSidebarMinimized] = useState(false);
 
+  // Google Reviews Feed State
+  const [googleReviews, setGoogleReviews] = useState(() => {
+    const data = localStorage.getItem('salon_google_reviews');
+    if (data) return JSON.parse(data);
+    const mock = [
+      {
+        id: 'rev-1',
+        reviewerName: 'Sarah Jenkins',
+        reviewerAvatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=100',
+        rating: 5,
+        timeAgo: '2 hours ago',
+        comment: 'Absolutely loved my Thermo Treadmill session today! Burning 850 kcal in 30 minutes felt effortless with the entertainment screen. The place is super clean and the staff is extremely helpful. Highly recommend Sculpt & Glow!',
+        service: 'Thermo Treadmill Workout',
+        status: 'Unanswered',
+        reply: ''
+      },
+      {
+        id: 'rev-2',
+        reviewerName: 'Clarissa Vance',
+        reviewerAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=100',
+        rating: 5,
+        timeAgo: '1 day ago',
+        comment: 'The fat freezing treatment really works. I was skeptical but after 4 weeks I can definitely see a difference in my waistline. The receptionist was so sweet and set me up with a cup of collagen tea. Will be back next week!',
+        service: 'Cryo Fat Freezing',
+        status: 'Replied',
+        reply: 'Thank you Clarissa! We are so glad to hear you are enjoying your Cryo Fat Freezing results. Our reception desk works hard to make every visit feel like a VIP retreat. See you soon!'
+      },
+      {
+        id: 'rev-3',
+        reviewerName: 'Amanda DeVore',
+        reviewerAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=100',
+        rating: 4,
+        timeAgo: '3 days ago',
+        comment: 'Great service and premium ambience. The skin peptide treatment was very relaxing, though booking on the weekend was a bit crowded. But the treatment itself made my skin glow instantly.',
+        service: 'Premium Peptide Serum Infusion',
+        status: 'Unanswered',
+        reply: ''
+      },
+      {
+        id: 'rev-4',
+        reviewerName: 'Michael K.',
+        reviewerAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=100',
+        rating: 5,
+        timeAgo: '5 days ago',
+        comment: 'Jessica is the absolute best therapist in town. She explained the entire laser process clearly and made sure I was comfortable throughout the session. Real professional clinical standards.',
+        service: 'Laser Hair Removal',
+        status: 'Replied',
+        reply: "Thank you Michael! Jessica is indeed a gem, and we're so proud to have her on our clinical team. We appreciate you taking the time to share your experience!"
+      }
+    ];
+    localStorage.setItem('salon_google_reviews', JSON.stringify(mock));
+    return mock;
+  });
+
+  const [activeReplyReview, setActiveReplyReview] = useState(null);
+  const [reviewReplyText, setReviewReplyText] = useState('');
+  const [showReplyModal, setShowReplyModal] = useState(false);
+  const [isSyncingReviews, setIsSyncingReviews] = useState(false);
+
   // New Modals for Rescheduling & Capturing Payments
   const [showRescheduleModal, setShowRescheduleModal] = useState(false);
   const [showCapturePaymentModal, setShowCapturePaymentModal] = useState(false);
@@ -363,7 +422,8 @@ export default function BookingCRM() {
       items: [
         { id: 'crm', label: 'CRM Client Folders', roles: ['owner', 'receptionist', 'therapist'] },
         { id: 'loyalty', label: 'VIP & Glow Points', roles: ['owner', 'receptionist'] },
-        { id: 'gallery', label: 'Before/After Progress', roles: ['owner', 'receptionist', 'therapist'] }
+        { id: 'gallery', label: 'Before/After Progress', roles: ['owner', 'receptionist', 'therapist'] },
+        { id: 'reviews', label: 'Google Business Reviews', roles: ['owner', 'receptionist'] }
       ]
     },
     billing: {
@@ -1717,6 +1777,357 @@ export default function BookingCRM() {
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* WORKSPACE FOR GOOGLE BUSINESS REVIEWS INTEGRATION */}
+        {activeTab === 'reviews' && (
+          <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            {/* Header synced panel */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h1 style={{ fontSize: '1.75rem', fontWeight: 800, margin: 0, fontFamily: 'Outfit' }}>Google Business Reviews Feed</h1>
+                <p style={{ color: '#BFA6D8', margin: '4px 0 0 0', fontSize: '0.85rem' }}>Monitor public ratings, track feedback loops, and publish live owner replies to your Google listings.</p>
+              </div>
+
+              <button
+                onClick={() => {
+                  if (isSyncingReviews) return;
+                  setIsSyncingReviews(true);
+                  // Simulate live fetch latency
+                  setTimeout(() => {
+                    setGoogleReviews(prev => {
+                      // Check if already fetched to prevent duplication
+                      if (prev.some(r => r.id === 'rev-fetched')) {
+                        setIsSyncingReviews(false);
+                        alert('Your Google Business profile is already fully synchronized! 0 new reviews found.');
+                        return prev;
+                      }
+                      
+                      const newReview = {
+                        id: 'rev-fetched',
+                        reviewerName: 'Victoria S.',
+                        reviewerAvatar: 'https://images.unsplash.com/photo-1554151228-14d9def656e4?auto=format&fit=crop&q=80&w=100',
+                        rating: 5,
+                        timeAgo: 'Just now',
+                        comment: 'Absolutely phenomenal clinical standards! The digital weight scale progression charting and the loyalty Glow Points reward system make me feel so valued. The Fat Freezing results are already showing. 10/10!',
+                        service: 'Cryo Fat Freezing',
+                        status: 'Unanswered',
+                        reply: ''
+                      };
+                      
+                      const updated = [newReview, ...prev];
+                      localStorage.setItem('salon_google_reviews', JSON.stringify(updated));
+                      setIsSyncingReviews(false);
+                      logAction(currentUserName(), 'Sync Google Reviews', 'Fetched 1 new review from Google Business Profile.');
+                      alert('Success! Sycned Google Business Reviews: 1 new review pulled successfully!');
+                      return updated;
+                    });
+                  }, 1200);
+                }}
+                className="btn-brand-gold"
+                style={{ fontSize: '0.78rem', height: '36px', display: 'flex', alignItems: 'center', gap: '8px' }}
+                disabled={isSyncingReviews}
+              >
+                <RefreshCw className={isSyncingReviews ? 'animate-spin' : ''} style={{ width: '14px', height: '14px' }} />
+                {isSyncingReviews ? 'Syncing Profile...' : 'Sync Google Reviews'}
+              </button>
+            </div>
+
+            {/* Metrics cards grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
+              <div className="card-premium" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <span style={{ fontSize: '0.72rem', color: '#A89684', textTransform: 'uppercase', fontWeight: 700 }}>Overall Google Rating</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <strong style={{ fontSize: '1.8rem', color: 'white', fontFamily: 'Outfit' }}>
+                    {(googleReviews.reduce((acc, r) => acc + r.rating, 0) / googleReviews.length).toFixed(1)}
+                  </strong>
+                  <div>
+                    <div style={{ display: 'flex', color: '#D4AF37', fontSize: '0.85rem' }}>
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <span key={i}>★</span>
+                      ))}
+                    </div>
+                    <span style={{ fontSize: '0.65rem', color: '#BFA6D8' }}>{googleReviews.length + 120} verified reviews</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="card-premium" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <span style={{ fontSize: '0.72rem', color: '#A89684', textTransform: 'uppercase', fontWeight: 700 }}>Response Rate</span>
+                <div>
+                  <strong style={{ fontSize: '1.8rem', color: 'white', fontFamily: 'Outfit' }}>
+                    {Math.round((googleReviews.filter(r => r.status === 'Replied').length / googleReviews.length) * 100)}%
+                  </strong>
+                  <span style={{ display: 'block', fontSize: '0.65rem', color: '#BFA6D8', marginTop: '2px' }}>Target SLA threshold: 95%</span>
+                </div>
+              </div>
+
+              <div className="card-premium" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <span style={{ fontSize: '0.72rem', color: '#A89684', textTransform: 'uppercase', fontWeight: 700 }}>Unanswered Reviews</span>
+                <div>
+                  <strong style={{ fontSize: '1.8rem', color: googleReviews.some(r => r.status === 'Unanswered') ? '#ef4444' : '#34d399', fontFamily: 'Outfit' }}>
+                    {googleReviews.filter(r => r.status === 'Unanswered').length}
+                  </strong>
+                  <span style={{ display: 'block', fontSize: '0.65rem', color: '#BFA6D8', marginTop: '2px' }}>Action required within 24h</span>
+                </div>
+              </div>
+
+              <div className="card-premium" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <span style={{ fontSize: '0.72rem', color: '#A89684', textTransform: 'uppercase', fontWeight: 700 }}>Synced Google Account</span>
+                <div>
+                  <strong style={{ fontSize: '0.88rem', color: 'white', display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                    sculptglow.location1@gmail.com
+                  </strong>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.65rem', color: '#34d399', fontWeight: 700, marginTop: '4px' }}>
+                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#34d399', display: 'inline-block' }} /> Live Business Sync
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Google Reviews feed cards */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {googleReviews.map(review => {
+                const isReplied = review.status === 'Replied';
+                return (
+                  <div
+                    key={review.id}
+                    className="card-premium"
+                    style={{
+                      borderLeft: isReplied ? '4px solid rgba(107, 44, 145, 0.4)' : '4px solid #D4AF37',
+                      transition: 'all 0.3s ease'
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      {/* Left: Reviewer profile */}
+                      <div style={{ display: 'flex', gap: '12px' }}>
+                        <img
+                          src={review.reviewerAvatar}
+                          style={{ width: '44px', height: '44px', borderRadius: '50%', objectFit: 'cover', border: '1px solid rgba(107, 44, 145, 0.2)' }}
+                          alt={review.reviewerName}
+                        />
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <strong style={{ color: 'white', fontSize: '0.92rem' }}>{review.reviewerName}</strong>
+                            <span
+                              className="badge-brand gold"
+                              style={{ fontSize: '0.52rem', padding: '2px 6px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}
+                            >
+                              Verified Google Local Guide
+                            </span>
+                          </div>
+                          
+                          {/* Rating stars */}
+                          <div style={{ display: 'flex', gap: '2px', color: '#D4AF37', fontSize: '0.72rem', marginTop: '3px' }}>
+                            {Array.from({ length: 5 }).map((_, idx) => (
+                              <span key={idx}>{idx < review.rating ? '★' : '☆'}</span>
+                            ))}
+                            <span style={{ color: '#A89684', fontSize: '0.7rem', marginLeft: '6px' }}>{review.timeAgo}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Right: Treatment Tag & Status Badge */}
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
+                        {review.service && (
+                          <span className="badge-brand purple" style={{ fontSize: '0.62rem' }}>
+                            Treatment: {review.service}
+                          </span>
+                        )}
+                        <span
+                          className={`badge-brand ${isReplied ? 'completed' : 'pending'}`}
+                          style={{ fontSize: '0.62rem' }}
+                        >
+                          {isReplied ? '✓ Replied' : '⚠️ Unanswered'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Review comment text */}
+                    <div style={{ margin: '14px 0', paddingLeft: '4px' }}>
+                      <p style={{ color: '#F5EFE6', fontSize: '0.85rem', lineHeight: '1.5', margin: 0, fontStyle: 'italic' }}>
+                        "{review.comment}"
+                      </p>
+                    </div>
+
+                    {/* Reply Section */}
+                    {isReplied ? (
+                      <div
+                        style={{
+                          backgroundColor: 'rgba(107, 44, 145, 0.15)',
+                          border: '1px solid rgba(107, 44, 145, 0.25)',
+                          borderRadius: '10px',
+                          padding: '12px 16px',
+                          fontSize: '0.8rem',
+                          marginTop: '12px'
+                        }}
+                      >
+                        <div style={{ display: 'flex', justify: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                          <strong style={{ color: '#D4AF37', fontSize: '0.75rem', textTransform: 'uppercase', tracking: '0.05em' }}>
+                            Response from Owner (Verified GMB):
+                          </strong>
+                          <button
+                            onClick={() => {
+                              // Edit reply flow
+                              setActiveReplyReview(review);
+                              setReviewReplyText(review.reply);
+                              setShowReplyModal(true);
+                            }}
+                            style={{
+                              background: 'none', border: 'none', color: '#BFA6D8', fontSize: '0.68rem', cursor: 'pointer',
+                              textDecoration: 'underline'
+                            }}
+                          >
+                            Edit Response
+                          </button>
+                        </div>
+                        <p style={{ color: '#BFA6D8', margin: 0, lineHeight: '1.4' }}>
+                          {review.reply}
+                        </p>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', justify: 'flex-end', marginTop: '12px' }}>
+                        <button
+                          onClick={() => {
+                            setActiveReplyReview(review);
+                            setReviewReplyText('');
+                            setShowReplyModal(true);
+                          }}
+                          className="btn-brand-gold"
+                          style={{ fontSize: '0.72rem', padding: '6px 14px' }}
+                        >
+                          Reply on Google
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* REPLY MODAL OVERLAY */}
+            {showReplyModal && activeReplyReview && (
+              <div
+                className="rent-suspend-overlay"
+                style={{
+                  position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+                  backgroundColor: 'rgba(13, 13, 13, 0.9)', backdropFilter: 'blur(10px)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100000
+                }}
+              >
+                <div
+                  className="card-premium"
+                  style={{
+                    width: '100%', maxWidth: '540px', padding: '24px',
+                    boxShadow: 'var(--shadow-premium), 0 0 30px rgba(107, 44, 145, 0.25)',
+                    border: '1px solid hsl(var(--brand-purple) / 0.5)'
+                  }}
+                >
+                  <h3 style={{ fontFamily: 'Outfit', fontSize: '1.25rem', color: 'white', margin: '0 0 16px 0' }}>
+                    Reply to Google Business Review
+                  </h3>
+
+                  {/* Original Review Bubble */}
+                  <div
+                    style={{
+                      backgroundColor: 'hsl(var(--brand-black))', borderRadius: '10px',
+                      padding: '12px 14px', border: '1px solid rgba(107, 44, 145, 0.15)',
+                      marginBottom: '16px', fontSize: '0.78rem'
+                    }}
+                  >
+                    <div style={{ display: 'flex', justify: 'space-between', marginBottom: '6px' }}>
+                      <strong style={{ color: 'white' }}>{activeReplyReview.reviewerName}</strong>
+                      <div style={{ color: '#D4AF37' }}>
+                        {Array.from({ length: 5 }).map((_, i) => (
+                          <span key={i}>{i < activeReplyReview.rating ? '★' : '☆'}</span>
+                        ))}
+                      </div>
+                    </div>
+                    <p style={{ color: '#BFA6D8', margin: 0, fontStyle: 'italic' }}>
+                      "{activeReplyReview.comment}"
+                    </p>
+                  </div>
+
+                  {/* Input Label & Assistant */}
+                  <div style={{ display: 'flex', justify: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <label style={{ fontSize: '0.78rem', color: '#A89684', fontWeight: 600 }}>Your Public Owner Response:</label>
+                    <button
+                      onClick={() => {
+                        const greeting = `Dear ${activeReplyReview.reviewerName},\n\n`;
+                        const body = `Thank you so much for the glowing ${activeReplyReview.rating}-star Google review! We are absolutely delighted that you had such a premium experience at Sculpt & Glow. Our clinical team works incredibly hard to ensure every treatment feels comfortable and delivers excellent results. We cannot wait to welcome you back for another retreat soon!`;
+                        const closing = `\n\nWarmest regards,\nThe Sculpt & Glow Management`;
+                        setReviewReplyText(greeting + body + closing);
+                      }}
+                      type="button"
+                      style={{
+                        background: 'linear-gradient(135deg, rgba(107, 44, 145, 0.25) 0%, rgba(212, 175, 55, 0.1) 100%)',
+                        border: '1px solid hsl(var(--brand-purple) / 0.4)', color: '#D4AF37',
+                        padding: '4px 10px', borderRadius: '6px', fontSize: '0.68rem', cursor: 'pointer',
+                        fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px'
+                      }}
+                    >
+                      <span>✨ Generate AI Response</span>
+                    </button>
+                  </div>
+
+                  <textarea
+                    rows={6}
+                    value={reviewReplyText}
+                    onChange={(e) => setReviewReplyText(e.target.value)}
+                    placeholder="Enter your professional response..."
+                    className="brand-input"
+                    style={{ fontSize: '0.8rem', lineHeight: '1.4', marginBottom: '20px', fontFamily: 'inherit' }}
+                  />
+
+                  {/* Action Buttons */}
+                  <div style={{ display: 'flex', justify: 'flex-end', gap: '12px' }}>
+                    <button
+                      onClick={() => {
+                        setShowReplyModal(false);
+                        setActiveReplyReview(null);
+                        setReviewReplyText('');
+                      }}
+                      className="btn-brand-purple"
+                      style={{ fontSize: '0.75rem', padding: '6px 14px' }}
+                    >
+                      Cancel
+                    </button>
+                    
+                    <button
+                      onClick={() => {
+                        if (!reviewReplyText.trim()) {
+                          alert('Please enter a response or use the AI Assistant before posting!');
+                          return;
+                        }
+                        
+                        setGoogleReviews(prev => {
+                          const updated = prev.map(r => {
+                            if (r.id === activeReplyReview.id) {
+                              return { ...r, reply: reviewReplyText, status: 'Replied' };
+                            }
+                            return r;
+                          });
+                          localStorage.setItem('salon_google_reviews', JSON.stringify(updated));
+                          return updated;
+                        });
+                        
+                        logAction(currentUserName(), 'Google Review Reply', `Responded to ${activeReplyReview.reviewerName}'s review.`);
+                        syncDatabase();
+                        setShowReplyModal(false);
+                        setActiveReplyReview(null);
+                        setReviewReplyText('');
+                        alert('Success! Reply posted to Google Business profile.');
+                      }}
+                      className="btn-brand-gold"
+                      style={{ fontSize: '0.75rem', padding: '6px 14px' }}
+                    >
+                      Post Reply to Google
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
