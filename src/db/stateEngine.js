@@ -77,6 +77,51 @@ export const initializeDatabase = () => {
   initTable('settings', initialSettings);
   initTable('products', initialProducts);
   initTable('waitlist', []);
+
+  // Seed extended HR/Payroll fields for users if not present
+  const users = JSON.parse(localStorage.getItem('salon_users') || '[]');
+  let updatedUsers = false;
+  const newUsers = users.map(user => {
+    if (user.salary === undefined) {
+      updatedUsers = true;
+      let salary = 0;
+      let comm = 0;
+      let salesT = 15000;
+      let srvT = 10000;
+      if (user.role === 'owner') { salary = 35000; comm = 0; }
+      else if (user.role === 'therapist') { salary = 12500; comm = 10; salesT = 20000; srvT = 15000; }
+      else if (user.role === 'receptionist') { salary = 8500; comm = 5; salesT = 10000; srvT = 5000; }
+      
+      return {
+        ...user,
+        salary,
+        bankName: 'FNB Pretoria',
+        accountHolder: user.name,
+        accountNumber: `102938${user.id.split('-')[1]}`,
+        branchCode: '250655',
+        contracts: [
+          { id: `doc-1`, name: `${user.name} Active Employment Contract.pdf`, type: 'contract', uploadDate: '2025-01-10' }
+        ],
+        commissionRate: comm,
+        salesTarget: salesT,
+        servicesTarget: srvT,
+        leaveBalance: 15,
+        monthlyLeaveAccrual: 1.25,
+        sickLeaveBalance: 10,
+        sickLeaveRenewCycle: '1 year',
+        familyLeaveBalance: 3,
+        claims: [],
+        loans: [],
+        bonuses: [],
+        payslips: [],
+        leaveRequests: []
+      };
+    }
+    return user;
+  });
+  if (updatedUsers && newUsers.length > 0) {
+    localStorage.setItem('salon_users', JSON.stringify(newUsers));
+  }
 };
 
 // Unified state sync triggers
@@ -1276,4 +1321,300 @@ export const deleteInventoryItem = (username, itemId) => {
   archiveItem(username, 'Inventory', prev.name, prev);
   logAction(username, 'Delete Inventory Item', `Deleted stock item "${prev.name}"`, prev, '');
   return true;
+};
+
+// HR & Payroll Ecosystem Functions
+export const updateStaffProfile = (username, staffId, profileData) => {
+  const users = getTable('users');
+  const idx = users.findIndex(u => u.id === staffId);
+  if (idx === -1) return null;
+  const prev = users[idx];
+  const updated = { ...prev, ...profileData };
+  users[idx] = updated;
+  saveTable('users', users);
+  logAction(username, 'Update Staff Profile', `Updated HR parameters and banking credentials for ${updated.name}`, prev, updated);
+  return updated;
+};
+
+export const uploadStaffDocument = (username, staffId, docName, docType) => {
+  const users = getTable('users');
+  const idx = users.findIndex(u => u.id === staffId);
+  if (idx === -1) return null;
+  const user = users[idx];
+  const docs = user.contracts || [];
+  const newDoc = {
+    id: `doc-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    name: docName,
+    type: docType,
+    uploadDate: new Date().toISOString().split('T')[0]
+  };
+  users[idx] = { ...user, contracts: [...docs, newDoc] };
+  saveTable('users', users);
+  logAction(username, 'Upload Staff Document', `Attached new ${docType} "${docName}" to ${user.name}`);
+  return users[idx];
+};
+
+export const submitLeaveRequest = (username, staffId, leaveReq) => {
+  const users = getTable('users');
+  const idx = users.findIndex(u => u.id === staffId);
+  if (idx === -1) return { success: false, error: 'Staff not found.' };
+  
+  const user = users[idx];
+  const reqs = user.leaveRequests || [];
+  const newReq = {
+    id: `req-${Date.now()}`,
+    type: leaveReq.type,
+    startDate: leaveReq.startDate,
+    endDate: leaveReq.endDate,
+    days: Number(leaveReq.days),
+    notes: leaveReq.notes,
+    doctorNoteName: leaveReq.doctorNoteName || '',
+    status: 'pending'
+  };
+
+  users[idx] = { ...user, leaveRequests: [...reqs, newReq] };
+  saveTable('users', users);
+
+  let warning = '';
+  let balance = user.leaveBalance;
+  if (leaveReq.type === 'Sick') balance = user.sickLeaveBalance;
+  else if (leaveReq.type === 'Family') balance = user.familyLeaveBalance;
+
+  if (balance - Number(leaveReq.days) < 0) {
+    warning = `Warning: This request will leave you with a negative ${leaveReq.type} leave balance of ${balance - Number(leaveReq.days)} days.`;
+  }
+
+  logAction(username, 'Submit Leave Request', `${user.name} requested ${leaveReq.days} days of ${leaveReq.type} Leave.`);
+  return { success: true, warning };
+};
+
+export const approveLeaveRequest = (username, staffId, requestId, status) => {
+  const users = getTable('users');
+  const idx = users.findIndex(u => u.id === staffId);
+  if (idx === -1) return false;
+  
+  const user = users[idx];
+  const reqs = user.leaveRequests || [];
+  const reqIdx = reqs.findIndex(r => r.id === requestId);
+  if (reqIdx === -1) return false;
+  
+  const req = reqs[reqIdx];
+  req.status = status;
+  
+  if (status === 'approved') {
+    if (req.type === 'Annual') {
+      user.leaveBalance = Number((user.leaveBalance - req.days).toFixed(2));
+    } else if (req.type === 'Sick') {
+      user.sickLeaveBalance = Math.max(0, user.sickLeaveBalance - req.days);
+    } else if (req.type === 'Family') {
+      user.familyLeaveBalance = Math.max(0, user.familyLeaveBalance - req.days);
+    }
+    
+    // Also auto-log as a shift leave conflict!
+    const shifts = getTable('staffShifts');
+    const start = new Date(req.startDate);
+    const end = new Date(req.endDate);
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const dateStr = d.toISOString().split('T')[0];
+      shifts.push({
+        id: `shf-lv-${Date.now()}-${Math.floor(Math.random()*1000)}`,
+        staffId,
+        date: dateStr,
+        startTime: '08:00',
+        endTime: '17:00',
+        type: `${req.type} Leave`,
+        isLeave: true
+      });
+    }
+    saveTable('staffShifts', shifts);
+  }
+  
+  users[idx] = { ...user, leaveRequests: reqs };
+  saveTable('users', users);
+  logAction(username, status === 'approved' ? 'Approve Leave Request' : 'Reject Leave Request', `${status.toUpperCase()}ED ${req.days} days ${req.type} Leave for ${user.name}`);
+  return true;
+};
+
+export const submitStaffClaim = (username, staffId, claimData) => {
+  const users = getTable('users');
+  const idx = users.findIndex(u => u.id === staffId);
+  if (idx === -1) return null;
+  
+  const user = users[idx];
+  const claims = user.claims || [];
+  const newClaim = {
+    id: `clm-${Date.now()}`,
+    type: claimData.type,
+    description: claimData.description,
+    amount: Number(claimData.amount),
+    km: Number(claimData.km || 0),
+    date: new Date().toISOString().split('T')[0],
+    status: 'pending'
+  };
+  
+  users[idx] = { ...user, claims: [...claims, newClaim] };
+  saveTable('users', users);
+  logAction(username, 'Submit Claim', `${user.name} submitted a ${claimData.type} claim of R${newClaim.amount}`);
+  return users[idx];
+};
+
+export const approveStaffClaim = (username, staffId, claimId, status) => {
+  const users = getTable('users');
+  const idx = users.findIndex(u => u.id === staffId);
+  if (idx === -1) return false;
+  
+  const user = users[idx];
+  const claims = user.claims || [];
+  const cIdx = claims.findIndex(c => c.id === claimId);
+  if (cIdx === -1) return false;
+  
+  claims[cIdx].status = status;
+  users[idx] = { ...user, claims };
+  saveTable('users', users);
+  logAction(username, status === 'approved' ? 'Approve Claim' : 'Reject Claim', `${status.toUpperCase()}ED claim for ${user.name}: R${claims[cIdx].amount}`);
+  return true;
+};
+
+export const submitLoanRequest = (username, staffId, loanData) => {
+  const users = getTable('users');
+  const idx = users.findIndex(u => u.id === staffId);
+  if (idx === -1) return null;
+  
+  const user = users[idx];
+  const loans = user.loans || [];
+  const newLoan = {
+    id: `lon-${Date.now()}`,
+    amount: Number(loanData.amount),
+    months: Number(loanData.months),
+    monthlyRepayment: Number((loanData.amount / loanData.months).toFixed(2)),
+    status: 'pending',
+    date: new Date().toISOString().split('T')[0],
+    repaymentMonthsLeft: Number(loanData.months)
+  };
+  
+  users[idx] = { ...user, loans: [...loans, newLoan] };
+  saveTable('users', users);
+  logAction(username, 'Request Loan', `${user.name} requested R${loanData.amount} loan to repay over ${loanData.months} months.`);
+  return users[idx];
+};
+
+export const approveLoanRequest = (username, staffId, loanId, status) => {
+  const users = getTable('users');
+  const idx = users.findIndex(u => u.id === staffId);
+  if (idx === -1) return false;
+  
+  const user = users[idx];
+  const loans = user.loans || [];
+  const lIdx = loans.findIndex(l => l.id === loanId);
+  if (lIdx === -1) return false;
+  
+  loans[lIdx].status = status;
+  users[idx] = { ...user, loans };
+  saveTable('users', users);
+  logAction(username, status === 'approved' ? 'Approve Loan Request' : 'Reject Loan Request', `${status.toUpperCase()}ED R${loans[lIdx].amount} loan request for ${user.name}`);
+  return true;
+};
+
+export const addSalaryAdjustment = (username, staffId, adjData) => {
+  const users = getTable('users');
+  const idx = users.findIndex(u => u.id === staffId);
+  if (idx === -1) return null;
+  
+  const user = users[idx];
+  if (adjData.type === 'increase') {
+    const prevSalary = user.salary;
+    const newSalary = Number(prevSalary) + Number(adjData.amount);
+    users[idx] = { ...user, salary: newSalary };
+    saveTable('users', users);
+    logAction(username, 'Apply Salary Increase', `Increased base salary for ${user.name} by R${adjData.amount}. New Salary: R${newSalary}`, prevSalary, newSalary);
+  } else {
+    const bonuses = user.bonuses || [];
+    const newBonus = {
+      id: `adj-${Date.now()}`,
+      type: 'bonus',
+      amount: Number(adjData.amount),
+      date: new Date().toISOString().split('T')[0]
+    };
+    users[idx] = { ...user, bonuses: [...bonuses, newBonus] };
+    saveTable('users', users);
+    logAction(username, 'Award One-off Bonus', `Awarded R${adjData.amount} bonus to ${user.name}`);
+  }
+  return users[idx];
+};
+
+export const finalizeStaffPayslip = (username, staffId, monthName) => {
+  const users = getTable('users');
+  const idx = users.findIndex(u => u.id === staffId);
+  if (idx === -1) return { success: false, error: 'Staff not found.' };
+  
+  const user = users[idx];
+  
+  // 1. Calculate Commissions
+  const comm = getStaffCommissions(staffId);
+  const commTotal = comm.total;
+  
+  // 2. Calculate Approved Claims
+  const approvedClaims = (user.claims || []).filter(c => c.status === 'approved');
+  const claimsAmt = approvedClaims.reduce((acc, c) => acc + Number(c.amount), 0);
+  
+  // 3. Calculate Approved Bonuses
+  const bonusesAmt = (user.bonuses || []).reduce((acc, b) => acc + Number(b.amount), 0);
+  
+  // 4. Calculate Loan Deductions
+  const activeLoans = (user.loans || []).filter(l => l.status === 'approved' && l.repaymentMonthsLeft > 0);
+  const loansAmt = activeLoans.reduce((acc, l) => acc + l.monthlyRepayment, 0);
+  
+  // 5. Total Pay
+  const netSalary = Number((user.salary + commTotal + claimsAmt + bonusesAmt - loansAmt).toFixed(2));
+  
+  // 6. Archive Payslip
+  const archived = user.payslips || [];
+  const payslipItem = {
+    id: `pay-${Date.now()}`,
+    month: monthName,
+    baseSalary: user.salary,
+    commissionEarned: commTotal,
+    claimsApproved: claimsAmt,
+    loanDeduction: loansAmt,
+    bonusApproved: bonusesAmt,
+    finalSalary: netSalary,
+    generatedAt: new Date().toISOString().split('T')[0] + ' ' + new Date().toLocaleTimeString(),
+    emailedAt: new Date().toISOString().split('T')[0]
+  };
+  
+  // 7. Update Loan Terms
+  const updatedLoans = (user.loans || []).map(l => {
+    if (l.status === 'approved' && l.repaymentMonthsLeft > 0) {
+      return { ...l, repaymentMonthsLeft: l.repaymentMonthsLeft - 1 };
+    }
+    return l;
+  });
+  
+  // 8. Accumulate Leave
+  const newLeaveBal = Number((user.leaveBalance + user.monthlyLeaveAccrual).toFixed(2));
+  
+  // 9. Reset Claims & Bonuses
+  const remainingClaims = (user.claims || []).filter(c => c.status !== 'approved'); // clears processed ones
+  
+  // Update user object
+  users[idx] = {
+    ...user,
+    leaveBalance: newLeaveBal,
+    claims: remainingClaims,
+    loans: updatedLoans,
+    bonuses: [], // clear one-off bonuses
+    payslips: [...archived, payslipItem]
+  };
+  
+  saveTable('users', users);
+  
+  // 10. Write Salaries expense entry inside Finance Ledger automatically!
+  addExpense('System', {
+    category: 'Salaries',
+    description: `Net Salary, commissions and claims paid for ${user.name} (${monthName})`,
+    amount: netSalary
+  });
+  
+  logAction(username, 'Finalize Payroll Payslip', `Processed monthly payroll for ${user.name} (${monthName}). Total Paid: R${netSalary}`);
+  return { success: true, payslip: payslipItem };
 };

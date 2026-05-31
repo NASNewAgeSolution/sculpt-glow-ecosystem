@@ -45,7 +45,17 @@ import {
   updateInventoryItem,
   deleteInventoryItem,
   restoreItem,
-  purgeItem
+  purgeItem,
+  updateStaffProfile,
+  uploadStaffDocument,
+  submitLeaveRequest,
+  approveLeaveRequest,
+  submitStaffClaim,
+  approveStaffClaim,
+  submitLoanRequest,
+  approveLoanRequest,
+  addSalaryAdjustment,
+  finalizeStaffPayslip
 } from '../db/stateEngine';
 
 export default function BookingCRM() {
@@ -69,6 +79,7 @@ export default function BookingCRM() {
   const [auditLogs, setAuditLogs] = useState([]);
   const [settings, setSettings] = useState({});
   const [shifts, setShifts] = useState([]);
+  const [users, setUsers] = useState([]);
 
   // Dynamic Rooms State configuration
   const [rooms, setRooms] = useState(() => {
@@ -285,6 +296,25 @@ export default function BookingCRM() {
   const [inventorySearchQuery, setInventorySearchQuery] = useState('');
   const [archiveList, setArchiveList] = useState([]);
 
+  // HR & Payroll State Hooks
+  const [selectedStaffId, setSelectedStaffId] = useState('usr-3');
+  const [selectedStaffDossierTab, setSelectedStaffDossierTab] = useState('profile');
+  const [showNewStaffModal, setShowNewStaffModal] = useState(false);
+  const [newStaffForm, setNewStaffForm] = useState({
+    name: '', username: '', role: 'therapist', email: '', pin: '1234',
+    salary: 12500, bankName: 'FNB Pretoria', accountHolder: '', accountNumber: '', branchCode: '250655'
+  });
+  const [leaveRequestForm, setLeaveRequestForm] = useState({
+    type: 'Annual', startDate: new Date().toISOString().split('T')[0], endDate: new Date().toISOString().split('T')[0], days: 1, notes: '', doctorNoteName: ''
+  });
+  const [claimForm, setClaimForm] = useState({ type: 'out_of_pocket', description: '', amount: '', km: '' });
+  const [loanForm, setLoanForm] = useState({ amount: '', months: 1 });
+  const [salaryAdjForm, setSalaryAdjForm] = useState({ type: 'bonus', amount: '' });
+  const [activeCommissionsDrilldownStaff, setActiveCommissionsDrilldownStaff] = useState(null);
+  const [aaMileageRate, setAaMileageRate] = useState(4.50);
+  const [documentName, setDocumentName] = useState('');
+  const [documentType, setDocumentType] = useState('contract');
+
   const syncDatabase = () => {
     // Check SaaS rent lock status
     const isLocked = localStorage.getItem('saas_lock') === 'true';
@@ -304,6 +334,7 @@ export default function BookingCRM() {
     setAuditLogs(getTable('auditLogs'));
     setSettings(getTable('settings'));
     setShifts(getTable('staffShifts'));
+    setUsers(getTable('users'));
     setArchiveList(JSON.parse(localStorage.getItem('salon_archive') || '[]'));
 
     // Automatically set default items inside dropdown modals
@@ -345,9 +376,9 @@ export default function BookingCRM() {
   // Restrict access depending on simulated role boundaries
   useEffect(() => {
     const safeTabsByRole = {
-      owner: ['dashboard', 'waitlist', 'rooms', 'crm', 'loyalty', 'gallery', 'reviews', 'billing', 'quotes', 'expenses', 'payments', 'services', 'products', 'inventory', 'orders', 'therapist', 'commissions', 'settings', 'audit', 'archive'],
-      receptionist: ['dashboard', 'waitlist', 'rooms', 'crm', 'loyalty', 'gallery', 'reviews', 'billing', 'quotes', 'payments', 'services', 'products', 'inventory', 'orders', 'therapist', 'commissions'],
-      therapist: ['dashboard', 'crm', 'gallery', 'reviews', 'therapist', 'commissions']
+      owner: ['dashboard', 'waitlist', 'rooms', 'crm', 'loyalty', 'gallery', 'reviews', 'billing', 'quotes', 'expenses', 'payments', 'services', 'products', 'inventory', 'orders', 'therapist', 'commissions', 'settings', 'audit', 'archive', 'staff'],
+      receptionist: ['dashboard', 'waitlist', 'rooms', 'crm', 'loyalty', 'gallery', 'reviews', 'billing', 'quotes', 'payments', 'services', 'products', 'inventory', 'orders', 'therapist', 'commissions', 'staff'],
+      therapist: ['dashboard', 'crm', 'gallery', 'reviews', 'therapist', 'commissions', 'staff']
     };
 
     const allowed = safeTabsByRole[currentUserRole] || [];
@@ -508,6 +539,7 @@ export default function BookingCRM() {
       label: 'Staffing & HR',
       icon: Briefcase,
       items: [
+        { id: 'staff', label: 'Staff Profile & HR Portal', roles: ['owner', 'receptionist', 'therapist'] },
         { id: 'therapist', label: 'Shift Roster Timeline', roles: ['owner', 'receptionist', 'therapist'] },
         { id: 'commissions', label: 'Commission Splits', roles: ['owner', 'receptionist', 'therapist'] }
       ]
@@ -3753,7 +3785,14 @@ export default function BookingCRM() {
               {getTable('users').filter(u => u.role !== 'owner').map(staff => {
                 const comm = getStaffCommissions(staff.id);
                 return (
-                  <div key={staff.id} className="card-premium" style={{ border: '1px solid rgba(107, 44, 145, 0.25)' }}>
+                  <div
+                    key={staff.id}
+                    onClick={() => setActiveCommissionsDrilldownStaff(staff)}
+                    className="card-premium"
+                    style={{ border: '1px solid rgba(107, 44, 145, 0.25)', cursor: 'pointer', transition: 'all 0.2s' }}
+                    onMouseEnter={(e) => e.currentTarget.style.borderColor = '#D4AF37'}
+                    onMouseLeave={(e) => e.currentTarget.style.borderColor = 'rgba(107, 44, 145, 0.25)'}
+                  >
                     <h3 style={{ fontFamily: 'Outfit', fontSize: '1.2rem', color: 'white', marginBottom: '16px' }}>{staff.name}</h3>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '0.85rem' }}>
                       <div style={{ display: 'flex', justify: 'space-between', color: '#BFA6D8' }}>
@@ -3761,7 +3800,7 @@ export default function BookingCRM() {
                         <strong style={{ color: 'white' }}>{staff.role}</strong>
                       </div>
                       <div style={{ display: 'flex', justify: 'space-between', color: '#BFA6D8' }}>
-                        <span>Service splits (10%):</span>
+                        <span>Service splits ({staff.commissionRate || 10}%):</span>
                         <strong>R {comm.serviceComm.toFixed(2)}</strong>
                       </div>
                       <div style={{ display: 'flex', justify: 'space-between', color: '#BFA6D8', borderBottom: '1px solid rgba(107, 44, 145, 0.15)', paddingBottom: '8px' }}>
@@ -3772,6 +3811,9 @@ export default function BookingCRM() {
                         <span>Total Payout Due:</span>
                         <span>R {comm.total.toFixed(2)}</span>
                       </div>
+                      <div style={{ fontSize: '0.72rem', color: '#A89684', marginTop: '4px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '8px', textAlign: 'center' }}>
+                        💡 Click card to view sales drill-down ledger
+                      </div>
                     </div>
                   </div>
                 );
@@ -3779,6 +3821,1119 @@ export default function BookingCRM() {
             </div>
           </div>
         )}
+
+        {/* WORKSPACE Q.2: STAFF PROFILE & HR PORTAL */}
+        {activeTab === 'staff' && (() => {
+          const currentStaff = users.find(u => u.id === selectedStaffId) || users[0];
+          if (!currentStaff) return <div style={{ color: 'white' }}>Loading staff profiles...</div>;
+
+          const isOwner = currentUserRole === 'owner';
+          const activeUserObj = users.find(u => u.username === (currentUserRole === 'receptionist' ? 'reception' : currentUserRole === 'therapist' ? 'therapist' : 'owner')) || currentStaff;
+          const displayStaff = isOwner ? currentStaff : activeUserObj;
+
+          // Calculate Target Progress
+          const completedApts = appointments.filter(a => a.staffId === displayStaff.id && a.status === 'Completed');
+          const actualServicesTotal = completedApts.reduce((acc, a) => {
+            const srv = services.find(s => s.id === a.serviceId);
+            return acc + (srv ? srv.price : 0);
+          }, 0);
+          const targetProgressPercent = displayStaff.servicesTarget ? Math.min(100, Math.floor((actualServicesTotal / displayStaff.servicesTarget) * 100)) : 0;
+
+          // Calculate Commissions
+          const comm = getStaffCommissions(displayStaff.id);
+          
+          // Calculate active claims, loans, bonuses
+          const approvedClaims = (displayStaff.claims || []).filter(c => c.status === 'approved');
+          const claimsAmt = approvedClaims.reduce((acc, c) => acc + Number(c.amount), 0);
+          const bonusesAmt = (displayStaff.bonuses || []).reduce((acc, b) => acc + Number(b.amount), 0);
+          const activeLoans = (displayStaff.loans || []).filter(l => l.status === 'approved' && l.repaymentMonthsLeft > 0);
+          const loansAmt = activeLoans.reduce((acc, l) => acc + l.monthlyRepayment, 0);
+
+          const netSalary = Number((displayStaff.salary + comm.total + claimsAmt + bonusesAmt - loansAmt).toFixed(2));
+
+          return (
+            <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <h1 style={{ fontSize: '1.75rem', fontWeight: 800, margin: 0, fontFamily: 'Outfit', color: '#D4AF37' }}>Staffing & HR Portal</h1>
+                  <p style={{ color: '#BFA6D8', margin: '4px 0 0 0', fontSize: '0.85rem' }}>
+                    {isOwner ? 'Manage employees, banking details, leave allocations, claims, and monthly payslips.' : 'View your target progress, submit leave requests, claims, loan requests, and download payslips.'}
+                  </p>
+                </div>
+                {isOwner && (
+                  <button
+                    onClick={() => {
+                      setNewStaffForm({
+                        name: '', username: '', role: 'therapist', email: '', pin: '1234',
+                        salary: 12500, bankName: 'FNB Pretoria', accountHolder: '', accountNumber: '', branchCode: '250655'
+                      });
+                      setShowNewStaffModal(true);
+                    }}
+                    className="btn-brand-gold"
+                    style={{ height: '36px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                  >
+                    <Plus style={{ width: '16px', height: '16px' }} /> Register Staff Member
+                  </button>
+                )}
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: isOwner ? '280px 1fr' : '1fr', gap: '20px', alignItems: 'start' }}>
+                
+                {/* STAFF LIST DIRECTORY (Owner Only) */}
+                {isOwner && (
+                  <div className="card-premium" style={{ display: 'flex', flexDirection: 'column', gap: '10px', padding: '16px' }}>
+                    <h3 style={{ fontFamily: 'Outfit', fontSize: '1rem', color: '#D4AF37', margin: '0 0 8px 0', borderBottom: '1px solid rgba(107, 44, 145, 0.2)', paddingBottom: '6px' }}>Employees Directory</h3>
+                    {users.map(u => (
+                      <div
+                        key={u.id}
+                        onClick={() => setSelectedStaffId(u.id)}
+                        style={{
+                          padding: '12px',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          backgroundColor: selectedStaffId === u.id ? 'rgba(107, 44, 145, 0.2)' : 'rgba(255, 255, 255, 0.02)',
+                          border: selectedStaffId === u.id ? '1px solid #D4AF37' : '1px solid transparent',
+                          transition: 'all 0.2s',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '10px'
+                        }}
+                      >
+                        <div style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: 'rgba(212, 175, 55, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#D4AF37', fontWeight: 'bold', fontSize: '0.9rem' }}>
+                          {u.name.split(' ').map(n => n[0]).join('').toUpperCase()}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'white', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.name}</div>
+                          <div style={{ fontSize: '0.72rem', color: '#BFA6D8', textTransform: 'capitalize' }}>{u.role}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* MAIN DOSSIER CANVAS */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                  
+                  {/* STAFF PROFILE TARGET BANNER */}
+                  <div className="card-premium" style={{ display: 'flex', flexDirection: 'column', gap: '16px', border: '1px solid rgba(107, 44, 145, 0.25)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+                        <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: 'rgba(212, 175, 55, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#D4AF37', fontWeight: 'bold', fontSize: '1.4rem' }}>
+                          {displayStaff.name.split(' ').map(n => n[0]).join('').toUpperCase()}
+                        </div>
+                        <div>
+                          <h2 style={{ fontFamily: 'Outfit', margin: 0, color: 'white', fontSize: '1.3rem' }}>{displayStaff.name}</h2>
+                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '4px' }}>
+                            <span className="badge-brand purple" style={{ fontSize: '0.65rem' }}>{displayStaff.role.toUpperCase()}</span>
+                            <span style={{ fontSize: '0.78rem', color: '#BFA6D8' }}>{displayStaff.email}</span>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div style={{ textAlign: 'right' }}>
+                        <span style={{ fontSize: '0.75rem', color: '#A89684', display: 'block' }}>Basic Monthly Salary</span>
+                        <strong style={{ fontSize: '1.25rem', color: '#34d399', fontFamily: 'Outfit' }}>R {Number(displayStaff.salary || 0).toLocaleString()}</strong>
+                      </div>
+                    </div>
+
+                    {/* Target Bar */}
+                    <div style={{ backgroundColor: 'rgba(255,255,255,0.02)', padding: '14px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#BFA6D8', marginBottom: '6px' }}>
+                        <span>Target Progress (Services Target)</span>
+                        <strong>R {actualServicesTotal.toLocaleString()} / R {Number(displayStaff.servicesTarget || 0).toLocaleString()} ({targetProgressPercent}%)</strong>
+                      </div>
+                      <div style={{ height: '8px', backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: '4px', overflow: 'hidden' }}>
+                        <div style={{ width: `${targetProgressPercent}%`, height: '100%', backgroundColor: targetProgressPercent >= 100 ? '#34d399' : '#D4AF37', borderRadius: '4px', transition: 'width 0.3s' }} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* DOSSIER TABS */}
+                  <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid rgba(107, 44, 145, 0.2)', paddingBottom: '2px', overflowX: 'auto' }}>
+                    {[
+                      { id: 'profile', label: 'Overview & Salary' },
+                      { id: 'leave', label: 'Leave Requests' },
+                      { id: 'claims', label: 'Claims & Travel' },
+                      { id: 'loans', label: 'App Loans' },
+                      { id: 'documents', label: 'Documents & Contracts' },
+                      { id: 'payslips', label: 'Payslip Vault' }
+                    ].map(tab => (
+                      <button
+                        key={tab.id}
+                        onClick={() => setSelectedStaffDossierTab(tab.id)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: selectedStaffDossierTab === tab.id ? '#D4AF37' : '#BFA6D8',
+                          borderBottom: selectedStaffDossierTab === tab.id ? '2px solid #D4AF37' : '2px solid transparent',
+                          padding: '8px 14px',
+                          cursor: 'pointer',
+                          fontSize: '0.82rem',
+                          fontWeight: selectedStaffDossierTab === tab.id ? 700 : 500,
+                          transition: 'all 0.2s',
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* DOSSIER SUB-TAB PANELS */}
+
+                  {/* PANEL 1: OVERVIEW & SALARY SETTINGS */}
+                  {selectedStaffDossierTab === 'profile' && (
+                    <div className="card-premium animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: isOwner ? '1fr 1fr' : '1fr', gap: '20px' }}>
+                        
+                        {/* BANKING DETAILS PANEL */}
+                        <div style={{ borderRight: isOwner ? '1px solid rgba(255,255,255,0.06)' : 'none', paddingRight: isOwner ? '20px' : '0' }}>
+                          <h3 style={{ fontFamily: 'Outfit', fontSize: '1rem', color: '#D4AF37', margin: '0 0 14px 0' }}>Banking Details</h3>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '0.85rem' }}>
+                            <div style={{ display: 'flex', justify: 'space-between', color: '#BFA6D8' }}>
+                              <span>Bank Name:</span>
+                              <strong style={{ color: 'white' }}>{displayStaff.bankName || 'FNB'}</strong>
+                            </div>
+                            <div style={{ display: 'flex', justify: 'space-between', color: '#BFA6D8' }}>
+                              <span>Account Holder:</span>
+                              <strong style={{ color: 'white' }}>{displayStaff.accountHolder || displayStaff.name}</strong>
+                            </div>
+                            <div style={{ display: 'flex', justify: 'space-between', color: '#BFA6D8' }}>
+                              <span>Account Number:</span>
+                              <strong style={{ color: 'white' }}>{displayStaff.accountNumber || '—'}</strong>
+                            </div>
+                            <div style={{ display: 'flex', justify: 'space-between', color: '#BFA6D8' }}>
+                              <span>Branch Code:</span>
+                              <strong style={{ color: 'white' }}>{displayStaff.branchCode || '—'}</strong>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* CONFIGURATION PANEL (Owner Only) */}
+                        {isOwner && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                            <h3 style={{ fontFamily: 'Outfit', fontSize: '1rem', color: '#D4AF37', margin: '0 0 4px 0' }}>HR Configuration</h3>
+                            
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                              <div>
+                                <label style={{ display: 'block', fontSize: '0.72rem', color: '#A89684', marginBottom: '4px' }}>Base Salary (R):</label>
+                                <input
+                                  type="number"
+                                  className="brand-input"
+                                  defaultValue={displayStaff.salary}
+                                  onBlur={(e) => {
+                                    updateStaffProfile('System', displayStaff.id, { salary: Number(e.target.value) });
+                                    syncDatabase();
+                                  }}
+                                />
+                              </div>
+                              <div>
+                                <label style={{ display: 'block', fontSize: '0.72rem', color: '#A89684', marginBottom: '4px' }}>Commission Rate (%):</label>
+                                <input
+                                  type="number"
+                                  className="brand-input"
+                                  defaultValue={displayStaff.commissionRate}
+                                  onBlur={(e) => {
+                                    updateStaffProfile('System', displayStaff.id, { commissionRate: Number(e.target.value) });
+                                    syncDatabase();
+                                  }}
+                                />
+                              </div>
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                              <div>
+                                <label style={{ display: 'block', fontSize: '0.72rem', color: '#A89684', marginBottom: '4px' }}>Services Target (R):</label>
+                                <input
+                                  type="number"
+                                  className="brand-input"
+                                  defaultValue={displayStaff.servicesTarget}
+                                  onBlur={(e) => {
+                                    updateStaffProfile('System', displayStaff.id, { servicesTarget: Number(e.target.value) });
+                                    syncDatabase();
+                                  }}
+                                />
+                              </div>
+                              <div>
+                                <label style={{ display: 'block', fontSize: '0.72rem', color: '#A89684', marginBottom: '4px' }}>Sales Target (R):</label>
+                                <input
+                                  type="number"
+                                  className="brand-input"
+                                  defaultValue={displayStaff.salesTarget}
+                                  onBlur={(e) => {
+                                    updateStaffProfile('System', displayStaff.id, { salesTarget: Number(e.target.value) });
+                                    syncDatabase();
+                                  }}
+                                />
+                              </div>
+                            </div>
+                            
+                            <p style={{ color: '#A89684', fontSize: '0.72rem', margin: '4px 0 0 0', fontStyle: 'italic' }}>*Changes save automatically when you click out of the fields.</p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* SALARY INCREASES & BONUSES SECTION (Owner Only) */}
+                      {isOwner && (
+                        <div style={{ borderTop: '1px solid rgba(107,44,145,0.15)', paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                          <h3 style={{ fontFamily: 'Outfit', fontSize: '1rem', color: '#D4AF37', margin: 0 }}>Award Salary Adjustment</h3>
+                          <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end' }}>
+                            <div style={{ flex: 1 }}>
+                              <label style={{ display: 'block', fontSize: '0.72rem', color: '#A89684', marginBottom: '4px' }}>Adjustment Type:</label>
+                              <select
+                                className="brand-input"
+                                value={salaryAdjForm.type}
+                                onChange={(e) => setSalaryAdjForm(prev => ({ ...prev, type: e.target.value }))}
+                              >
+                                <option value="bonus">One-off Bonus (Paid on next pay date)</option>
+                                <option value="increase">Permanent Salary Increase (Adds to base)</option>
+                              </select>
+                            </div>
+                            <div style={{ width: '150px' }}>
+                              <label style={{ display: 'block', fontSize: '0.72rem', color: '#A89684', marginBottom: '4px' }}>Amount (R):</label>
+                              <input
+                                type="number"
+                                className="brand-input"
+                                placeholder="e.g. 500"
+                                value={salaryAdjForm.amount}
+                                onChange={(e) => setSalaryAdjForm(prev => ({ ...prev, amount: e.target.value }))}
+                              />
+                            </div>
+                            <button
+                              onClick={() => {
+                                if (!salaryAdjForm.amount) return alert('Please enter an amount.');
+                                const res = addSalaryAdjustment(currentUserName(), displayStaff.id, salaryAdjForm);
+                                if (res) {
+                                  setSalaryAdjForm({ type: 'bonus', amount: '' });
+                                  syncDatabase();
+                                }
+                              }}
+                              className="btn-brand-gold"
+                              style={{ height: '36px' }}
+                            >
+                              Award Adjustment
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* PANEL 2: LEAVE REQUESTS */}
+                  {selectedStaffDossierTab === 'leave' && (
+                    <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                      
+                      {/* LEAVE BALANCES GRID */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
+                        <div className="card-premium" style={{ textAlign: 'center', padding: '16px' }}>
+                          <span style={{ fontSize: '0.78rem', color: '#BFA6D8', display: 'block', marginBottom: '4px' }}>Annual Leave</span>
+                          <strong style={{ fontSize: '1.5rem', color: displayStaff.leaveBalance < 0 ? '#ef4444' : '#D4AF37', fontFamily: 'Outfit' }}>{displayStaff.leaveBalance || 0} days</strong>
+                          <span style={{ fontSize: '0.7rem', color: '#A89684', display: 'block', marginTop: '4px' }}>Accrual: +{displayStaff.monthlyLeaveAccrual || 1.25}/mo</span>
+                        </div>
+                        <div className="card-premium" style={{ textAlign: 'center', padding: '16px' }}>
+                          <span style={{ fontSize: '0.78rem', color: '#BFA6D8', display: 'block', marginBottom: '4px' }}>Sick Leave</span>
+                          <strong style={{ fontSize: '1.5rem', color: '#60a5fa', fontFamily: 'Outfit' }}>{displayStaff.sickLeaveBalance || 0} days</strong>
+                          <span style={{ fontSize: '0.7rem', color: '#A89684', display: 'block', marginTop: '4px' }}>Renews: {displayStaff.sickLeaveRenewCycle || '1 year'}</span>
+                        </div>
+                        <div className="card-premium" style={{ textAlign: 'center', padding: '16px' }}>
+                          <span style={{ fontSize: '0.78rem', color: '#BFA6D8', display: 'block', marginBottom: '4px' }}>Family Responsibility</span>
+                          <strong style={{ fontSize: '1.5rem', color: '#c084fc', fontFamily: 'Outfit' }}>{displayStaff.familyLeaveBalance || 0} days</strong>
+                          <span style={{ fontSize: '0.7rem', color: '#A89684', display: 'block', marginTop: '4px' }}>Standard statutory allocation</span>
+                        </div>
+                      </div>
+
+                      {/* SUBMIT LEAVE REQUEST FORM (Staff View Only) */}
+                      {!isOwner && (
+                        <div className="card-premium">
+                          <h3 style={{ fontFamily: 'Outfit', fontSize: '1rem', color: '#D4AF37', margin: '0 0 16px 0' }}>Request Leave / Log Out of Office</h3>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '14px', marginBottom: '14px' }}>
+                            <div>
+                              <label style={{ display: 'block', fontSize: '0.78rem', color: '#A89684', marginBottom: '4px' }}>Leave Category:</label>
+                              <select
+                                className="brand-input"
+                                value={leaveRequestForm.type}
+                                onChange={(e) => setLeaveRequestForm(prev => ({ ...prev, type: e.target.value, days: prev.days, notes: prev.notes }))}
+                              >
+                                <option value="Annual">Annual Leave</option>
+                                <option value="Sick">Sick Leave (Requires Doctor's Note)</option>
+                                <option value="Family">Family Responsibility</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label style={{ display: 'block', fontSize: '0.78rem', color: '#A89684', marginBottom: '4px' }}>Start Date:</label>
+                              <input
+                                type="date"
+                                className="brand-input"
+                                value={leaveRequestForm.startDate}
+                                onChange={(e) => setLeaveRequestForm(prev => ({ ...prev, startDate: e.target.value }))}
+                              />
+                            </div>
+                            <div>
+                              <label style={{ display: 'block', fontSize: '0.78rem', color: '#A89684', marginBottom: '4px' }}>End Date:</label>
+                              <input
+                                type="date"
+                                className="brand-input"
+                                value={leaveRequestForm.endDate}
+                                onChange={(e) => setLeaveRequestForm(prev => ({ ...prev, endDate: e.target.value }))}
+                              />
+                            </div>
+                          </div>
+
+                          <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '14px', marginBottom: '14px' }}>
+                            <div>
+                              <label style={{ display: 'block', fontSize: '0.78rem', color: '#A89684', marginBottom: '4px' }}>Total Days:</label>
+                              <input
+                                type="number"
+                                className="brand-input"
+                                value={leaveRequestForm.days}
+                                onChange={(e) => setLeaveRequestForm(prev => ({ ...prev, days: e.target.value }))}
+                              />
+                            </div>
+                            <div>
+                              <label style={{ display: 'block', fontSize: '0.78rem', color: '#A89684', marginBottom: '4px' }}>Notes / Justification:</label>
+                              <input
+                                type="text"
+                                className="brand-input"
+                                placeholder="e.g. Family holiday trip / dentist visit"
+                                value={leaveRequestForm.notes}
+                                onChange={(e) => setLeaveRequestForm(prev => ({ ...prev, notes: e.target.value }))}
+                              />
+                            </div>
+                          </div>
+
+                          {leaveRequestForm.type === 'Sick' && (
+                            <div style={{ marginBottom: '16px', padding: '10px', backgroundColor: 'rgba(96,165,250,0.05)', borderRadius: '6px', border: '1px solid rgba(96,165,250,0.1)' }}>
+                              <label style={{ display: 'block', fontSize: '0.78rem', color: '#60a5fa', marginBottom: '6px', fontWeight: 600 }}>Doctor's Note Upload:</label>
+                              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                                <input
+                                  type="text"
+                                  className="brand-input"
+                                  placeholder="Simulate doctor note name e.g. sick_note_2026.pdf"
+                                  value={leaveRequestForm.doctorNoteName}
+                                  onChange={(e) => setLeaveRequestForm(prev => ({ ...prev, doctorNoteName: e.target.value }))}
+                                />
+                                <button
+                                  onClick={() => setLeaveRequestForm(prev => ({ ...prev, doctorNoteName: `medical_certificate_${Date.now().toString().substr(8)}.pdf` }))}
+                                  className="badge-brand blue"
+                                  style={{ border: 'none', cursor: 'pointer', padding: '8px 12px', height: '36px', borderRadius: '6px' }}
+                                >
+                                  Attach Note
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          <button
+                            onClick={() => {
+                              if (!leaveRequestForm.days || Number(leaveRequestForm.days) <= 0) {
+                                return alert('Please enter valid number of leave days.');
+                              }
+                              if (leaveRequestForm.type === 'Sick' && !leaveRequestForm.doctorNoteName) {
+                                return alert('Warning: Uploading a doctor note is mandatory for sick leave request!');
+                              }
+                              
+                              const res = submitLeaveRequest(currentUserName(), displayStaff.id, leaveRequestForm);
+                              if (res.success) {
+                                if (res.warning) alert(res.warning);
+                                setLeaveRequestForm({
+                                  type: 'Annual', startDate: new Date().toISOString().split('T')[0], endDate: new Date().toISOString().split('T')[0], days: 1, notes: '', doctorNoteName: ''
+                                });
+                                syncDatabase();
+                              }
+                            }}
+                            className="btn-brand-gold"
+                            style={{ width: '100%', justifyContent: 'center' }}
+                          >
+                            Submit Leave Request
+                          </button>
+                        </div>
+                      )}
+
+                      {/* LEAVE LOGS & REQUESTS QUEUE */}
+                      <div className="card-premium">
+                        <h3 style={{ fontFamily: 'Outfit', fontSize: '1rem', color: '#D4AF37', margin: '0 0 16px 0' }}>Leave History & Requests</h3>
+                        
+                        <div style={{ overflowX: 'auto' }}>
+                          <table className="table-premium">
+                            <thead>
+                              <tr>
+                                <th>Category</th>
+                                <th>Dates</th>
+                                <th>Total Days</th>
+                                <th>Notes / Documents</th>
+                                <th>Status</th>
+                                {isOwner && <th style={{ textAlign: 'right' }}>Actions</th>}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {(displayStaff.leaveRequests || []).length === 0 ? (
+                                <tr>
+                                  <td colSpan={isOwner ? 6 : 5} style={{ textTransform: 'none', color: '#BFA6D8', textAlign: 'center', padding: '20px 0' }}>
+                                    No logged leave requests found for this employee.
+                                  </td>
+                                </tr>
+                              ) : (
+                                (displayStaff.leaveRequests || []).map(req => (
+                                  <tr key={req.id}>
+                                    <td>
+                                      <span className={`badge-brand ${req.type === 'Sick' ? 'blue' : req.type === 'Family' ? 'purple' : 'gold'}`}>
+                                        {req.type}
+                                      </span>
+                                    </td>
+                                    <td style={{ fontSize: '0.8rem' }}>{req.startDate} to {req.endDate}</td>
+                                    <td style={{ fontWeight: 700 }}>{req.days} days</td>
+                                    <td style={{ fontSize: '0.78rem', color: '#BFA6D8' }}>
+                                      {req.notes}
+                                      {req.doctorNoteName && (
+                                        <div style={{ color: '#60a5fa', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                          📄 {req.doctorNoteName} (attached)
+                                        </div>
+                                      )}
+                                    </td>
+                                    <td>
+                                      <span className={`badge-brand ${req.status === 'approved' ? 'green' : req.status === 'rejected' ? 'red' : 'purple'}`}>
+                                        {req.status.toUpperCase()}
+                                      </span>
+                                    </td>
+                                    {isOwner && (
+                                      <td style={{ textAlign: 'right' }}>
+                                        {req.status === 'pending' ? (
+                                          <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                                            <button
+                                              onClick={() => {
+                                                let balance = displayStaff.leaveBalance;
+                                                if (req.type === 'Sick') balance = displayStaff.sickLeaveBalance;
+                                                else if (req.type === 'Family') balance = displayStaff.familyLeaveBalance;
+
+                                                let confirmMsg = `Are you sure you want to approve this leave request?`;
+                                                if (balance - req.days < 0) {
+                                                  confirmMsg = `[WARNING] Approving this request will drive ${displayStaff.name}'s ${req.type} leave balance negative (${(balance - req.days).toFixed(1)} days).\nDo you still wish to proceed and approve?`;
+                                                }
+                                                if (confirm(confirmMsg)) {
+                                                  approveLeaveRequest(currentUserName(), displayStaff.id, req.id, 'approved');
+                                                  syncDatabase();
+                                                }
+                                              }}
+                                              className="badge-brand green"
+                                              style={{ border: 'none', cursor: 'pointer', fontSize: '0.65rem', padding: '3px 8px' }}
+                                            >
+                                              Approve
+                                            </button>
+                                            <button
+                                              onClick={() => {
+                                                if (confirm(`Reject this leave request?`)) {
+                                                  approveLeaveRequest(currentUserName(), displayStaff.id, req.id, 'rejected');
+                                                  syncDatabase();
+                                                }
+                                              }}
+                                              className="badge-brand red"
+                                              style={{ border: 'none', cursor: 'pointer', fontSize: '0.65rem', padding: '3px 8px' }}
+                                            >
+                                              Reject
+                                            </button>
+                                          </div>
+                                        ) : (
+                                          <span style={{ fontSize: '0.72rem', color: '#A89684' }}>Processed</span>
+                                        )}
+                                      </td>
+                                    )}
+                                  </tr>
+                                ))
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* PANEL 3: CLAIMS & TRAVEL */}
+                  {selectedStaffDossierTab === 'claims' && (
+                    <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                      
+                      {/* SUBMIT CLAIM FORM (Staff View Only) */}
+                      {!isOwner && (
+                        <div className="card-premium">
+                          <h3 style={{ fontFamily: 'Outfit', fontSize: '1rem', color: '#D4AF37', margin: '0 0 16px 0' }}>Log Out-of-Pocket Expense or Business Travel Claims</h3>
+                          
+                          <div style={{ display: 'grid', gridTemplateColumns: '200px 1fr', gap: '14px', marginBottom: '14px' }}>
+                            <div>
+                              <label style={{ display: 'block', fontSize: '0.78rem', color: '#A89684', marginBottom: '4px' }}>Claim Category:</label>
+                              <select
+                                className="brand-input"
+                                value={claimForm.type}
+                                onChange={(e) => setClaimForm(prev => ({ ...prev, type: e.target.value, amount: e.target.value === 'travel' ? '' : prev.amount }))}
+                              >
+                                <option value="out_of_pocket">Out-of-Pocket Cash Purchase</option>
+                                <option value="travel">Business Travel Mileage (Calculated per KM)</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label style={{ display: 'block', fontSize: '0.78rem', color: '#A89684', marginBottom: '4px' }}>Description / Reason:</label>
+                              <input
+                                type="text"
+                                className="brand-input"
+                                placeholder={claimForm.type === 'travel' ? 'e.g. Travel to Pretoria North branch for stock collection' : 'e.g. Replenished hand sanitizers and facial wipes from pharmacy'}
+                                value={claimForm.description}
+                                onChange={(e) => setClaimForm(prev => ({ ...prev, description: e.target.value }))}
+                              />
+                            </div>
+                          </div>
+
+                          <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-end', marginBottom: '16px' }}>
+                            {claimForm.type === 'out_of_pocket' ? (
+                              <div style={{ width: '160px' }}>
+                                <label style={{ display: 'block', fontSize: '0.78rem', color: '#A89684', marginBottom: '4px' }}>Amount Claimed (R):</label>
+                                <input
+                                  type="number"
+                                  className="brand-input"
+                                  placeholder="e.g. 350"
+                                  value={claimForm.amount}
+                                  onChange={(e) => setClaimForm(prev => ({ ...prev, amount: e.target.value }))}
+                                />
+                              </div>
+                            ) : (
+                              <>
+                                <div style={{ width: '120px' }}>
+                                  <label style={{ display: 'block', fontSize: '0.78rem', color: '#A89684', marginBottom: '4px' }}>Distance (KM):</label>
+                                  <input
+                                    type="number"
+                                    className="brand-input"
+                                    placeholder="e.g. 45"
+                                    value={claimForm.km}
+                                    onChange={(e) => {
+                                      const kmVal = Number(e.target.value);
+                                      setClaimForm(prev => ({
+                                        ...prev,
+                                        km: e.target.value,
+                                        amount: Number((kmVal * aaMileageRate).toFixed(2))
+                                      }));
+                                    }}
+                                  />
+                                </div>
+                                <div style={{ flex: 1, padding: '10px', backgroundColor: 'rgba(212,175,55,0.05)', borderRadius: '6px', border: '1px solid rgba(212,175,55,0.1)', fontSize: '0.8rem', color: '#D4AF37' }}>
+                                  <span>Refund Rate: <strong>R {aaMileageRate} / KM</strong> (Official AA Rate)</span>
+                                  <span style={{ display: 'block', marginTop: '2px' }}>Total Payout: <strong>R {claimForm.amount || 0}</strong></span>
+                                </div>
+                              </>
+                            )}
+                          </div>
+
+                          <button
+                            onClick={() => {
+                              if (!claimForm.description) return alert('Please input description/reason for claim.');
+                              if (!claimForm.amount || Number(claimForm.amount) <= 0) return alert('Please enter valid claims parameters.');
+
+                              const created = submitStaffClaim(currentUserName(), displayStaff.id, claimForm);
+                              if (created) {
+                                setClaimForm({ type: 'out_of_pocket', description: '', amount: '', km: '' });
+                                syncDatabase();
+                              }
+                            }}
+                            className="btn-brand-gold"
+                            style={{ width: '100%', justifyContent: 'center' }}
+                          >
+                            Submit Claim
+                          </button>
+                        </div>
+                      )}
+
+                      {/* AA MILEAGE RATE SETTING (Owner View Only) */}
+                      {isOwner && (
+                        <div className="card-premium" style={{ display: 'flex', justify: 'space-between', alignItems: 'center', border: '1px solid rgba(212, 175, 55, 0.2)' }}>
+                          <div>
+                            <strong style={{ color: 'white', display: 'block' }}>Official AA Travel Reimbursement Rate</strong>
+                            <span style={{ fontSize: '0.78rem', color: '#BFA6D8' }}>Set the business mileage refund rate per kilometer for travel claims.</span>
+                          </div>
+                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                            <span style={{ color: '#D4AF37', fontWeight: 'bold' }}>R </span>
+                            <input
+                              type="number"
+                              className="brand-input"
+                              style={{ width: '80px', textAlign: 'center' }}
+                              value={aaMileageRate}
+                              onChange={(e) => setAaMileageRate(Number(e.target.value))}
+                            />
+                            <span style={{ fontSize: '0.8rem', color: '#A89684' }}>/ KM</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* CLAIMS HISTORY GRID */}
+                      <div className="card-premium">
+                        <h3 style={{ fontFamily: 'Outfit', fontSize: '1rem', color: '#D4AF37', margin: '0 0 16px 0' }}>Reimbursement Claims Ledger</h3>
+                        
+                        <div style={{ overflowX: 'auto' }}>
+                          <table className="table-premium">
+                            <thead>
+                              <tr>
+                                <th>Category</th>
+                                <th>Description / Details</th>
+                                <th>Metrics</th>
+                                <th>Payout Amount</th>
+                                <th>Date Logged</th>
+                                <th>Status</th>
+                                {isOwner && <th style={{ textAlign: 'right' }}>Actions</th>}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {(displayStaff.claims || []).length === 0 ? (
+                                <tr>
+                                  <td colSpan={isOwner ? 7 : 6} style={{ textTransform: 'none', color: '#BFA6D8', textAlign: 'center', padding: '20px 0' }}>
+                                    No claims logged for this employee.
+                                  </td>
+                                </tr>
+                              ) : (
+                                (displayStaff.claims || []).map(c => (
+                                  <tr key={c.id}>
+                                    <td>
+                                      <span className={`badge-brand ${c.type === 'travel' ? 'green' : 'purple'}`}>
+                                        {c.type === 'travel' ? '🚗 Travel Mileage' : '🛍️ Out of Pocket'}
+                                      </span>
+                                    </td>
+                                    <td style={{ fontSize: '0.8rem', fontWeight: 600 }}>{c.description}</td>
+                                    <td style={{ fontSize: '0.75rem', color: '#BFA6D8' }}>
+                                      {c.type === 'travel' ? `${c.km} KM travelled` : 'Cash Receipt'}
+                                    </td>
+                                    <td style={{ fontWeight: 700, color: '#34d399' }}>R {c.amount.toFixed(2)}</td>
+                                    <td style={{ fontSize: '0.75rem', color: '#A89684' }}>{c.date}</td>
+                                    <td>
+                                      <span className={`badge-brand ${c.status === 'approved' ? 'green' : c.status === 'rejected' ? 'red' : 'purple'}`}>
+                                        {c.status.toUpperCase()}
+                                      </span>
+                                    </td>
+                                    {isOwner && (
+                                      <td style={{ textAlign: 'right' }}>
+                                        {c.status === 'pending' ? (
+                                          <div style={{ display: 'flex', gap: '6px', justify: 'flex-end' }}>
+                                            <button
+                                              onClick={() => {
+                                                if (confirm(`Approve this R${c.amount} claim? (It will be added to the next pay slip)`)) {
+                                                  approveStaffClaim(currentUserName(), displayStaff.id, c.id, 'approved');
+                                                  syncDatabase();
+                                                }
+                                              }}
+                                              className="badge-brand green"
+                                              style={{ border: 'none', cursor: 'pointer', fontSize: '0.65rem', padding: '3px 8px' }}
+                                            >
+                                              Approve
+                                            </button>
+                                            <button
+                                              onClick={() => {
+                                                if (confirm(`Reject this claim?`)) {
+                                                  approveStaffClaim(currentUserName(), displayStaff.id, c.id, 'rejected');
+                                                  syncDatabase();
+                                                }
+                                              }}
+                                              className="badge-brand red"
+                                              style={{ border: 'none', cursor: 'pointer', fontSize: '0.65rem', padding: '3px 8px' }}
+                                            >
+                                              Reject
+                                            </button>
+                                          </div>
+                                        ) : (
+                                          <span style={{ fontSize: '0.72rem', color: '#A89684' }}>Processed</span>
+                                        )}
+                                      </td>
+                                    )}
+                                  </tr>
+                                ))
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* PANEL 4: APP LOANS */}
+                  {selectedStaffDossierTab === 'loans' && (
+                    <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                      
+                      {/* LOAN REQUEST FORM (Staff View Only) */}
+                      {!isOwner && (
+                        <div className="card-premium">
+                          <h3 style={{ fontFamily: 'Outfit', fontSize: '1rem', color: '#D4AF37', margin: '0 0 16px 0' }}>Request Emergency Staff Cash Loan</h3>
+                          <p style={{ fontSize: '0.78rem', color: '#BFA6D8', marginTop: '-8px', marginBottom: '16px' }}>Approved loans will automatically reflect as a monthly amortized deduction on your payslips.</p>
+                          
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '16px' }}>
+                            <div>
+                              <label style={{ display: 'block', fontSize: '0.78rem', color: '#A89684', marginBottom: '4px' }}>Loan Amount (R):</label>
+                              <input
+                                type="number"
+                                className="brand-input"
+                                placeholder="e.g. 1200"
+                                value={loanForm.amount}
+                                onChange={(e) => setLoanForm(prev => ({ ...prev, amount: e.target.value }))}
+                              />
+                            </div>
+                            <div>
+                              <label style={{ display: 'block', fontSize: '0.78rem', color: '#A89684', marginBottom: '4px' }}>Repayment Repay Term:</label>
+                              <select
+                                className="brand-input"
+                                value={loanForm.months}
+                                onChange={(e) => setLoanForm(prev => ({ ...prev, months: Number(e.target.value) }))}
+                              >
+                                <option value={1}>1 Month Repayment</option>
+                                <option value={2}>2 Months Repayments</option>
+                                <option value={3}>3 Months Repayments</option>
+                                <option value={4}>4 Months Repayments</option>
+                                <option value={5}>5 Months Repayments</option>
+                                <option value={6}>6 Months Repayments</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          {loanForm.amount && (
+                            <div style={{ marginBottom: '16px', padding: '10px', backgroundColor: 'rgba(96,165,250,0.05)', borderRadius: '6px', border: '1px solid rgba(96,165,250,0.1)', fontSize: '0.8rem', color: '#60a5fa' }}>
+                              <span>Deduction Schedule: <strong>R {(loanForm.amount / loanForm.months).toFixed(2)} / month</strong> for the next {loanForm.months} months.</span>
+                            </div>
+                          )}
+
+                          <button
+                            onClick={() => {
+                              if (!loanForm.amount || Number(loanForm.amount) <= 0) return alert('Please enter valid loan amount.');
+                              const res = submitLoanRequest(currentUserName(), displayStaff.id, loanForm);
+                              if (res) {
+                                setLoanForm({ amount: '', months: 1 });
+                                syncDatabase();
+                              }
+                            }}
+                            className="btn-brand-gold"
+                            style={{ width: '100%', justifyContent: 'center' }}
+                          >
+                            Submit Loan Request
+                          </button>
+                        </div>
+                      )}
+
+                      {/* LOANS LEDGER */}
+                      <div className="card-premium">
+                        <h3 style={{ fontFamily: 'Outfit', fontSize: '1rem', color: '#D4AF37', margin: '0 0 16px 0' }}>Emergency Loan Repayment Book</h3>
+                        
+                        <div style={{ overflowX: 'auto' }}>
+                          <table className="table-premium">
+                            <thead>
+                              <tr>
+                                <th>Loan Capital</th>
+                                <th>Payback Term</th>
+                                <th>Monthly Repayment</th>
+                                <th>Months Remaining</th>
+                                <th>Date Requested</th>
+                                <th>Status</th>
+                                {isOwner && <th style={{ textAlign: 'right' }}>Actions</th>}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {(displayStaff.loans || []).length === 0 ? (
+                                <tr>
+                                  <td colSpan={isOwner ? 7 : 6} style={{ textTransform: 'none', color: '#BFA6D8', textAlign: 'center', padding: '20px 0' }}>
+                                    No active or requested staff loans.
+                                  </td>
+                                </tr>
+                              ) : (
+                                (displayStaff.loans || []).map(l => (
+                                  <tr key={l.id}>
+                                    <td style={{ fontWeight: 700, color: '#ef4444' }}>R {l.amount.toFixed(2)}</td>
+                                    <td>{l.months} months</td>
+                                    <td style={{ color: '#D4AF37' }}>R {l.monthlyRepayment.toFixed(2)} / mo</td>
+                                    <td>
+                                      {l.status === 'approved' ? (
+                                        <strong style={{ color: l.repaymentMonthsLeft > 0 ? '#60a5fa' : '#34d399' }}>
+                                          {l.repaymentMonthsLeft > 0 ? `${l.repaymentMonthsLeft} months left` : 'Fully Paid 🎉'}
+                                        </strong>
+                                      ) : '—'}
+                                    </td>
+                                    <td style={{ fontSize: '0.75rem', color: '#A89684' }}>{l.date}</td>
+                                    <td>
+                                      <span className={`badge-brand ${l.status === 'approved' ? 'green' : l.status === 'rejected' ? 'red' : 'purple'}`}>
+                                        {l.status.toUpperCase()}
+                                      </span>
+                                    </td>
+                                    {isOwner && (
+                                      <td style={{ textAlign: 'right' }}>
+                                        {l.status === 'pending' ? (
+                                          <div style={{ display: 'flex', gap: '6px', justify: 'flex-end' }}>
+                                            <button
+                                              onClick={() => {
+                                                if (confirm(`Approve this cash loan request for R${l.amount} to be repaid over ${l.months} months?`)) {
+                                                  approveLoanRequest(currentUserName(), displayStaff.id, l.id, 'approved');
+                                                  syncDatabase();
+                                                }
+                                              }}
+                                              className="badge-brand green"
+                                              style={{ border: 'none', cursor: 'pointer', fontSize: '0.65rem', padding: '3px 8px' }}
+                                            >
+                                              Approve
+                                            </button>
+                                            <button
+                                              onClick={() => {
+                                                if (confirm(`Reject this loan request?`)) {
+                                                  approveLoanRequest(currentUserName(), displayStaff.id, l.id, 'rejected');
+                                                  syncDatabase();
+                                                }
+                                              }}
+                                              className="badge-brand red"
+                                              style={{ border: 'none', cursor: 'pointer', fontSize: '0.65rem', padding: '3px 8px' }}
+                                            >
+                                              Reject
+                                            </button>
+                                          </div>
+                                        ) : (
+                                          <span style={{ fontSize: '0.72rem', color: '#A89684' }}>Processed</span>
+                                        )}
+                                      </td>
+                                    )}
+                                  </tr>
+                                ))
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* PANEL 5: DOCUMENTS & EMPLOYMENT CONTRACTS */}
+                  {selectedStaffDossierTab === 'documents' && (
+                    <div className="card-premium animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '10px' }}>
+                        <h3 style={{ fontFamily: 'Outfit', fontSize: '1.1rem', color: '#D4AF37', margin: 0 }}>Corporate Employee Vault</h3>
+                        <span style={{ fontSize: '0.78rem', color: '#BFA6D8' }}>Contracts, Warning Letters, Performance Reviews</span>
+                      </div>
+
+                      {/* UPLOAD SIMULATOR (Owner Only) */}
+                      {isOwner && (
+                        <div style={{ padding: '14px', backgroundColor: 'rgba(255, 255, 255, 0.02)', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                          <h4 style={{ margin: '0 0 10px 0', fontSize: '0.85rem', color: 'white' }}>Upload Simulated Corporate Document</h4>
+                          <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end' }}>
+                            <div style={{ flex: 1 }}>
+                              <label style={{ display: 'block', fontSize: '0.72rem', color: '#A89684', marginBottom: '4px' }}>Document Name / File:</label>
+                              <input
+                                type="text"
+                                className="brand-input"
+                                placeholder="e.g. Jessica_Laser_Employment_Contract_2026_V2.pdf"
+                                value={documentName}
+                                onChange={(e) => setDocumentName(e.target.value)}
+                              />
+                            </div>
+                            <div style={{ width: '150px' }}>
+                              <label style={{ display: 'block', fontSize: '0.72rem', color: '#A89684', marginBottom: '4px' }}>Category Type:</label>
+                              <select
+                                className="brand-input"
+                                value={documentType}
+                                onChange={(e) => setDocumentType(e.target.value)}
+                              >
+                                <option value="contract">Employment Contract</option>
+                                <option value="warning">Written Warning Letter</option>
+                                <option value="other">Business Memo / Certificate</option>
+                              </select>
+                            </div>
+                            <button
+                              onClick={() => {
+                                if (!documentName) return alert('Please enter a document name.');
+                                const res = uploadStaffDocument(currentUserName(), displayStaff.id, documentName, documentType);
+                                if (res) {
+                                  setDocumentName('');
+                                  syncDatabase();
+                                }
+                              }}
+                              className="btn-brand-gold"
+                              style={{ height: '36px' }}
+                            >
+                              Attach Document
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* ATTACHED DOCUMENTS LIST */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                        {(displayStaff.contracts || []).length === 0 ? (
+                          <div style={{ color: '#BFA6D8', fontSize: '0.85rem', padding: '16px 0', textAlign: 'center' }}>No uploaded contracts or business documents found.</div>
+                        ) : (
+                          (displayStaff.contracts || []).map(doc => (
+                            <div
+                              key={doc.id}
+                              style={{
+                                display: 'flex',
+                                justify: 'space-between',
+                                alignItems: 'center',
+                                padding: '12px',
+                                borderRadius: '6px',
+                                backgroundColor: doc.type === 'warning' ? 'rgba(239, 68, 68, 0.05)' : 'rgba(255,255,255,0.02)',
+                                border: doc.type === 'warning' ? '1px solid rgba(239, 68, 68, 0.15)' : '1px solid rgba(255,255,255,0.05)',
+                                fontSize: '0.85rem'
+                              }}
+                            >
+                              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                                <span style={{ fontSize: '1.4rem' }}>{doc.type === 'warning' ? '⚠️' : '📄'}</span>
+                                <div>
+                                  <strong style={{ color: 'white', display: 'block' }}>{doc.name}</strong>
+                                  <span style={{ fontSize: '0.72rem', color: '#BFA6D8', textTransform: 'capitalize' }}>Category: {doc.type} • Uploaded: {doc.uploadDate}</span>
+                                </div>
+                              </div>
+                              <button
+                                onClick={() => alert(`Simulating file download: Initializing download stream for employee document "${doc.name}"...`)}
+                                className="badge-brand purple"
+                                style={{ border: 'none', cursor: 'pointer', fontSize: '0.68rem', padding: '4px 10px' }}
+                              >
+                                Download
+                              </button>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* PANEL 6: PAYSLIPS VAULT */}
+                  {selectedStaffDossierTab === 'payslips' && (
+                    <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                      
+                      {/* DRAFT PAYSLIP PROCESSOR (Owner Only) */}
+                      {isOwner && (
+                        <div className="card-premium" style={{ border: '1px solid rgba(167, 243, 208, 0.25)', backgroundColor: 'rgba(167, 243, 208, 0.02)' }}>
+                          <div style={{ display: 'flex', justify: 'space-between', alignItems: 'center', marginBottom: '16px', borderBottom: '1px solid rgba(167, 243, 208, 0.1)', paddingBottom: '10px' }}>
+                            <h3 style={{ fontFamily: 'Outfit', color: '#34d399', fontSize: '1.1rem', margin: 0 }}>Processed Live Draft Payslip</h3>
+                            <span className="badge-brand green" style={{ fontSize: '0.6rem' }}>ACTIVE BILLING CYCLE</span>
+                          </div>
+
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '0.85rem', color: '#BFA6D8' }}>
+                            <div style={{ display: 'flex', justify: 'space-between' }}>
+                              <span>1. Basic Monthly Salary:</span>
+                              <strong style={{ color: 'white' }}>R {displayStaff.salary.toFixed(2)}</strong>
+                            </div>
+                            <div style={{ display: 'flex', justify: 'space-between' }}>
+                              <span>2. Completed Service Commissions:</span>
+                              <strong style={{ color: '#34d399' }}>+ R {comm.total.toFixed(2)}</strong>
+                            </div>
+                            <div style={{ display: 'flex', justify: 'space-between' }}>
+                              <span>3. Approved Cash & Mileage Claims:</span>
+                              <strong style={{ color: '#34d399' }}>+ R {claimsAmt.toFixed(2)}</strong>
+                            </div>
+                            <div style={{ display: 'flex', justify: 'space-between' }}>
+                              <span>4. Salary Adjustments / Bonuses:</span>
+                              <strong style={{ color: '#34d399' }}>+ R {bonusesAmt.toFixed(2)}</strong>
+                            </div>
+                            <div style={{ display: 'flex', justify: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '8px' }}>
+                              <span>5. Active Cash Loan Deductions:</span>
+                              <strong style={{ color: '#ef4444' }}>- R {loansAmt.toFixed(2)}</strong>
+                            </div>
+                            <div style={{ display: 'flex', justify: 'space-between', fontSize: '1.15rem', color: '#34d399', fontWeight: 'bold', paddingTop: '8px' }}>
+                              <span>NET SALARY PAYOUT:</span>
+                              <span>R {netSalary.toFixed(2)}</span>
+                            </div>
+                          </div>
+
+                          <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end', marginTop: '20px' }}>
+                            <div style={{ flex: 1 }}>
+                              <label style={{ display: 'block', fontSize: '0.72rem', color: '#A89684', marginBottom: '4px' }}>Automatic Email Delivery Day:</label>
+                              <select className="brand-input" defaultValue="25">
+                                <option value="20">20th of the month</option>
+                                <option value="25">25th of the month</option>
+                                <option value="28">28th of the month</option>
+                                <option value="30">30th of the month</option>
+                              </select>
+                            </div>
+                            <button
+                              onClick={() => {
+                                const currentMonthName = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
+                                if (confirm(`[PROPOSAL] Finalize, process and email Payslip for ${displayStaff.name} for the billing month of ${currentMonthName}?\nThis will automatically charge the business salaries ledger, archive the payslip, reset temporary claims, and trigger email dispatches.`)) {
+                                  const res = finalizeStaffPayslip(currentUserName(), displayStaff.id, currentMonthName);
+                                  if (res.success) {
+                                    alert(`Successfully finalized payslip! Dynamic Salaries expense entry has been posted to operating expenses.`);
+                                    syncDatabase();
+                                  }
+                                }
+                              }}
+                              className="btn-brand-gold"
+                              style={{ height: '36px', width: '100%', justifyContent: 'center' }}
+                            >
+                              Finalize Live Payslip & Email Staff
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* ARCHIVED PAYSLIPS LEDGER */}
+                      <div className="card-premium">
+                        <h3 style={{ fontFamily: 'Outfit', fontSize: '1rem', color: '#D4AF37', margin: '0 0 16px 0' }}>Payslip Archives</h3>
+                        
+                        <div style={{ overflowX: 'auto' }}>
+                          <table className="table-premium">
+                            <thead>
+                              <tr>
+                                <th>Billing Month</th>
+                                <th>Basic Salary</th>
+                                <th>Commission</th>
+                                <th>Claims & Bonuses</th>
+                                <th>Deductions</th>
+                                <th>Net Salary Payout</th>
+                                <th style={{ textAlign: 'right' }}>Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {(displayStaff.payslips || []).length === 0 ? (
+                                <tr>
+                                  <td colSpan={7} style={{ textTransform: 'none', color: '#BFA6D8', textAlign: 'center', padding: '20px 0' }}>
+                                    No finalized or archived payslips for this employee yet.
+                                  </td>
+                                </tr>
+                              ) : (
+                                (displayStaff.payslips || []).map(p => (
+                                  <tr key={p.id}>
+                                    <td style={{ fontWeight: 'bold' }}>{p.month}</td>
+                                    <td>R {p.baseSalary.toFixed(2)}</td>
+                                    <td style={{ color: '#34d399' }}>R {p.commissionEarned.toFixed(2)}</td>
+                                    <td style={{ color: '#34d399' }}>R {(p.claimsApproved + p.bonusApproved).toFixed(2)}</td>
+                                    <td style={{ color: '#ef4444' }}>- R {p.loanDeduction.toFixed(2)}</td>
+                                    <td style={{ fontWeight: 700, color: '#34d399' }}>R {p.finalSalary.toFixed(2)}</td>
+                                    <td style={{ textAlign: 'right' }}>
+                                      <button
+                                        onClick={() => {
+                                          alert(`
+========================================
+       SCULPT & GLOW PAYSLIP RECEIPT
+========================================
+Employee: ${displayStaff.name}
+Billing Month: ${p.month}
+Generated At: ${p.generatedAt}
+Emailed At: ${p.emailedAt}
+
+- Basic Salary: R ${p.baseSalary.toFixed(2)}
+- Commissions: R ${p.commissionEarned.toFixed(2)}
+- Reimbursements: R ${(p.claimsApproved + p.bonusApproved).toFixed(2)}
+- Loan Repayment: - R ${p.loanDeduction.toFixed(2)}
+----------------------------------------
+NET PAYOUT PAID: R ${p.finalSalary.toFixed(2)}
+========================================
+Banking details paid to: ${displayStaff.bankName} Account: ${displayStaff.accountNumber}
+Transferred successfully.
+`);
+                                        }}
+                                        className="badge-brand purple"
+                                        style={{ border: 'none', cursor: 'pointer', fontSize: '0.68rem', padding: '4px 10px' }}
+                                      >
+                                        View Payslip
+                                      </button>
+                                    </td>
+                                  </tr>
+                                ))
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                </div>
+
+              </div>
+            </div>
+          );
+        })()}
 
         {/* WORKSPACE P: GLOBAL SALON SETTINGS */}
         {activeTab === 'settings' && currentUserRole === 'owner' && (
@@ -4117,6 +5272,309 @@ export default function BookingCRM() {
       {/* ======================================================= */}
       {/*   5. MODAL DIALOGS / POPUPS                             */}
       {/* ======================================================= */}
+
+      {/* NEW MODAL: REGISTER STAFF MEMBER */}
+      {showNewStaffModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000 }}>
+          <div className="card-premium animate-fade-in" style={{ width: '450px', maxHeight: '90vh', overflowY: 'auto' }}>
+            <h3 style={{ fontFamily: 'Outfit', color: '#D4AF37', marginBottom: '16px' }}>Register New Staff Member</h3>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '4px' }}>Full Name:</label>
+                <input
+                  type="text"
+                  className="brand-input"
+                  placeholder="e.g. Jessica Thompson"
+                  value={newStaffForm.name}
+                  onChange={(e) => setNewStaffForm(prev => ({ ...prev, name: e.target.value }))}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '4px' }}>Username:</label>
+                  <input
+                    type="text"
+                    className="brand-input"
+                    placeholder="e.g. jessica"
+                    value={newStaffForm.username}
+                    onChange={(e) => setNewStaffForm(prev => ({ ...prev, username: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '4px' }}>Pin (4-digit):</label>
+                  <input
+                    type="text"
+                    className="brand-input"
+                    placeholder="e.g. 1234"
+                    maxLength={4}
+                    value={newStaffForm.pin}
+                    onChange={(e) => setNewStaffForm(prev => ({ ...prev, pin: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '4px' }}>Role / Post:</label>
+                  <select
+                    className="brand-input"
+                    value={newStaffForm.role}
+                    onChange={(e) => setNewStaffForm(prev => ({ ...prev, role: e.target.value }))}
+                  >
+                    <option value="therapist">Clinical Therapist</option>
+                    <option value="receptionist">Reception Clerk</option>
+                    <option value="owner">Co-Owner / Admin</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '4px' }}>Base Salary (R):</label>
+                  <input
+                    type="number"
+                    className="brand-input"
+                    placeholder="e.g. 12500"
+                    value={newStaffForm.salary}
+                    onChange={(e) => setNewStaffForm(prev => ({ ...prev, salary: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '4px' }}>Email Address:</label>
+                <input
+                  type="email"
+                  className="brand-input"
+                  placeholder="e.g. jessica@sculptglow.co.za"
+                  value={newStaffForm.email}
+                  onChange={(e) => setNewStaffForm(prev => ({ ...prev, email: e.target.value }))}
+                />
+              </div>
+
+              <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '10px', marginTop: '4px' }}>
+                <h4 style={{ margin: '0 0 10px 0', color: '#D4AF37', fontSize: '0.82rem' }}>Banking Details</h4>
+                
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.75rem', color: '#A89684', marginBottom: '4px' }}>Bank Name:</label>
+                    <input
+                      type="text"
+                      className="brand-input"
+                      placeholder="e.g. FNB Pretoria"
+                      value={newStaffForm.bankName}
+                      onChange={(e) => setNewStaffForm(prev => ({ ...prev, bankName: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.75rem', color: '#A89684', marginBottom: '4px' }}>Account Number:</label>
+                    <input
+                      type="text"
+                      className="brand-input"
+                      placeholder="e.g. 1029384756"
+                      value={newStaffForm.accountNumber}
+                      onChange={(e) => setNewStaffForm(prev => ({ ...prev, accountNumber: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', color: '#A89684', marginBottom: '4px' }}>Branch Code:</label>
+                  <input
+                    type="text"
+                    className="brand-input"
+                    placeholder="e.g. 250655"
+                    value={newStaffForm.branchCode}
+                    onChange={(e) => setNewStaffForm(prev => ({ ...prev, branchCode: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', marginTop: '16px' }}>
+                <button
+                  onClick={() => {
+                    if (!newStaffForm.name || !newStaffForm.username || !newStaffForm.email) {
+                      return alert('Please fill in all mandatory staff profile fields.');
+                    }
+                    const usersList = getTable('users');
+                    if (usersList.some(u => u.username === newStaffForm.username)) {
+                      return alert('Error: A staff member with this username already exists.');
+                    }
+                    const newUser = {
+                      id: `usr-${Date.now()}`,
+                      name: newStaffForm.name,
+                      username: newStaffForm.username,
+                      role: newStaffForm.role,
+                      email: newStaffForm.email,
+                      pin: newStaffForm.pin || '1234',
+                      salary: Number(newStaffForm.salary || 10000),
+                      bankName: newStaffForm.bankName || 'FNB Pretoria',
+                      accountHolder: newStaffForm.name,
+                      accountNumber: newStaffForm.accountNumber || `102938${Date.now().toString().substr(8)}`,
+                      branchCode: newStaffForm.branchCode || '250655',
+                      contracts: [],
+                      commissionRate: newStaffForm.role === 'therapist' ? 10 : newStaffForm.role === 'receptionist' ? 5 : 0,
+                      salesTarget: newStaffForm.role === 'receptionist' ? 10000 : 15000,
+                      servicesTarget: newStaffForm.role === 'therapist' ? 15000 : 10000,
+                      leaveBalance: 15,
+                      monthlyLeaveAccrual: 1.25,
+                      sickLeaveBalance: 10,
+                      sickLeaveRenewCycle: '1 year',
+                      familyLeaveBalance: 3,
+                      claims: [],
+                      loans: [],
+                      bonuses: [],
+                      payslips: [],
+                      leaveRequests: []
+                    };
+                    usersList.push(newUser);
+                    saveTable('users', usersList);
+                    syncDatabase();
+                    setShowNewStaffModal(false);
+                    alert(`Successfully registered new staff member: ${newUser.name}!`);
+                  }}
+                  className="btn-brand-gold"
+                  style={{ flex: 1, justifyContent: 'center' }}
+                >
+                  Register Staff
+                </button>
+                <button
+                  onClick={() => setShowNewStaffModal(false)}
+                  className="btn-brand-purple"
+                  style={{ width: '100px', justifyContent: 'center', border: '1px solid rgba(255,255,255,0.15)', background: 'none' }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* NEW MODAL: COMMISSIONS SALES DRILL DOWN */}
+      {activeCommissionsDrilldownStaff && (() => {
+        const staff = activeCommissionsDrilldownStaff;
+        const comm = getStaffCommissions(staff.id);
+        const invoicesList = getTable('invoices').filter(i => i.status === 'Paid');
+        const appointmentsList = getTable('appointments');
+        const svcCommRate = staff.commissionRate || 10;
+        const prdCommRate = 5;
+
+        let salesList = [];
+        invoicesList.forEach(inv => {
+          const apt = appointmentsList.find(a => a.id === inv.appointmentId);
+          const client = getTable('clients').find(c => c.id === inv.clientId) || { name: 'Walk-in Client' };
+          
+          inv.items.forEach(item => {
+            if (item.name.includes('[Service]') && apt && apt.staffId === staff.id) {
+              const commEarned = Number((item.price * item.quantity * (svcCommRate / 100)).toFixed(2));
+              salesList.push({
+                date: inv.date,
+                clientName: client.name,
+                itemName: item.name.split(' [')[0],
+                itemType: 'Service',
+                price: item.price,
+                qty: item.quantity,
+                rate: svcCommRate,
+                commEarned
+              });
+            } else if (item.name.includes('[Product]')) {
+              if (apt && apt.staffId === staff.id) {
+                const commEarned = Number((item.price * item.quantity * (prdCommRate / 100)).toFixed(2));
+                salesList.push({
+                  date: inv.date,
+                  clientName: client.name,
+                  itemName: item.name.split(' [')[0],
+                  itemType: 'Product Retail',
+                  price: item.price,
+                  qty: item.quantity,
+                  rate: prdCommRate,
+                  commEarned
+                });
+              }
+            }
+          });
+        });
+
+        return (
+          <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000 }}>
+            <div className="card-premium animate-fade-in" style={{ width: '700px', maxHeight: '85vh', overflowY: 'auto' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', borderBottom: '1px solid rgba(107, 44, 145, 0.2)', paddingBottom: '10px' }}>
+                <div>
+                  <h3 style={{ fontFamily: 'Outfit', color: '#D4AF37', margin: 0 }}>Sales & Commissions Drill Down</h3>
+                  <span style={{ fontSize: '0.8rem', color: '#BFA6D8' }}>Detailed ledger for <strong>{staff.name}</strong> • Service: {svcCommRate}%, Retail: {prdCommRate}%</span>
+                </div>
+                <button
+                  onClick={() => setActiveCommissionsDrilldownStaff(null)}
+                  className="btn-brand-purple"
+                  style={{ padding: '4px 10px', fontSize: '0.75rem', height: '26px' }}
+                >
+                  Close
+                </button>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', marginBottom: '20px' }}>
+                <div style={{ backgroundColor: 'rgba(255,255,255,0.02)', padding: '10px', borderRadius: '6px', textAlign: 'center' }}>
+                  <span style={{ fontSize: '0.72rem', color: '#BFA6D8', display: 'block' }}>Total Sales Volume</span>
+                  <strong style={{ fontSize: '1.2rem', color: 'white', fontFamily: 'Outfit' }}>
+                    R {salesList.reduce((acc, s) => acc + (s.price * s.qty), 0).toLocaleString()}
+                  </strong>
+                </div>
+                <div style={{ backgroundColor: 'rgba(255,255,255,0.02)', padding: '10px', borderRadius: '6px', textAlign: 'center' }}>
+                  <span style={{ fontSize: '0.72rem', color: '#BFA6D8', display: 'block' }}>Total Sales Count</span>
+                  <strong style={{ fontSize: '1.2rem', color: 'white', fontFamily: 'Outfit' }}>
+                    {salesList.length} items
+                  </strong>
+                </div>
+                <div style={{ backgroundColor: 'rgba(167, 243, 208, 0.05)', padding: '10px', borderRadius: '6px', textAlign: 'center', border: '1px solid rgba(167, 243, 208, 0.15)' }}>
+                  <span style={{ fontSize: '0.72rem', color: '#a7f3d0', display: 'block' }}>Total Commissions Payout</span>
+                  <strong style={{ fontSize: '1.2rem', color: '#34d399', fontFamily: 'Outfit' }}>
+                    R {comm.total.toFixed(2)}
+                  </strong>
+                </div>
+              </div>
+
+              <div style={{ overflowX: 'auto' }}>
+                <table className="table-premium">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Client</th>
+                      <th>Item Name / Category</th>
+                      <th>Price</th>
+                      <th>Split Rate</th>
+                      <th style={{ textAlign: 'right' }}>Commission</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {salesList.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} style={{ textTransform: 'none', color: '#BFA6D8', textAlign: 'center', padding: '30px 0' }}>
+                          No sales contributed by this therapist in the paid invoices directory yet.
+                        </td>
+                      </tr>
+                    ) : (
+                      salesList.map((s, idx) => (
+                        <tr key={idx}>
+                          <td style={{ fontSize: '0.78rem', color: '#A89684' }}>{s.date}</td>
+                          <td><strong>{s.clientName}</strong></td>
+                          <td style={{ fontSize: '0.78rem' }}>
+                            {s.itemName}
+                            <span className={`badge-brand ${s.itemType.includes('Service') ? 'gold' : 'purple'}`} style={{ fontSize: '0.55rem', marginLeft: '6px', padding: '1px 4px' }}>
+                              {s.itemType}
+                            </span>
+                          </td>
+                          <td>R {s.price.toFixed(2)}</td>
+                          <td style={{ color: '#D4AF37' }}>{s.rate}%</td>
+                          <td style={{ fontWeight: 700, color: '#34d399', textAlign: 'right' }}>R {s.commEarned.toFixed(2)}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* NEW MODAL: RESCHEDULE APPOINTMENT */}
       {showRescheduleModal && activeRescheduleApt && (
