@@ -637,6 +637,42 @@ export const addProduct = (username, product) => {
   products.push(newP);
   saveTable('products', products);
   logAction(username, 'Add Retail Product', `Added retail catalog product "${newP.name}" priced at R${newP.price}`, '', newP);
+
+  // Auto-sync added products to inventory!
+  const inventory = getTable('inventory');
+  if (!inventory.some(item => item.name === newP.name)) {
+    const newInvItem = {
+      id: `inv-${Date.now()}`,
+      name: newP.name,
+      quantity: newP.stock,
+      alertAt: 5,
+      unit: 'items',
+      cost: Number((newP.price * 0.6).toFixed(2)),
+      sellPrice: newP.price,
+      supplier: 'Atelier E-Commerce'
+    };
+    
+    if (useSupabase()) {
+      cloudFetch('inventory', {
+        method: 'POST',
+        body: {
+          id: newInvItem.id,
+          name: newInvItem.name,
+          quantity: newInvItem.quantity,
+          alert_at: newInvItem.alertAt,
+          unit: newInvItem.unit,
+          cost: newInvItem.cost,
+          sell_price: newInvItem.sellPrice,
+          supplier: newInvItem.supplier
+        }
+      }).catch(err => console.error('Cloud stock item creation failed:', err));
+    }
+    
+    inventory.push(newInvItem);
+    saveTable('inventory', inventory);
+    logAction(username, 'Add Stock Item', `Registered e-commerce product "${newInvItem.name}" in inventory automatically`, '', newInvItem);
+  }
+
   return newP;
 };
 
@@ -933,4 +969,85 @@ export const getStaffCommissions = (staffId) => {
     productComm,
     total: Number((serviceComm + productComm).toFixed(2))
   };
+};
+
+// Services Config CRUD
+export const addService = (username, service) => {
+  const services = getTable('services');
+  const newS = {
+    id: `srv-${Date.now()}`,
+    vat: 15.00,
+    requiredStaffType: 'therapist',
+    ...service
+  };
+
+  if (useSupabase()) {
+    cloudFetch('services', {
+      method: 'POST',
+      body: {
+        id: newS.id,
+        name: newS.name,
+        category: newS.category,
+        price: newS.price,
+        duration: newS.duration,
+        description: newS.description,
+        required_machine: newS.requiredMachine,
+        required_staff_type: newS.requiredStaffType,
+        consumables: newS.consumables
+      }
+    }).catch(err => console.error('Cloud service sync failed:', err));
+  }
+
+  services.push(newS);
+  saveTable('services', services);
+  logAction(username, 'Add Service', `Added service "${newS.name}" priced at R${newS.price}`, '', newS);
+  return newS;
+};
+
+export const updateService = (username, service) => {
+  const services = getTable('services');
+  const idx = services.findIndex(s => s.id === service.id);
+  if (idx === -1) return null;
+  const prev = services[idx];
+  const updated = { ...prev, ...service };
+
+  if (useSupabase()) {
+    cloudFetch('services', {
+      method: 'PATCH',
+      query: `id=eq.${service.id}`,
+      body: {
+        name: updated.name,
+        category: updated.category,
+        price: updated.price,
+        duration: updated.duration,
+        description: updated.description,
+        required_machine: updated.requiredMachine,
+        consumables: updated.consumables
+      }
+    }).catch(err => console.error('Cloud service update failed:', err));
+  }
+
+  services[idx] = updated;
+  saveTable('services', services);
+  logAction(username, 'Update Service', `Updated service "${service.name}"`, prev, service);
+  return updated;
+};
+
+export const deleteService = (username, serviceId) => {
+  const services = getTable('services');
+  const idx = services.findIndex(s => s.id === serviceId);
+  if (idx === -1) return false;
+  const prev = services[idx];
+
+  if (useSupabase()) {
+    cloudFetch('services', {
+      method: 'DELETE',
+      query: `id=eq.${serviceId}`
+    }).catch(err => console.error('Cloud service delete failed:', err));
+  }
+
+  const filtered = services.filter(s => s.id !== serviceId);
+  saveTable('services', filtered);
+  logAction(username, 'Delete Service', `Deleted service "${prev.name}"`, prev, '');
+  return true;
 };

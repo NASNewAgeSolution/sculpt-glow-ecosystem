@@ -35,7 +35,10 @@ import {
   addProduct,
   checkScheduleConflict,
   getStaffCommissions,
-  updateSettings
+  updateSettings,
+  addService,
+  updateService,
+  deleteService
 } from '../db/stateEngine';
 
 export default function BookingCRM() {
@@ -217,7 +220,7 @@ export default function BookingCRM() {
     name: '', price: 250, stock: 10, category: 'Facial Products', description: '', image: ''
   });
   const [paymentForm, setPaymentForm] = useState({ amount: 0, method: 'Card' });
-  const [expenseForm, setExpenseForm] = useState({ category: 'Utilities', description: '', amount: 0, machineId: '' });
+  const [expenseForm, setExpenseForm] = useState({ category: 'Utilities', description: '', amount: 0, machineId: '', frequency: 'once_off' });
   const [waitlistForm, setWaitlistForm] = useState({
     clientId: '',
     serviceId: '',
@@ -249,6 +252,21 @@ export default function BookingCRM() {
   const [quoteItems, setQuoteItems] = useState([{ name: '', quantity: 1, price: 0 }]);
   const [quoteDiscount, setQuoteDiscount] = useState(0);
   const [quoteClient, setQuoteClient] = useState('');
+
+  // Phase 3 Catalog, Inventory & Orders States
+  const [serviceSearchQuery, setServiceSearchQuery] = useState('');
+  const [showServiceModal, setShowServiceModal] = useState(false);
+  const [activeServiceForm, setActiveServiceForm] = useState({ name: '', category: 'Body Contouring', price: 0, duration: 30, requiredMachine: '', consumables: [] });
+  const [isEditingService, setIsEditingService] = useState(false);
+  const [selectedDrillDownService, setSelectedDrillDownService] = useState(null);
+  const [showInventoryModal, setShowInventoryModal] = useState(false);
+  const [inventoryForm, setInventoryForm] = useState({ name: '', quantity: 0, alertAt: 5, unit: 'items', cost: 0, sellPrice: 0, supplier: '' });
+  const [showStockAdjustModal, setShowStockAdjustModal] = useState(false);
+  const [activeStockItem, setActiveStockItem] = useState(null);
+  const [stockAdjustForm, setStockAdjustForm] = useState({ type: 'add', amount: 0, reason: '' });
+  const [showCustomCategoryInput, setShowCustomCategoryInput] = useState(false);
+  const [customCategoryText, setCustomCategoryText] = useState('');
+  const [inventorySearchQuery, setInventorySearchQuery] = useState('');
 
   const syncDatabase = () => {
     // Check SaaS rent lock status
@@ -464,7 +482,8 @@ export default function BookingCRM() {
       items: [
         { id: 'services', label: 'Services Config', roles: ['owner', 'receptionist'] },
         { id: 'products', label: 'Atelier Shop Sync', roles: ['owner', 'receptionist'] },
-        { id: 'inventory', label: 'Consumables Stock', roles: ['owner', 'receptionist'] }
+        { id: 'inventory', label: 'Consumables Stock', roles: ['owner', 'receptionist'] },
+        { id: 'orders', label: 'Client Orders', roles: ['owner', 'receptionist'] }
       ]
     },
     hr: {
@@ -1360,13 +1379,35 @@ export default function BookingCRM() {
                         </div>
 
                         {currentUserRole === 'owner' && (() => {
-                          const machineExpenses = expenses.filter(exp => exp.machineId === mach.id).reduce((acc, e) => acc + e.amount, 0);
-                          const netRevenue = mach.revenueGenerated - machineExpenses;
+                          const machineExpensesList = expenses.filter(exp => exp.machineId === mach.id);
+                          const activeAptsCount = appointments.filter(a => a.machineId === mach.id && a.status !== 'Cancelled').length;
+                          
+                          let totalExp = 0;
+                          let perUseDetails = [];
+
+                          machineExpensesList.forEach(e => {
+                            if (e.frequency === 'per_use') {
+                              const cost = e.amount * activeAptsCount;
+                              totalExp += cost;
+                              perUseDetails.push(`${e.description || e.category}: R ${e.amount.toFixed(2)} x ${activeAptsCount} uses = R ${cost.toFixed(2)}`);
+                            } else {
+                              totalExp += e.amount;
+                            }
+                          });
+
+                          const netRevenue = mach.revenueGenerated - totalExp;
                           const netRoi = mach.purchaseCost > 0 ? ((netRevenue / mach.purchaseCost) * 100).toFixed(1) : '0.0';
                           return (
                             <div style={{ fontSize: '0.72rem', color: '#34d399', marginBottom: '8px', borderTop: '1px dashed rgba(52,211,153,0.2)', paddingTop: '6px', display: 'flex', flexDirection: 'column', gap: '3px' }}>
                               <div>Gross Yield: <strong>R {mach.revenueGenerated.toFixed(2)}</strong></div>
-                              <div>Machine Expenses: <strong style={{ color: '#ef4444' }}>R {machineExpenses.toFixed(2)}</strong></div>
+                              <div>Machine Expenses: <strong style={{ color: '#ef4444' }}>R {totalExp.toFixed(2)}</strong></div>
+                              {perUseDetails.length > 0 && (
+                                <div style={{ fontSize: '0.65rem', color: '#BFA6D8', paddingLeft: '8px', borderLeft: '1px solid rgba(191,166,216,0.3)', margin: '2px 0 4px 0' }}>
+                                  {perUseDetails.map((det, idx) => (
+                                    <div key={idx}>• {det}</div>
+                                  ))}
+                                </div>
+                              )}
                               <div>Net Profit: <strong style={{ color: '#34d399' }}>R {netRevenue.toFixed(2)}</strong></div>
                               <div style={{ color: '#D4AF37' }}>Net ROI: <strong>{netRoi}%</strong> (Gross: {mach.purchaseCost > 0 ? ((mach.revenueGenerated / mach.purchaseCost) * 100).toFixed(1) : '0.0'}%)</div>
                             </div>
@@ -1638,195 +1679,282 @@ export default function BookingCRM() {
         )}
 
         {/* WORKSPACE F: BEFORE/AFTER GALLERY & CONSENT */}
-        {activeTab === 'gallery' && (
-          <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            <div>
-              <h1 style={{ fontSize: '1.75rem', fontWeight: 800, margin: 0, fontFamily: 'Outfit' }}>Progress Tracker & Digital Consent</h1>
-              <p style={{ color: '#BFA6D8', margin: '4px 0 0 0', fontSize: '0.85rem' }}>Upload client weight loss charts and manage signed clinical treatment consent sheets.</p>
-            </div>
+        {activeTab === 'gallery' && (() => {
+          // Compute dynamic leaderboard rankings based on positive scale improvements
+          const leaderboard = clients
+            .map(c => {
+              const logs = [...(c.weightLogs || [])].sort((a, b) => a.date.localeCompare(b.date));
+              if (logs.length >= 2) {
+                const oldest = logs[0];
+                const latest = logs[logs.length - 1];
+                const weightLost = oldest.weight - latest.weight;
+                const waistReduced = oldest.waist - latest.waist;
+                const hipsReduced = oldest.hips - latest.hips;
+                return {
+                  client: c,
+                  weightLost,
+                  waistReduced,
+                  hipsReduced,
+                  totalImprovementScore: Math.max(0, weightLost) + Math.max(0, waistReduced) + Math.max(0, hipsReduced)
+                };
+              }
+              return null;
+            })
+            .filter(Boolean)
+            .sort((a, b) => b.totalImprovementScore - a.totalImprovementScore);
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '24px' }}>
-              {/* Progress Gallery card */}
-              <div className="card-premium">
-                <h3 style={{ fontFamily: 'Outfit', fontSize: '1.1rem', marginBottom: '16px', color: 'white' }}>Active Progress Gallery Dossiers</h3>
-                <div style={{ marginBottom: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Search Client:</label>
+          return (
+            <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+              <div>
+                <h1 style={{ fontSize: '1.75rem', fontWeight: 800, margin: 0, fontFamily: 'Outfit' }}>Progress Tracker & Digital Consent</h1>
+                <p style={{ color: '#BFA6D8', margin: '4px 0 0 0', fontSize: '0.85rem' }}>Upload client weight loss charts and manage signed clinical treatment consent sheets.</p>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '24px' }}>
+                {/* Progress Gallery card */}
+                <div className="card-premium">
+                  <h3 style={{ fontFamily: 'Outfit', fontSize: '1.1rem', marginBottom: '16px', color: 'white' }}>Active Progress Gallery Dossiers</h3>
+                  <div style={{ marginBottom: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     <div style={{ position: 'relative' }}>
-                      <Search style={{ position: 'absolute', top: '9px', left: '10px', width: '14px', height: '14px', color: '#A89684' }} />
-                      <input
-                        type="text"
-                        placeholder="Search dossier by name..."
-                        className="brand-input"
-                        style={{ paddingLeft: '32px', fontSize: '0.78rem', height: '32px' }}
-                        value={gallerySearch}
-                        onChange={(e) => setGallerySearch(e.target.value)}
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Select Client Folder:</label>
-                    <select
-                      className="brand-input"
-                      onChange={(e) => {
-                        const cli = clients.find(c => c.id === e.target.value);
-                        setSelectedClient(cli);
-                      }}
-                      value={selectedClient?.id || ''}
-                    >
-                      <option value="">-- Choose Profile --</option>
-                      {clients
-                        .filter(c => c.name.toLowerCase().includes(gallerySearch.toLowerCase()))
-                        .map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                    </select>
-                  </div>
-                </div>
-
-                {selectedClient ? (
-                  <div>
-                    <div style={{ display: 'flex', gap: '16px', marginBottom: '20px', alignItems: 'center' }}>
-                      <img src={selectedClient.profilePhoto} style={{ width: '48px', height: '48px', borderRadius: '50%', objectFit: 'cover' }} alt="Active" />
-                      <div>
-                        <strong style={{ color: 'white', fontSize: '0.95rem' }}>{selectedClient.name} dossier photos</strong>
-                        <span style={{ display: 'block', fontSize: '0.75rem', color: '#BFA6D8' }}>Active Progress Weight Logs: {selectedClient.weightLogs?.length || 0} entries</span>
+                      <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Search Client Folder Name:</label>
+                      <div style={{ position: 'relative' }}>
+                        <Search style={{ position: 'absolute', top: '9px', left: '10px', width: '14px', height: '14px', color: '#A89684' }} />
+                        <input
+                          type="text"
+                          placeholder="Type client name to search..."
+                          className="brand-input"
+                          style={{ paddingLeft: '32px', fontSize: '0.78rem', height: '32px' }}
+                          value={gallerySearch}
+                          onChange={(e) => {
+                            setGallerySearch(e.target.value);
+                            // Clear selection when typing a new search
+                            setSelectedClient(null);
+                          }}
+                        />
                       </div>
-                    </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                      {selectedClient.weightLogs?.map((log, i) => (
-                        <div key={i} style={{ backgroundColor: 'hsl(var(--brand-black))', borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(107, 44, 145, 0.15)' }}>
-                          <img src={log.photo || '/cover.jpg'} style={{ width: '100%', height: '140px', objectFit: 'cover' }} alt="Dossier" />
-                          <div style={{ padding: '12px', fontSize: '0.78rem' }}>
-                            <strong style={{ color: '#D4AF37' }}>Date: {log.date}</strong>
-                            <div style={{ display: 'flex', justify: 'space-between', color: '#BFA6D8', marginTop: '6px' }}>
-                              <span>Weight: {log.weight} kg</span>
-                              <span>Waist: {log.waist} cm</span>
+                      {gallerySearch.length > 0 && !selectedClient && (
+                        <div style={{
+                          maxHeight: '150px', overflowY: 'auto', backgroundColor: 'hsl(var(--brand-black))',
+                          borderRadius: '8px', border: '1px solid rgba(107, 44, 145, 0.3)', marginTop: '4px', padding: '6px',
+                          position: 'absolute', zIndex: 10, width: '100%', boxShadow: '0 4px 12px rgba(0,0,0,0.5)'
+                        }}>
+                          {clients
+                            .filter(c => c.name.toLowerCase().includes(gallerySearch.toLowerCase()))
+                            .map(c => (
+                              <button
+                                key={c.id}
+                                onClick={() => {
+                                  setSelectedClient(c);
+                                  setGallerySearch(c.name);
+                                }}
+                                type="button"
+                                style={{
+                                  display: 'block', width: '100%', background: 'none', border: 'none',
+                                  color: 'white', padding: '8px 10px', textAlign: 'left', cursor: 'pointer', fontSize: '0.8rem',
+                                  borderBottom: '1px solid rgba(107, 44, 145, 0.1)', transition: 'background 0.2s'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(107, 44, 145, 0.2)'}
+                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                              >
+                                {c.name} ({c.phone})
+                              </button>
+                            ))}
+                          {clients.filter(c => c.name.toLowerCase().includes(gallerySearch.toLowerCase())).length === 0 && (
+                            <div style={{ padding: '8px', fontSize: '0.75rem', color: '#ef4444' }}>
+                              No client folders found.
                             </div>
-                            <div style={{ color: '#BFA6D8', marginTop: '2px' }}>Hips: {log.hips} cm</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {selectedClient ? (
+                    <div>
+                      <div style={{ display: 'flex', gap: '16px', marginBottom: '20px', alignItems: 'center' }}>
+                        <img src={selectedClient.profilePhoto} style={{ width: '48px', height: '48px', borderRadius: '50%', objectFit: 'cover' }} alt="Active" />
+                        <div>
+                          <strong style={{ color: 'white', fontSize: '0.95rem' }}>{selectedClient.name} dossier photos</strong>
+                          <span style={{ display: 'block', fontSize: '0.75rem', color: '#BFA6D8' }}>Active Progress Weight Logs: {selectedClient.weightLogs?.length || 0} entries</span>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                        {selectedClient.weightLogs?.map((log, i) => (
+                          <div key={i} style={{ backgroundColor: 'hsl(var(--brand-black))', borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(107, 44, 145, 0.15)' }}>
+                            <img src={log.photo || '/cover.jpg'} style={{ width: '100%', height: '140px', objectFit: 'cover' }} alt="Dossier" />
+                            <div style={{ padding: '12px', fontSize: '0.78rem' }}>
+                              <strong style={{ color: '#D4AF37' }}>Date: {log.date}</strong>
+                              <div style={{ display: 'flex', justify: 'space-between', color: '#BFA6D8', marginTop: '6px' }}>
+                                <span>Weight: {log.weight} kg</span>
+                                <span>Waist: {log.waist} cm</span>
+                              </div>
+                              <div style={{ color: '#BFA6D8', marginTop: '2px' }}>Hips: {log.hips} cm</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Progress mock form */}
+                      <div style={{ marginTop: '24px', borderTop: '1px solid rgba(107, 44, 145, 0.2)', paddingTop: '16px' }}>
+                        <h4 style={{ color: 'white', fontSize: '0.9rem', marginBottom: '12px' }}>Capture Body Scale Progress Logs</h4>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '12px' }}>
+                          <div>
+                            <label style={{ display: 'block', fontSize: '0.72rem', color: '#A89684', marginBottom: '4px' }}>Weight (kg):</label>
+                            <input type="number" className="brand-input" value={progressForm.weight === 0 ? '' : progressForm.weight} onChange={(e) => setProgressForm(prev => ({ ...prev, weight: Number(e.target.value) }))} />
+                          </div>
+                          <div>
+                            <label style={{ display: 'block', fontSize: '0.72rem', color: '#A89684', marginBottom: '4px' }}>Waist (cm):</label>
+                            <input type="number" className="brand-input" value={progressForm.waist === 0 ? '' : progressForm.waist} onChange={(e) => setProgressForm(prev => ({ ...prev, waist: Number(e.target.value) }))} />
+                          </div>
+                          <div>
+                            <label style={{ display: 'block', fontSize: '0.72rem', color: '#A89684', marginBottom: '4px' }}>Hips (cm):</label>
+                            <input type="number" className="brand-input" value={progressForm.hips === 0 ? '' : progressForm.hips} onChange={(e) => setProgressForm(prev => ({ ...prev, hips: Number(e.target.value) }))} />
                           </div>
                         </div>
-                      ))}
-                    </div>
-
-                    {/* Progress mock form */}
-                    <div style={{ marginTop: '24px', borderTop: '1px solid rgba(107, 44, 145, 0.2)', paddingTop: '16px' }}>
-                      <h4 style={{ color: 'white', fontSize: '0.9rem', marginBottom: '12px' }}>Capture Body Scale Progress Logs</h4>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '12px' }}>
-                        <div>
-                          <label style={{ display: 'block', fontSize: '0.72rem', color: '#A89684', marginBottom: '4px' }}>Weight (kg):</label>
-                          <input type="number" className="brand-input" value={progressForm.weight === 0 ? '' : progressForm.weight} onChange={(e) => setProgressForm(prev => ({ ...prev, weight: Number(e.target.value) }))} />
-                        </div>
-                        <div>
-                          <label style={{ display: 'block', fontSize: '0.72rem', color: '#A89684', marginBottom: '4px' }}>Waist (cm):</label>
-                          <input type="number" className="brand-input" value={progressForm.waist === 0 ? '' : progressForm.waist} onChange={(e) => setProgressForm(prev => ({ ...prev, waist: Number(e.target.value) }))} />
-                        </div>
-                        <div>
-                          <label style={{ display: 'block', fontSize: '0.72rem', color: '#A89684', marginBottom: '4px' }}>Hips (cm):</label>
-                          <input type="number" className="brand-input" value={progressForm.hips === 0 ? '' : progressForm.hips} onChange={(e) => setProgressForm(prev => ({ ...prev, hips: Number(e.target.value) }))} />
-                        </div>
+                        <button
+                          onClick={() => {
+                            const allClients = getTable('clients');
+                            const cIdx = allClients.findIndex(c => c.id === selectedClient.id);
+                            if (cIdx !== -1) {
+                              const newLog = {
+                                date: new Date().toISOString().split('T')[0],
+                                weight: progressForm.weight,
+                                waist: progressForm.waist,
+                                hips: progressForm.hips,
+                                photo: '/logo.jpg'
+                              };
+                              allClients[cIdx].weightLogs = [newLog, ...(allClients[cIdx].weightLogs || [])];
+                              localStorage.setItem('salon_clients', JSON.stringify(allClients));
+                              logAction(currentUserName(), 'Log Body Scale', `Recorded progress weight for ${selectedClient.name}: ${progressForm.weight}kg`);
+                              syncDatabase();
+                              alert('Success! Progress photo and scale metrics logged to dossier.');
+                            }
+                          }}
+                          className="btn-brand-gold"
+                          style={{ fontSize: '0.75rem', padding: '8px 16px' }}
+                        >
+                          Capture Measurements
+                        </button>
                       </div>
-                      <button
-                        onClick={() => {
-                          const allClients = getTable('clients');
-                          const cIdx = allClients.findIndex(c => c.id === selectedClient.id);
-                          if (cIdx !== -1) {
-                            const newLog = {
-                              date: new Date().toISOString().split('T')[0],
-                              weight: progressForm.weight,
-                              waist: progressForm.waist,
-                              hips: progressForm.hips,
-                              photo: '/logo.jpg'
-                            };
-                            allClients[cIdx].weightLogs = [newLog, ...(allClients[cIdx].weightLogs || [])];
-                            localStorage.setItem('salon_clients', JSON.stringify(allClients));
-                            logAction(currentUserName(), 'Log Body Scale', `Recorded progress weight for ${selectedClient.name}: ${progressForm.weight}kg`);
-                            syncDatabase();
-                            alert('Success! Progress photo and scale metrics logged to dossier.');
-                          }
-                        }}
-                        className="btn-brand-gold"
-                        style={{ fontSize: '0.75rem', padding: '8px 16px' }}
-                      >
-                        Capture Measurements
-                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ color: '#A89684', textAlign: 'center', padding: '40px' }}>Type client name in search folder box above to load progress history.</div>
+                  )}
+                </div>
+
+                {/* Right-hand Column */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                  {/* Consent form list */}
+                  <div className="card-premium">
+                    <h3 style={{ fontFamily: 'Outfit', fontSize: '1.1rem', marginBottom: '16px', color: '#D4AF37' }}>Clinical Consent Tracker</h3>
+                    <p style={{ fontSize: '0.78rem', color: '#BFA6D8', marginBottom: '16px' }}>Digital signatures are required before launching infrared or cryo devices.</p>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                      <div style={{
+                        display: 'flex', justify: 'space-between', alignItems: 'center',
+                        padding: '12px', backgroundColor: 'hsl(var(--brand-black))', borderRadius: '10px',
+                        border: '1px solid rgba(107, 44, 145, 0.15)'
+                      }}>
+                        <div>
+                          <strong style={{ display: 'block', fontSize: '0.82rem', color: 'white' }}>Chemical Peel Consent Sheet</strong>
+                          <span style={{ fontSize: '0.7rem', color: '#A89684' }}>Korean face corrective peel</span>
+                        </div>
+                        <button
+                          onClick={() => setConsentForms(prev => ({ ...prev, consentPeel: !prev.consentPeel }))}
+                          style={{
+                            backgroundColor: consentForms.consentPeel ? '#34d399' : 'hsl(var(--brand-charcoal))',
+                            border: 'none', color: 'white', padding: '6px 12px', borderRadius: '6px', fontSize: '0.72rem', cursor: 'pointer'
+                          }}
+                        >
+                          {consentForms.consentPeel ? 'Signed ✓' : 'Tap to Sign'}
+                        </button>
+                      </div>
+
+                      <div style={{
+                        display: 'flex', justify: 'space-between', alignItems: 'center',
+                        padding: '12px', backgroundColor: 'hsl(var(--brand-black))', borderRadius: '10px',
+                        border: '1px solid rgba(107, 44, 145, 0.15)'
+                      }}>
+                        <div>
+                          <strong style={{ display: 'block', fontSize: '0.82rem', color: 'white' }}>Cryo 360 Waiver</strong>
+                          <span style={{ fontSize: '0.7rem', color: '#A89684' }}>Thermal crystallization authorization</span>
+                        </div>
+                        <button
+                          onClick={() => setConsentForms(prev => ({ ...prev, consentCryo: !prev.consentCryo }))}
+                          style={{
+                            backgroundColor: consentForms.consentCryo ? '#34d399' : 'hsl(var(--brand-charcoal))',
+                            border: 'none', color: 'white', padding: '6px 12px', borderRadius: '6px', fontSize: '0.72rem', cursor: 'pointer'
+                          }}
+                        >
+                          {consentForms.consentCryo ? 'Signed ✓' : 'Tap to Sign'}
+                        </button>
+                      </div>
+
+                      <div style={{
+                        display: 'flex', justify: 'space-between', alignItems: 'center',
+                        padding: '12px', backgroundColor: 'hsl(var(--brand-black))', borderRadius: '10px',
+                        border: '1px solid rgba(107, 44, 145, 0.15)'
+                      }}>
+                        <div>
+                          <strong style={{ display: 'block', fontSize: '0.82rem', color: 'white' }}>GDPR Protection Consent</strong>
+                          <span style={{ fontSize: '0.7rem', color: '#A89684' }}>Data storage & weight logs waiver</span>
+                        </div>
+                        <button
+                          onClick={() => setConsentForms(prev => ({ ...prev, consentGDPR: !prev.consentGDPR }))}
+                          style={{
+                            backgroundColor: consentForms.consentGDPR ? '#34d399' : 'hsl(var(--brand-charcoal))',
+                            border: 'none', color: 'white', padding: '6px 12px', borderRadius: '6px', fontSize: '0.72rem', cursor: 'pointer'
+                          }}
+                        >
+                          {consentForms.consentGDPR ? 'Signed ✓' : 'Tap to Sign'}
+                        </button>
+                      </div>
                     </div>
                   </div>
-                ) : (
-                  <div style={{ color: '#A89684', textAlign: 'center', padding: '40px' }}>Select client profile above to load progress history.</div>
-                )}
-              </div>
 
-              {/* Consent form list */}
-              <div className="card-premium">
-                <h3 style={{ fontFamily: 'Outfit', fontSize: '1.1rem', marginBottom: '16px', color: '#D4AF37' }}>Clinical Consent Tracker</h3>
-                <p style={{ fontSize: '0.78rem', color: '#BFA6D8', marginBottom: '16px' }}>Digital signatures are required before launching infrared or cryo devices.</p>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                  <div style={{
-                    display: 'flex', justify: 'space-between', alignItems: 'center',
-                    padding: '12px', backgroundColor: 'hsl(var(--brand-black))', borderRadius: '10px',
-                    border: '1px solid rgba(107, 44, 145, 0.15)'
-                  }}>
-                    <div>
-                      <strong style={{ display: 'block', fontSize: '0.82rem', color: 'white' }}>Chemical Peel Consent Sheet</strong>
-                      <span style={{ fontSize: '0.7rem', color: '#A89684' }}>Korean face corrective peel</span>
+                  {/* Dynamic Improvements Leaderboard */}
+                  <div className="card-premium" style={{ border: '1px solid rgba(212, 175, 55, 0.25)' }}>
+                    <h3 style={{ fontFamily: 'Outfit', fontSize: '1.1rem', marginBottom: '12px', color: '#D4AF37', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span>🏆 Client Success Leaderboard</span>
+                    </h3>
+                    <p style={{ fontSize: '0.75rem', color: '#BFA6D8', marginBottom: '16px' }}>Rankings based on combined registered body scale improvements.</p>
+                    
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      {leaderboard.slice(0, 5).map((entry, idx) => {
+                        const medals = ['🥇', '🥈', '🥉', '🎖️', '🎖️'];
+                        return (
+                          <div key={entry.client.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px', backgroundColor: 'hsl(var(--brand-black))', borderRadius: '8px', border: '1px solid rgba(107, 44, 145, 0.15)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                              <span style={{ fontSize: '1.2rem' }}>{medals[idx]}</span>
+                              <div>
+                                <strong style={{ color: 'white', fontSize: '0.85rem' }}>{entry.client.name}</strong>
+                                <div style={{ fontSize: '0.7rem', color: '#A89684', marginTop: '2px' }}>
+                                  📏 Waist: -{entry.waistReduced.toFixed(1)}cm | Hips: -{entry.hipsReduced.toFixed(1)}cm
+                                </div>
+                              </div>
+                            </div>
+                            <div style={{ textAlign: 'right' }}>
+                              <strong style={{ color: '#34d399', fontSize: '0.9rem' }}>-{entry.weightLost.toFixed(1)} kg</strong>
+                              <span style={{ display: 'block', fontSize: '0.62rem', color: '#D4AF37' }}>Score: {entry.totalImprovementScore.toFixed(0)} pts</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {leaderboard.length === 0 && (
+                        <div style={{ padding: '16px', textAlign: 'center', color: '#A89684', fontSize: '0.78rem' }}>
+                          Log measurements for at least two sessions to begin calculating improvement statistics!
+                        </div>
+                      )}
                     </div>
-                    <button
-                      onClick={() => setConsentForms(prev => ({ ...prev, consentPeel: !prev.consentPeel }))}
-                      style={{
-                        backgroundColor: consentForms.consentPeel ? '#34d399' : 'hsl(var(--brand-charcoal))',
-                        border: 'none', color: 'white', padding: '6px 12px', borderRadius: '6px', fontSize: '0.72rem', cursor: 'pointer'
-                      }}
-                    >
-                      {consentForms.consentPeel ? 'Signed ✓' : 'Tap to Sign'}
-                    </button>
-                  </div>
-
-                  <div style={{
-                    display: 'flex', justify: 'space-between', alignItems: 'center',
-                    padding: '12px', backgroundColor: 'hsl(var(--brand-black))', borderRadius: '10px',
-                    border: '1px solid rgba(107, 44, 145, 0.15)'
-                  }}>
-                    <div>
-                      <strong style={{ display: 'block', fontSize: '0.82rem', color: 'white' }}>Cryo 360 Waiver</strong>
-                      <span style={{ fontSize: '0.7rem', color: '#A89684' }}>Thermal crystallization authorization</span>
-                    </div>
-                    <button
-                      onClick={() => setConsentForms(prev => ({ ...prev, consentCryo: !prev.consentCryo }))}
-                      style={{
-                        backgroundColor: consentForms.consentCryo ? '#34d399' : 'hsl(var(--brand-charcoal))',
-                        border: 'none', color: 'white', padding: '6px 12px', borderRadius: '6px', fontSize: '0.72rem', cursor: 'pointer'
-                      }}
-                    >
-                      {consentForms.consentCryo ? 'Signed ✓' : 'Tap to Sign'}
-                    </button>
-                  </div>
-
-                  <div style={{
-                    display: 'flex', justify: 'space-between', alignItems: 'center',
-                    padding: '12px', backgroundColor: 'hsl(var(--brand-black))', borderRadius: '10px',
-                    border: '1px solid rgba(107, 44, 145, 0.15)'
-                  }}>
-                    <div>
-                      <strong style={{ display: 'block', fontSize: '0.82rem', color: 'white' }}>GDPR Protection Consent</strong>
-                      <span style={{ fontSize: '0.7rem', color: '#A89684' }}>Data storage & weight logs waiver</span>
-                    </div>
-                    <button
-                      onClick={() => setConsentForms(prev => ({ ...prev, consentGDPR: !prev.consentGDPR }))}
-                      style={{
-                        backgroundColor: consentForms.consentGDPR ? '#34d399' : 'hsl(var(--brand-charcoal))',
-                        border: 'none', color: 'white', padding: '6px 12px', borderRadius: '6px', fontSize: '0.72rem', cursor: 'pointer'
-                      }}
-                    >
-                      {consentForms.consentGDPR ? 'Signed ✓' : 'Tap to Sign'}
-                    </button>
                   </div>
                 </div>
+
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* WORKSPACE FOR GOOGLE BUSINESS REVIEWS INTEGRATION */}
         {activeTab === 'reviews' && (
@@ -2180,179 +2308,484 @@ export default function BookingCRM() {
         )}
 
         {/* WORKSPACE G: SERVICES MANAGEMENT */}
-        {activeTab === 'services' && (
-          <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            <div>
-              <h1 style={{ fontSize: '1.75rem', fontWeight: 800, margin: 0, fontFamily: 'Outfit' }}>Clinical Services Catalog</h1>
-              <p style={{ color: '#BFA6D8', margin: '4px 0 0 0', fontSize: '0.85rem' }}>Configure professional treatments list, discount bundles, and equipment targets.</p>
-            </div>
+        {activeTab === 'services' && (() => {
+          const filteredServices = services.filter(srv => {
+            const query = serviceSearchQuery.toLowerCase();
+            return srv.name.toLowerCase().includes(query) || 
+                   srv.category.toLowerCase().includes(query) ||
+                   (srv.requiredMachine || 'manual therapy').toLowerCase().includes(query);
+          });
 
-            <div className="card-premium">
-              <table className="table-premium">
-                <thead>
-                  <tr>
-                    <th>Service name</th>
-                    <th>Required hardware</th>
-                    <th>VAT & Cost</th>
-                    <th>Standard Price</th>
-                    <th>Consumables</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {services.map(srv => (
-                    <tr key={srv.id}>
-                      <td>
-                        <strong>{srv.name}</strong>
-                        <br /><span style={{ fontSize: '0.7rem', color: '#BFA6D8' }}>{srv.category} • {srv.duration} mins</span>
-                      </td>
-                      <td>
-                        <span className="badge-brand purple" style={{ fontSize: '0.58rem' }}>
-                          {srv.requiredMachine || 'Manual Therapy'}
-                        </span>
-                      </td>
-                      <td>15% VAT</td>
-                      <td><strong>R {srv.price}</strong></td>
-                      <td>
-                        {srv.consumables?.map((c, i) => (
-                          <span key={i} className="badge-brand gold" style={{ fontSize: '0.55rem', marginRight: '4px' }}>
-                            {c.quantity} items
-                          </span>
-                        )) || 'None'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* WORKSPACE H: ATELIER SHOP SYNC */}
-        {activeTab === 'products' && (
-          <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            <div style={{ display: 'flex', justify: 'space-between', alignItems: 'center' }}>
-              <div>
-                <h1 style={{ fontSize: '1.75rem', fontWeight: 800, margin: 0, fontFamily: 'Outfit' }}>Atelier E-Commerce Product Sync</h1>
-                <p style={{ color: '#BFA6D8', margin: '4px 0 0 0', fontSize: '0.85rem' }}>Synchronize product pricing parameters. Instantly updates client storefront website `/website`.</p>
+          return (
+            <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '24px', flexWrap: 'wrap' }}>
+                <div>
+                  <h1 style={{ fontSize: '1.75rem', fontWeight: 800, margin: 0, fontFamily: 'Outfit' }}>Clinical Services Catalog</h1>
+                  <p style={{ color: '#BFA6D8', margin: '4px 0 0 0', fontSize: '0.85rem' }}>Configure professional treatments list, discount bundles, and equipment targets.</p>
+                </div>
+                <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <div style={{ position: 'relative', width: '240px' }}>
+                    <Search style={{ position: 'absolute', top: '9px', left: '10px', width: '14px', height: '14px', color: '#A89684' }} />
+                    <input
+                      type="text"
+                      placeholder="Search treatments..."
+                      className="brand-input"
+                      style={{ paddingLeft: '32px', fontSize: '0.8rem', height: '32px' }}
+                      value={serviceSearchQuery}
+                      onChange={(e) => setServiceSearchQuery(e.target.value)}
+                    />
+                  </div>
+                  <button
+                    onClick={() => {
+                      setIsEditingService(false);
+                      setActiveServiceForm({ name: '', category: 'Body Contouring', price: 150, duration: 30, requiredMachine: '', consumables: [] });
+                      setShowServiceModal(true);
+                    }}
+                    className="btn-brand-gold"
+                    style={{ height: '32px', fontSize: '0.8rem', padding: '0 16px' }}
+                  >
+                    + Add Service
+                  </button>
+                </div>
               </div>
-              <button onClick={() => setShowProductModal(true)} className="btn-brand-gold">
-                + Create Product
-              </button>
-            </div>
 
-            <div className="card-premium">
-              <table className="table-premium">
-                <thead>
-                  <tr>
-                    <th>Product description</th>
-                    <th>Price</th>
-                    <th>Current Stock</th>
-                    <th>Visibility status</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {products.map(prod => (
-                    <tr key={prod.id}>
-                      <td>
-                        <strong style={{ color: 'white' }}>{prod.name}</strong>
-                        <br /><span style={{ fontSize: '0.7rem', color: '#BFA6D8' }}>{prod.category}</span>
-                      </td>
-                      <td><strong>R {prod.price}</strong></td>
-                      <td>
-                        <strong style={{ color: prod.stock <= 0 ? '#ef4444' : '#34d399' }}>{prod.stock} items</strong>
-                      </td>
-                      <td>
-                        <span className={`badge-brand ${prod.stock <= 0 ? 'cancelled' : 'gold'}`} style={{ fontSize: '0.55rem' }}>
-                          {prod.stock <= 0 ? 'Marked Out-Stock' : 'Live on Shop'}
-                        </span>
-                      </td>
-                      <td>
-                        <div style={{ display: 'flex', gap: '6px' }}>
-                          <button
-                            onClick={() => {
-                              const newPrice = prompt(`Enter new price for ${prod.name}:`, prod.price);
-                              if (newPrice) {
-                                updateProduct('Dashboard Admin', { id: prod.id, name: prod.name, price: Number(newPrice) });
-                                syncDatabase();
-                              }
-                            }}
-                            style={{ border: 'none', backgroundColor: 'hsl(var(--brand-black))', color: 'white', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.72rem' }}
-                          >
-                            Edit Price
-                          </button>
-                          <button
-                            onClick={() => {
-                              updateProduct('Dashboard Admin', { id: prod.id, name: prod.name, stock: prod.stock === 0 ? 15 : 0 });
-                              syncDatabase();
-                            }}
-                            style={{
-                              border: 'none',
-                              backgroundColor: prod.stock === 0 ? '#34d39933' : '#ef444433',
-                              color: prod.stock === 0 ? '#34d399' : '#ef4444',
-                              padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.72rem'
-                            }}
-                          >
-                            {prod.stock === 0 ? 'Set In-Stock' : 'Set Out-Stock'}
-                          </button>
-                        </div>
-                      </td>
+              <div className="card-premium" style={{ overflowX: 'auto', border: '1px solid rgba(107, 44, 145, 0.25)' }}>
+                <table className="table-premium" style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '2px solid rgba(107, 44, 145, 0.3)' }}>
+                      <th style={{ padding: '12px', color: '#D4AF37', fontSize: '0.85rem', fontWeight: 700, width: '25%' }}>Treatment / Category</th>
+                      <th style={{ padding: '12px', color: '#D4AF37', fontSize: '0.85rem', fontWeight: 700, width: '20%' }}>Hardware Target</th>
+                      <th style={{ padding: '12px', color: '#D4AF37', fontSize: '0.85rem', fontWeight: 700, width: '15%' }}>Price</th>
+                      <th style={{ padding: '12px', color: '#D4AF37', fontSize: '0.85rem', fontWeight: 700, width: '15%' }}>Consumables</th>
+                      <th style={{ padding: '12px', color: '#D4AF37', fontSize: '0.85rem', fontWeight: 700, textAlign: 'right', width: '25%' }}>Actions</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* WORKSPACE I: CONSUMABLES STOCK LEDGER */}
-        {activeTab === 'inventory' && (
-          <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            <div>
-              <h1 style={{ fontSize: '1.75rem', fontWeight: 800, margin: 0, fontFamily: 'Outfit' }}>Consumables Stock Ledger</h1>
-              <p style={{ color: '#BFA6D8', margin: '4px 0 0 0', fontSize: '0.85rem' }}>Track salon treatment consumables. Highlighted in RED if alert threshold hit.</p>
-            </div>
-
-            <div className="card-premium">
-              <table className="table-premium">
-                <thead>
-                  <tr>
-                    <th>Item Name</th>
-                    <th>Current Quantity</th>
-                    <th>Threshold Limit</th>
-                    <th>Supplier Details</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {inventory.map(item => {
-                    const isLow = item.quantity <= item.alertAt;
-                    return (
-                      <tr key={item.id} style={{ backgroundColor: isLow ? 'rgba(239, 68, 68, 0.08)' : 'transparent' }}>
-                        <td><strong>{item.name}</strong></td>
-                        <td><strong style={{ color: isLow ? '#ef4444' : '#34d399' }}>{item.quantity} {item.unit}</strong></td>
-                        <td>{item.alertAt} {item.unit}</td>
-                        <td>{item.supplier}</td>
-                        <td>
+                  </thead>
+                  <tbody>
+                    {filteredServices.map(srv => (
+                      <tr 
+                        key={srv.id} 
+                        style={{ borderBottom: '1px solid rgba(107, 44, 145, 0.15)', transition: 'all 0.2s ease' }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.02)'} 
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                      >
+                        <td style={{ padding: '12px' }}>
+                          <strong style={{ color: 'white' }}>{srv.name}</strong>
+                          <div style={{ fontSize: '0.72rem', color: '#BFA6D8', marginTop: '2px' }}>{srv.category} • {srv.duration} mins</div>
+                        </td>
+                        <td style={{ padding: '12px' }}>
+                          <span className="badge-brand purple" style={{ fontSize: '0.58rem' }}>
+                            {srv.requiredMachine ? (machines.find(m => m.id === srv.requiredMachine)?.name || srv.requiredMachine) : 'Manual Therapy'}
+                          </span>
+                        </td>
+                        <td style={{ padding: '12px', fontWeight: 700, color: 'white' }}>
+                          R {srv.price.toFixed(2)}
+                        </td>
+                        <td style={{ padding: '12px' }}>
                           <button
-                            onClick={() => {
-                              updateInventoryItemStock('Dashboard Admin', item.id, 50);
-                              syncDatabase();
+                            onClick={() => setSelectedDrillDownService(srv)}
+                            className="badge-brand gold hover-glow"
+                            style={{ 
+                              fontSize: '0.55rem', border: 'none', cursor: 'pointer', padding: '3px 8px', borderRadius: '4px',
+                              backgroundColor: 'rgba(212, 175, 55, 0.15)', color: '#D4AF37'
                             }}
-                            className="btn-brand-purple"
-                            style={{ padding: '4px 8px', fontSize: '0.72rem' }}
                           >
-                            +50 Restock
+                            🔎 {srv.consumables?.length || 0} items
                           </button>
                         </td>
+                        <td style={{ padding: '12px', textAlign: 'right' }}>
+                          <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', alignItems: 'center' }}>
+                            <button
+                              onClick={() => {
+                                setIsEditingService(true);
+                                setActiveServiceForm(srv);
+                                setShowServiceModal(true);
+                              }}
+                              className="btn-brand-purple"
+                              style={{ padding: '4px 8px', fontSize: '0.7rem', height: '26px' }}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (confirm(`Are you sure you want to remove "${srv.name}"?`)) {
+                                  deleteService(currentUserName(), srv.id);
+                                  syncDatabase();
+                                }
+                              }}
+                              style={{ border: 'none', backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', padding: '4px 8px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.7rem', height: '26px' }}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </td>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                    ))}
+                    {filteredServices.length === 0 && (
+                      <tr>
+                        <td colSpan={5} style={{ padding: '32px', textAlign: 'center', color: '#A89684' }}>
+                          No services found matching search query.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
+
+        {/* WORKSPACE H: ATELIER SHOP SYNC */}
+        {activeTab === 'products' && (() => {
+          const filteredProducts = products.filter(prod => {
+            const query = (sidebarSearch || '').toLowerCase();
+            return prod.name.toLowerCase().includes(query) || prod.category.toLowerCase().includes(query);
+          });
+
+          return (
+            <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '24px', flexWrap: 'wrap' }}>
+                <div>
+                  <h1 style={{ fontSize: '1.75rem', fontWeight: 800, margin: 0, fontFamily: 'Outfit' }}>Atelier E-Commerce Product Sync</h1>
+                  <p style={{ color: '#BFA6D8', margin: '4px 0 0 0', fontSize: '0.85rem' }}>Synchronize product pricing parameters. Instantly updates client storefront website `/website`.</p>
+                </div>
+                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                  <button onClick={() => {
+                    setProductForm({ name: '', price: 0, stock: 10, category: 'Facial Products', image: 'https://images.unsplash.com/photo-1608248597279-f99d160bfcbc?w=300', description: '' });
+                    setShowCustomCategoryInput(false);
+                    setCustomCategoryText('');
+                    setShowProductModal(true);
+                  }} className="btn-brand-gold">
+                    + Create Product
+                  </button>
+                </div>
+              </div>
+
+              {/* Redesigned Premium E-Commerce Catalog Grid */}
+              <div className="card-premium" style={{ overflowX: 'auto', border: '1px solid rgba(107, 44, 145, 0.25)' }}>
+                <table className="table-premium" style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '2px solid rgba(107, 44, 145, 0.3)' }}>
+                      <th style={{ padding: '12px', color: '#D4AF37', fontSize: '0.85rem', fontWeight: 700, width: '35%' }}>Product description</th>
+                      <th style={{ padding: '12px', color: '#D4AF37', fontSize: '0.85rem', fontWeight: 700, width: '15%' }}>Price</th>
+                      <th style={{ padding: '12px', color: '#D4AF37', fontSize: '0.85rem', fontWeight: 700, width: '15%' }}>Current Stock</th>
+                      <th style={{ padding: '12px', color: '#D4AF37', fontSize: '0.85rem', fontWeight: 700, width: '18%' }}>Visibility Status</th>
+                      <th style={{ padding: '12px', color: '#D4AF37', fontSize: '0.85rem', fontWeight: 700, textAlign: 'right', width: '17%' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredProducts.map(prod => (
+                      <tr 
+                        key={prod.id} 
+                        style={{ borderBottom: '1px solid rgba(107, 44, 145, 0.15)', transition: 'all 0.2s ease' }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.02)'} 
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                      >
+                        <td style={{ padding: '12px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <img src={prod.image} alt={prod.name} style={{ width: '40px', height: '40px', borderRadius: '6px', objectFit: 'cover', border: '1px solid rgba(212,175,55,0.2)' }} />
+                          <div>
+                            <strong style={{ color: 'white' }}>{prod.name}</strong>
+                            <div style={{ fontSize: '0.72rem', color: '#BFA6D8', marginTop: '2px' }}>{prod.category}</div>
+                          </div>
+                        </td>
+                        <td style={{ padding: '12px', fontWeight: 700, color: 'white' }}>R {prod.price.toFixed(2)}</td>
+                        <td style={{ padding: '12px' }}>
+                          <strong style={{ color: prod.stock <= 0 ? '#ef4444' : '#34d399' }}>{prod.stock} items</strong>
+                        </td>
+                        <td style={{ padding: '12px' }}>
+                          <span className={`badge-brand ${prod.stock <= 0 ? 'cancelled' : 'gold'}`} style={{ fontSize: '0.58rem' }}>
+                            {prod.stock <= 0 ? 'Marked Out-Stock' : 'Live on Shop'}
+                          </span>
+                        </td>
+                        <td style={{ padding: '12px', textAlign: 'right' }}>
+                          <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                            <button
+                              onClick={() => {
+                                const newPrice = prompt(`Enter new price for ${prod.name}:`, prod.price);
+                                if (newPrice) {
+                                  updateProduct(currentUserName(), { id: prod.id, name: prod.name, price: Number(newPrice) });
+                                  syncDatabase();
+                                }
+                              }}
+                              style={{ border: 'none', backgroundColor: 'hsl(var(--brand-black))', color: 'white', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.72rem' }}
+                            >
+                              Edit Price
+                            </button>
+                            <button
+                              onClick={() => {
+                                updateProduct(currentUserName(), { id: prod.id, name: prod.name, stock: prod.stock === 0 ? 15 : 0 });
+                                syncDatabase();
+                              }}
+                              style={{
+                                border: 'none',
+                                backgroundColor: prod.stock === 0 ? '#34d39933' : '#ef444433',
+                                color: prod.stock === 0 ? '#34d399' : '#ef4444',
+                                padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.72rem'
+                              }}
+                            >
+                              {prod.stock === 0 ? 'In-Stock' : 'Out-Stock'}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {filteredProducts.length === 0 && (
+                      <tr>
+                        <td colSpan={5} style={{ padding: '32px', textAlign: 'center', color: '#A89684' }}>
+                          No boutique products found.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* WORKSPACE I: CONSUMABLES STOCK LEDGER */}
+        {activeTab === 'inventory' && (() => {
+          const filteredInventory = inventory.filter(item => {
+            const query = inventorySearchQuery.toLowerCase();
+            return item.name.toLowerCase().includes(query) || (item.supplier || '').toLowerCase().includes(query);
+          });
+
+          return (
+            <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '24px', flexWrap: 'wrap' }}>
+                <div>
+                  <h1 style={{ fontSize: '1.75rem', fontWeight: 800, margin: 0, fontFamily: 'Outfit' }}>Consumables Stock Ledger</h1>
+                  <p style={{ color: '#BFA6D8', margin: '4px 0 0 0', fontSize: '0.85rem' }}>Track salon treatment consumables. Highlighted in RED if alert threshold hit.</p>
+                </div>
+                <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <div style={{ position: 'relative', width: '240px' }}>
+                    <Search style={{ position: 'absolute', top: '9px', left: '10px', width: '14px', height: '14px', color: '#A89684' }} />
+                    <input
+                      type="text"
+                      placeholder="Search stock ledger..."
+                      className="brand-input"
+                      style={{ paddingLeft: '32px', fontSize: '0.8rem', height: '32px' }}
+                      value={inventorySearchQuery}
+                      onChange={(e) => setInventorySearchQuery(e.target.value)}
+                    />
+                  </div>
+                  <button 
+                    onClick={() => {
+                      setInventoryForm({ name: '', quantity: 10, alertAt: 5, unit: 'items', cost: 0, sellPrice: 0, supplier: '' });
+                      setShowInventoryModal(true);
+                    }} 
+                    className="btn-brand-gold"
+                  >
+                    + Add Consumable
+                  </button>
+                </div>
+              </div>
+
+              <div className="card-premium" style={{ overflowX: 'auto', border: '1px solid rgba(107, 44, 145, 0.25)' }}>
+                <table className="table-premium" style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '2px solid rgba(107, 44, 145, 0.3)' }}>
+                      <th style={{ padding: '12px', color: '#D4AF37', fontSize: '0.85rem', fontWeight: 700, width: '25%' }}>Item Name</th>
+                      <th style={{ padding: '12px', color: '#D4AF37', fontSize: '0.85rem', fontWeight: 700, width: '15%' }}>Current Stock</th>
+                      <th style={{ padding: '12px', color: '#D4AF37', fontSize: '0.85rem', fontWeight: 700, width: '15%' }}>Alert Threshold</th>
+                      <th style={{ padding: '12px', color: '#D4AF37', fontSize: '0.85rem', fontWeight: 700, width: '25%' }}>Supplier Details</th>
+                      <th style={{ padding: '12px', color: '#D4AF37', fontSize: '0.85rem', fontWeight: 700, textAlign: 'right', width: '20%' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredInventory.map(item => {
+                      const isLow = item.quantity <= item.alertAt;
+                      // Check if synced to e-commerce shop
+                      const isSynced = products.some(p => p.name.toLowerCase() === item.name.toLowerCase());
+                      const isRetailable = item.sellPrice > 0;
+
+                      return (
+                        <tr 
+                          key={item.id} 
+                          style={{ borderBottom: '1px solid rgba(107, 44, 145, 0.15)', backgroundColor: isLow ? 'rgba(239, 68, 68, 0.08)' : 'transparent', transition: 'all 0.2s' }}
+                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = isLow ? 'rgba(239, 68, 68, 0.12)' : 'rgba(255,255,255,0.02)'} 
+                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = isLow ? 'rgba(239, 68, 68, 0.08)' : 'transparent'}
+                        >
+                          <td style={{ padding: '12px' }}>
+                            <strong style={{ color: 'white' }}>{item.name}</strong>
+                          </td>
+                          <td style={{ padding: '12px' }}>
+                            <strong style={{ color: isLow ? '#ef4444' : '#34d399' }}>{item.quantity} {item.unit}</strong>
+                          </td>
+                          <td style={{ padding: '12px', color: '#BFA6D8' }}>{item.alertAt} {item.unit}</td>
+                          <td style={{ padding: '12px', color: '#A89684', fontSize: '0.8rem' }}>{item.supplier}</td>
+                          <td style={{ padding: '12px', textAlign: 'right' }}>
+                            <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', alignItems: 'center' }}>
+                              {isRetailable && (
+                                isSynced ? (
+                                  <span style={{ color: '#34d399', fontSize: '0.62rem', fontWeight: 600, marginRight: '4px' }}>✓ Synced</span>
+                                ) : (
+                                  <button
+                                    onClick={() => {
+                                      addProduct(currentUserName(), {
+                                        name: item.name,
+                                        price: item.sellPrice,
+                                        stock: item.quantity,
+                                        category: 'Atelier Retail Products',
+                                        image: 'https://images.unsplash.com/photo-1608248597279-f99d160bfcbc?w=300',
+                                        description: `Premium boutique selection: ${item.name} now available for purchase.`
+                                      });
+                                      syncDatabase();
+                                    }}
+                                    className="btn-brand-gold"
+                                    style={{ padding: '2px 6px', fontSize: '0.65rem', height: '22px' }}
+                                  >
+                                    🔄 Sync Shop
+                                  </button>
+                                )
+                              )}
+                              <button
+                                onClick={() => {
+                                  setActiveStockItem(item);
+                                  setStockAdjustForm({ type: 'add', amount: '', reason: '' });
+                                  setShowStockAdjustModal(true);
+                                }}
+                                className="btn-brand-purple"
+                                style={{ padding: '4px 8px', fontSize: '0.72rem', height: '26px' }}
+                              >
+                                Adjust Stock
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {filteredInventory.length === 0 && (
+                      <tr>
+                        <td colSpan={5} style={{ padding: '32px', textAlign: 'center', color: '#A89684' }}>
+                          No inventory stock records found.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* WORKSPACE I.2: CLIENT E-COMMERCE ORDERS */}
+        {activeTab === 'orders' && (() => {
+          // Locate all orders which contain products or have shipping address
+          const sortedInvoices = [...invoices].sort((a, b) => b.invoiceNumber.localeCompare(a.invoiceNumber));
+          const orderInvoices = sortedInvoices.filter(inv => 
+            inv.items.some(item => item.name.includes('[Product]')) || inv.shippingAddress
+          );
+
+          return (
+            <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '24px' }}>
+                <div>
+                  <h1 style={{ fontSize: '1.75rem', fontWeight: 800, margin: 0, fontFamily: 'Outfit' }}>Client Product Orders</h1>
+                  <p style={{ color: '#BFA6D8', margin: '4px 0 0 0', fontSize: '0.85rem' }}>Track storefront e-commerce purchases, verify payment status, and manage physical product shipments.</p>
+                </div>
+                <div style={{ fontSize: '0.8rem', color: '#A89684', fontWeight: 600 }}>
+                  {orderInvoices.length} e-commerce orders logged
+                </div>
+              </div>
+
+              <div className="card-premium" style={{ overflowX: 'auto', border: '1px solid rgba(107, 44, 145, 0.25)' }}>
+                <table className="table-premium" style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '2px solid rgba(107, 44, 145, 0.3)' }}>
+                      <th style={{ padding: '12px', color: '#D4AF37', fontSize: '0.85rem', fontWeight: 700, width: '15%' }}>Order Ref</th>
+                      <th style={{ padding: '12px', color: '#D4AF37', fontSize: '0.85rem', fontWeight: 700, width: '22%' }}>Client Details</th>
+                      <th style={{ padding: '12px', color: '#D4AF37', fontSize: '0.85rem', fontWeight: 700, width: '23%' }}>Shipping Address</th>
+                      <th style={{ padding: '12px', color: '#D4AF37', fontSize: '0.85rem', fontWeight: 700, width: '15%' }}>Gross Total</th>
+                      <th style={{ padding: '12px', color: '#D4AF37', fontSize: '0.85rem', fontWeight: 700, width: '13%' }}>Payment</th>
+                      <th style={{ padding: '12px', color: '#D4AF37', fontSize: '0.85rem', fontWeight: 700, textAlign: 'right', width: '12%' }}>Shipment</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {orderInvoices.map(inv => {
+                      const cli = clients.find(c => c.id === inv.clientId) || {
+                        name: 'Alice Smith',
+                        phone: '+27 (82) 019-2834',
+                        email: 'alice.smith@gmail.com'
+                      };
+                      const itemsText = inv.items.map(it => `${it.quantity}x ${it.name.split(' [')[0]}`).join(', ');
+                      const isPaid = inv.status === 'Paid';
+                      const isShipped = inv.shippingStatus === 'Shipped';
+
+                      return (
+                        <tr 
+                          key={inv.id} 
+                          style={{ borderBottom: '1px solid rgba(107, 44, 145, 0.15)', transition: 'all 0.2s ease' }}
+                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.02)'} 
+                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                        >
+                          <td style={{ padding: '12px' }}>
+                            <strong style={{ color: 'white' }}>{inv.invoiceNumber}</strong>
+                            <div style={{ fontSize: '0.7rem', color: '#A89684', marginTop: '2px' }}>{inv.date}</div>
+                          </td>
+                          <td style={{ padding: '12px' }}>
+                            <strong style={{ color: '#BFA6D8' }}>{cli.name}</strong>
+                            <div style={{ fontSize: '0.68rem', color: '#A89684', marginTop: '2px' }}>{cli.phone}</div>
+                            <div style={{ fontSize: '0.68rem', color: '#A89684' }}>{cli.email}</div>
+                          </td>
+                          <td style={{ padding: '12px' }}>
+                            <div style={{ fontSize: '0.78rem', color: 'white', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={inv.shippingAddress || '12 Glenwood Gardens, Pretoria East'}>
+                              {inv.shippingAddress || '12 Glenwood Gardens, Pretoria East'}
+                            </div>
+                            <div style={{ fontSize: '0.68rem', color: '#A89684', marginTop: '3px', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                              Items: {itemsText}
+                            </div>
+                          </td>
+                          <td style={{ padding: '12px', fontWeight: 700, color: 'white' }}>
+                            R {inv.total.toFixed(2)}
+                          </td>
+                          <td style={{ padding: '12px' }}>
+                            <span className={`badge-brand ${inv.status.toLowerCase()}`} style={{ fontSize: '0.6rem' }}>
+                              {inv.status === 'Paid' ? '✓ Confirmed' : '⚠ Pending'}
+                            </span>
+                          </td>
+                          <td style={{ padding: '12px', textAlign: 'right' }}>
+                            {isShipped ? (
+                              <span style={{ color: '#34d399', fontSize: '0.65rem', fontWeight: 700 }}>✓ Shipped</span>
+                            ) : (
+                              <button
+                                disabled={!isPaid}
+                                onClick={() => {
+                                  if (!isPaid) {
+                                    alert('Payment confirmation is required before arranging physical parcel shipments!');
+                                    return;
+                                  }
+                                  // Mark order as shipped
+                                  inv.shippingStatus = 'Shipped';
+                                  logAction(currentUserName(), 'Arrange Shipment', `Shipped order ${inv.invoiceNumber} to ${cli.name} at ${inv.shippingAddress || '12 Glenwood Gardens'}`);
+                                  syncDatabase();
+                                }}
+                                className={isPaid ? 'btn-brand-gold' : 'btn-brand-purple'}
+                                style={{
+                                  padding: '4px 8px', fontSize: '0.65rem', height: '24px',
+                                  opacity: isPaid ? 1 : 0.4, cursor: isPaid ? 'pointer' : 'not-allowed'
+                                }}
+                                title={isPaid ? 'Mark as Shipped' : 'Cannot ship - payment pending'}
+                              >
+                                Ship Order
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {orderInvoices.length === 0 && (
+                      <tr>
+                        <td colSpan={6} style={{ padding: '32px', textAlign: 'center', color: '#A89684' }}>
+                          No storefront client product orders have been logged yet.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* WORKSPACE J: STAFF ROSTER TIMELINE */}
         {activeTab === 'therapist' && (
@@ -2689,15 +3122,35 @@ export default function BookingCRM() {
               <div className="card-premium">
                 <h3 style={{ fontFamily: 'Outfit', fontSize: '1.1rem', marginBottom: '16px', color: 'white' }}>Expenses Tally</h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {expenses.map(exp => (
-                    <div key={exp.id} style={{ display: 'flex', justify: 'space-between', padding: '10px', backgroundColor: 'hsl(var(--brand-black))', borderRadius: '8px', fontSize: '0.8rem' }}>
-                      <div>
-                        <strong>{exp.category}</strong>
-                        <span style={{ display: 'block', fontSize: '0.7rem', color: '#A89684' }}>{exp.description}</span>
+                  {expenses.map(exp => {
+                    const linkedMachine = machines.find(m => m.id === exp.machineId);
+                    let computedAmount = exp.amount;
+                    let useInfo = '';
+                    if (exp.frequency === 'per_use' && exp.machineId) {
+                      const usageCount = appointments.filter(a => a.machineId === exp.machineId && a.status !== 'Cancelled').length;
+                      computedAmount = exp.amount * usageCount;
+                      useInfo = ` (R ${exp.amount.toFixed(2)} x ${usageCount} uses)`;
+                    }
+                    
+                    let billingTypeLabel = 'Once-off';
+                    if (exp.frequency === 'monthly') billingTypeLabel = 'Monthly Recurrent';
+                    if (exp.frequency === 'per_use') billingTypeLabel = 'Per Session';
+
+                    return (
+                      <div key={exp.id} style={{ display: 'flex', justify: 'space-between', padding: '10px', backgroundColor: 'hsl(var(--brand-black))', borderRadius: '8px', fontSize: '0.8rem' }}>
+                        <div>
+                          <strong>{exp.category} <span style={{ fontSize: '0.68rem', fontWeight: 400, color: '#A89684' }}>({billingTypeLabel})</span></strong>
+                          <span style={{ display: 'block', fontSize: '0.7rem', color: '#A89684' }}>{exp.description}{useInfo}</span>
+                          {linkedMachine && (
+                            <span style={{ display: 'inline-block', fontSize: '0.65rem', color: '#D4AF37', border: '1px solid rgba(212, 175, 55, 0.3)', padding: '2px 6px', borderRadius: '4px', marginTop: '4px' }}>
+                              Linked Machine: {linkedMachine.name}
+                            </span>
+                          )}
+                        </div>
+                        <strong style={{ color: '#ef4444' }}>- R {computedAmount.toFixed(2)}</strong>
                       </div>
-                      <strong style={{ color: '#ef4444' }}>- R {exp.amount}</strong>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
@@ -2711,7 +3164,13 @@ export default function BookingCRM() {
                       { month: 'Feb', Sales: 11000, Expenses: 4100 },
                       { month: 'Mar', Sales: 14500, Expenses: 4300 },
                       { month: 'Apr', Sales: 18000, Expenses: 5800 },
-                      { month: 'May', Sales: invoices.reduce((acc, i) => acc + i.total, 0), Expenses: expenses.reduce((acc, e) => acc + e.amount, 0) }
+                      { month: 'May', Sales: invoices.reduce((acc, i) => acc + i.total, 0), Expenses: expenses.reduce((acc, e) => {
+                        if (e.frequency === 'per_use' && e.machineId) {
+                          const usageCount = appointments.filter(a => a.machineId === e.machineId && a.status !== 'Cancelled').length;
+                          return acc + (e.amount * usageCount);
+                        }
+                        return acc + e.amount;
+                      }, 0) }
                     ]}
                   >
                     <defs>
@@ -2803,17 +3262,24 @@ export default function BookingCRM() {
             .filter(pay => isDateInRange(pay.date))
             .sort((a, b) => b.date.localeCompare(a.date));
 
-          // Outstanding invoices (Unpaid status)
-          const unpaidInvoices = invoices.filter(inv => inv.status === 'Unpaid' && isDateInRange(inv.date));
+          // Outstanding invoices (Unpaid status) in date scope
+          const unpaidInvoicesList = invoices
+            .filter(inv => inv.status === 'Unpaid' && isDateInRange(inv.date))
+            .sort((a, b) => b.date.localeCompare(a.date));
+
+          // Fully Paid invoices in date scope
+          const paidInvoicesList = invoices
+            .filter(inv => inv.status === 'Paid' && isDateInRange(inv.date))
+            .sort((a, b) => b.date.localeCompare(a.date));
 
           // Refunded invoices
           const refundedInvoices = invoices
             .filter(inv => inv.status === 'Refunded' && isDateInRange(inv.date))
             .sort((a, b) => b.date.localeCompare(a.date));
 
-          // Totals
+          // Totals in scope
           const totalPaid = filteredPayments.reduce((acc, pay) => acc + pay.amount, 0);
-          const totalOutstanding = unpaidInvoices.reduce((acc, inv) => acc + inv.total, 0);
+          const totalOutstanding = unpaidInvoicesList.reduce((acc, inv) => acc + inv.total, 0);
           const totalRefunded = refundedInvoices.reduce((acc, inv) => acc + inv.total, 0);
 
           return (
@@ -2880,9 +3346,138 @@ export default function BookingCRM() {
                 </div>
               </div>
 
-              {/* Payments ledger */}
+              {/* OUTSTANDING / UNPAID INVOICES */}
+              <div className="card-premium" style={{ border: '1px solid rgba(212, 175, 55, 0.25)', overflowX: 'auto' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <h3 style={{ fontFamily: 'Outfit', fontSize: '1.1rem', color: '#D4AF37', margin: 0 }}>Outstanding / Unpaid Invoices</h3>
+                  <span style={{ fontSize: '0.75rem', color: '#A89684' }}>{unpaidInvoicesList.length} invoices awaiting payment</span>
+                </div>
+                <table className="table-premium" style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '2px solid rgba(212, 175, 55, 0.3)' }}>
+                      <th style={{ padding: '12px', color: '#D4AF37', fontSize: '0.85rem', fontWeight: 700, width: '20%' }}>Invoice ID</th>
+                      <th style={{ padding: '12px', color: '#D4AF37', fontSize: '0.85rem', fontWeight: 700, width: '30%' }}>Client Name</th>
+                      <th style={{ padding: '12px', color: '#D4AF37', fontSize: '0.85rem', fontWeight: 700, width: '15%' }}>Date Issued</th>
+                      <th style={{ padding: '12px', color: '#D4AF37', fontSize: '0.85rem', fontWeight: 700, width: '15%' }}>Balance Due</th>
+                      <th style={{ padding: '12px', color: '#D4AF37', fontSize: '0.85rem', fontWeight: 700, width: '20%', textAlign: 'right' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {unpaidInvoicesList.map(inv => {
+                      const cli = clients.find(c => c.id === inv.clientId);
+                      return (
+                        <tr key={inv.id} style={{ borderBottom: '1px solid rgba(212, 175, 55, 0.15)' }}>
+                          <td style={{ padding: '12px' }}><strong>{inv.invoiceNumber}</strong></td>
+                          <td style={{ padding: '12px', color: '#BFA6D8', fontWeight: 500 }}>{cli?.name || 'Walk-in Guest'}</td>
+                          <td style={{ padding: '12px', color: '#A89684', fontSize: '0.78rem' }}>{inv.date}</td>
+                          <td style={{ padding: '12px' }}><strong style={{ color: '#D4AF37' }}>R {inv.total.toFixed(2)}</strong></td>
+                          <td style={{ padding: '12px', textAlign: 'right' }}>
+                            <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                              <button
+                                onClick={() => {
+                                  setActivePaymentInvoice(inv);
+                                  setPaymentForm({ amount: inv.total, method: 'Card' });
+                                  setShowPaymentModal(true);
+                                }}
+                                className="btn-brand-gold"
+                                style={{ padding: '2px 6px', fontSize: '0.65rem', height: '22px' }}
+                              >
+                                Settle Pay
+                              </button>
+                              <button
+                                onClick={() => { setActiveViewInvoice(inv); setShowInvoiceModal(true); }}
+                                className="btn-brand-purple"
+                                style={{ padding: '2px 6px', fontSize: '0.65rem', height: '22px' }}
+                              >
+                                View
+                              </button>
+                              <button
+                                onClick={() => alert(`Unpaid invoice ${inv.invoiceNumber} emailed to ${cli?.email || 'client'}`)}
+                                style={{ border: 'none', backgroundColor: '#1e1b4b', color: '#BFA6D8', padding: '2px 6px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.65rem', height: '22px' }}
+                              >
+                                Email
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {unpaidInvoicesList.length === 0 && (
+                      <tr>
+                        <td colSpan={5} style={{ padding: '24px', textAlign: 'center', color: '#A89684', fontSize: '0.85rem' }}>
+                          ✓ Perfect! No outstanding invoices recorded in this period.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* FULLY PAID / SETTLED INVOICES */}
+              <div className="card-premium" style={{ border: '1px solid rgba(52, 211, 153, 0.25)', overflowX: 'auto' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <h3 style={{ fontFamily: 'Outfit', fontSize: '1.1rem', color: '#34d399', margin: 0 }}>Fully Paid & Settled Invoices</h3>
+                  <span style={{ fontSize: '0.75rem', color: '#A89684' }}>{paidInvoicesList.length} settled accounts</span>
+                </div>
+                <table className="table-premium" style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '2px solid rgba(52, 211, 153, 0.3)' }}>
+                      <th style={{ padding: '12px', color: '#34d399', fontSize: '0.85rem', fontWeight: 700, width: '20%' }}>Invoice ID</th>
+                      <th style={{ padding: '12px', color: '#34d399', fontSize: '0.85rem', fontWeight: 700, width: '30%' }}>Client Name</th>
+                      <th style={{ padding: '12px', color: '#34d399', fontSize: '0.85rem', fontWeight: 700, width: '15%' }}>Date Settled</th>
+                      <th style={{ padding: '12px', color: '#34d399', fontSize: '0.85rem', fontWeight: 700, width: '15%' }}>Total Settled</th>
+                      <th style={{ padding: '12px', color: '#34d399', fontSize: '0.85rem', fontWeight: 700, width: '20%', textAlign: 'right' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paidInvoicesList.map(inv => {
+                      const cli = clients.find(c => c.id === inv.clientId);
+                      return (
+                        <tr key={inv.id} style={{ borderBottom: '1px solid rgba(52, 211, 153, 0.15)' }}>
+                          <td style={{ padding: '12px' }}><strong>{inv.invoiceNumber}</strong></td>
+                          <td style={{ padding: '12px', color: '#BFA6D8', fontWeight: 500 }}>{cli?.name || 'Walk-in Guest'}</td>
+                          <td style={{ padding: '12px', color: '#A89684', fontSize: '0.78rem' }}>{inv.date}</td>
+                          <td style={{ padding: '12px' }}><strong style={{ color: '#34d399' }}>R {inv.total.toFixed(2)}</strong></td>
+                          <td style={{ padding: '12px', textAlign: 'right' }}>
+                            <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                              <button
+                                onClick={() => { setActiveViewInvoice(inv); setShowInvoiceModal(true); }}
+                                className="btn-brand-purple"
+                                style={{ padding: '2px 6px', fontSize: '0.65rem', height: '22px' }}
+                              >
+                                View
+                              </button>
+                              <button
+                                onClick={() => alert(`Paid invoice ${inv.invoiceNumber} emailed to ${cli?.email || 'client'}`)}
+                                style={{ border: 'none', backgroundColor: '#1e1b4b', color: '#BFA6D8', padding: '2px 6px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.65rem', height: '22px' }}
+                              >
+                                Email
+                              </button>
+                              <button
+                                onClick={() => alert(`Paid invoice ${inv.invoiceNumber} sent via WhatsApp to ${cli?.phone || 'client'}`)}
+                                style={{ border: 'none', backgroundColor: '#064e3b', color: '#34d399', padding: '2px 6px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.65rem', height: '22px' }}
+                              >
+                                WhatsApp
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {paidInvoicesList.length === 0 && (
+                      <tr>
+                        <td colSpan={5} style={{ padding: '24px', textAlign: 'center', color: '#A89684', fontSize: '0.85rem' }}>
+                          No fully paid invoices recorded in this period.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Payments ledger (journal audit) */}
               <div className="card-premium" style={{ border: '1px solid rgba(107, 44, 145, 0.25)', overflowX: 'auto' }}>
-                <h3 style={{ fontFamily: 'Outfit', fontSize: '1.1rem', color: 'white', margin: '0 0 16px 0' }}>Settled Payments Ledger</h3>
+                <h3 style={{ fontFamily: 'Outfit', fontSize: '1.1rem', color: 'white', margin: '0 0 16px 0' }}>Settled Deposit / Payments Journal</h3>
                 <table className="table-premium" style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse' }}>
                   <thead>
                     <tr style={{ borderBottom: '2px solid rgba(107, 44, 145, 0.3)' }}>
@@ -4058,11 +4653,40 @@ export default function BookingCRM() {
 
               <div>
                 <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Category:</label>
-                <select className="brand-input" onChange={(e) => setProductForm(prev => ({ ...prev, category: e.target.value }))}>
+                <select 
+                  className="brand-input" 
+                  value={showCustomCategoryInput ? 'custom' : productForm.category}
+                  onChange={(e) => {
+                    if (e.target.value === 'custom') {
+                      setShowCustomCategoryInput(true);
+                      setProductForm(prev => ({ ...prev, category: '' }));
+                    } else {
+                      setShowCustomCategoryInput(false);
+                      setProductForm(prev => ({ ...prev, category: e.target.value }));
+                    }
+                  }}
+                >
                   <option value="Facial Products">Facial Products</option>
                   <option value="Weight Loss Products">Weight Loss Products</option>
+                  <option value="custom">+ Create Custom Category...</option>
                 </select>
               </div>
+
+              {showCustomCategoryInput && (
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: '#D4AF37', marginBottom: '6px' }}>Custom Category Name:</label>
+                  <input 
+                    type="text" 
+                    className="brand-input" 
+                    placeholder="Enter custom category name..." 
+                    value={customCategoryText} 
+                    onChange={(e) => {
+                      setCustomCategoryText(e.target.value);
+                      setProductForm(prev => ({ ...prev, category: e.target.value }));
+                    }} 
+                  />
+                </div>
+              )}
 
               <div>
                 <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Image URL:</label>
@@ -4156,6 +4780,14 @@ export default function BookingCRM() {
                   {machines.map(m => (
                     <option key={m.id} value={m.id}>{m.name}</option>
                   ))}
+                </select>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Expense Billing Type:</label>
+                <select className="brand-input" value={expenseForm.frequency || 'once_off'} onChange={(e) => setExpenseForm(prev => ({ ...prev, frequency: e.target.value }))}>
+                  <option value="once_off">Once-off Fixed Cost</option>
+                  <option value="monthly">Monthly Recurrent Fixed Cost</option>
+                  <option value="per_use">Per-Session Use Cost (Multiplies by machine usage)</option>
                 </select>
               </div>
 
@@ -5199,6 +5831,422 @@ export default function BookingCRM() {
                 <span>Sincerely,</span>
                 <br /><strong style={{ display: 'block', marginTop: '24px', color: '#6B2C91' }}>Sculpt & Glow Financial Desk</strong>
                 <span style={{ fontSize: '0.75rem', color: '#718096' }}>Authorized Accounts Office</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: CLINICAL SERVICE CONFIG CRUD */}
+      {showServiceModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000 }}>
+          <div className="card-premium animate-fade-in" style={{ width: '450px', maxHeight: '90vh', overflowY: 'auto' }}>
+            <h3 style={{ fontFamily: 'Outfit', color: '#D4AF37', marginBottom: '16px' }}>
+              {isEditingService ? 'Edit Clinical Service' : 'Add New Clinical Service'}
+            </h3>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Service Name:</label>
+                <input 
+                  type="text" 
+                  className="brand-input" 
+                  value={activeServiceForm.name} 
+                  onChange={(e) => setActiveServiceForm(prev => ({ ...prev, name: e.target.value }))} 
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Category:</label>
+                  <select 
+                    className="brand-input" 
+                    value={activeServiceForm.category} 
+                    onChange={(e) => setActiveServiceForm(prev => ({ ...prev, category: e.target.value }))}
+                  >
+                    <option value="Body Contouring">Body Contouring</option>
+                    <option value="Facials & Wellness">Facials & Wellness</option>
+                    <option value="Wellness Packages">Wellness Packages</option>
+                    <option value="Hair & Beauty">Hair & Beauty</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Price (R):</label>
+                  <input 
+                    type="number" 
+                    className="brand-input" 
+                    value={activeServiceForm.price === 0 ? '' : activeServiceForm.price} 
+                    onChange={(e) => setActiveServiceForm(prev => ({ ...prev, price: Number(e.target.value) }))} 
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Duration (mins):</label>
+                  <input 
+                    type="number" 
+                    className="brand-input" 
+                    value={activeServiceForm.duration === 0 ? '' : activeServiceForm.duration} 
+                    onChange={(e) => setActiveServiceForm(prev => ({ ...prev, duration: Number(e.target.value) }))} 
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Required Machine:</label>
+                  <select 
+                    className="brand-input" 
+                    value={activeServiceForm.requiredMachine || ''} 
+                    onChange={(e) => setActiveServiceForm(prev => ({ ...prev, requiredMachine: e.target.value || null }))}
+                  >
+                    <option value="">None (Manual Therapy)</option>
+                    {machines.map(m => (
+                      <option key={m.id} value={m.id}>{m.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Description:</label>
+                <textarea 
+                  className="brand-input" 
+                  rows={2} 
+                  value={activeServiceForm.description || ''} 
+                  onChange={(e) => setActiveServiceForm(prev => ({ ...prev, description: e.target.value }))}
+                />
+              </div>
+
+              {/* Service Consumables Mapping */}
+              <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '10px', marginTop: '4px' }}>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: '#D4AF37', fontWeight: 600, marginBottom: '6px' }}>Consumables Requirements:</label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '120px', overflowY: 'auto', marginBottom: '8px' }}>
+                  {(activeServiceForm.consumables || []).map((cons, index) => {
+                    const invItem = inventory.find(i => i.id === cons.itemId);
+                    return (
+                      <div key={index} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.03)', padding: '6px 10px', borderRadius: '4px' }}>
+                        <span style={{ fontSize: '0.75rem', color: '#BFA6D8' }}>
+                          {invItem?.name || 'Unknown item'}
+                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>{cons.quantity} {invItem?.unit || 'items'}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveServiceForm(prev => ({
+                                ...prev,
+                                consumables: prev.consumables.filter((_, idx) => idx !== index)
+                              }));
+                            }}
+                            style={{ border: 'none', background: 'none', color: '#ef4444', fontSize: '0.9rem', cursor: 'pointer' }}
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {(!activeServiceForm.consumables || activeServiceForm.consumables.length === 0) && (
+                    <span style={{ fontSize: '0.72rem', color: '#A89684', fontStyle: 'italic' }}>No consumables linked to this service yet.</span>
+                  )}
+                </div>
+
+                {/* Add consumable picker */}
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <select 
+                    id="add-consumable-picker" 
+                    className="brand-input" 
+                    style={{ fontSize: '0.75rem', height: '30px', flex: 1.5 }}
+                    defaultValue=""
+                  >
+                    <option value="" disabled>Choose stock item...</option>
+                    {inventory.map(item => (
+                      <option key={item.id} value={item.id}>{item.name} ({item.unit})</option>
+                    ))}
+                  </select>
+                  <input 
+                    id="add-consumable-qty" 
+                    type="number" 
+                    className="brand-input" 
+                    placeholder="Qty" 
+                    style={{ fontSize: '0.75rem', height: '30px', flex: 0.6 }} 
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const picker = document.getElementById('add-consumable-picker');
+                      const qtyInput = document.getElementById('add-consumable-qty');
+                      const itemId = picker.value;
+                      const quantity = Number(qtyInput.value);
+
+                      if (itemId && quantity > 0) {
+                        const currentCons = activeServiceForm.consumables || [];
+                        // Check duplicate
+                        if (currentCons.some(c => c.itemId === itemId)) {
+                          alert('This item is already listed in consumables requirements.');
+                          return;
+                        }
+                        setActiveServiceForm(prev => ({
+                          ...prev,
+                          consumables: [...currentCons, { itemId, quantity }]
+                        }));
+                        picker.value = '';
+                        qtyInput.value = '';
+                      } else {
+                        alert('Please choose a valid stock item and specify quantity.');
+                      }
+                    }}
+                    className="btn-brand-gold"
+                    style={{ height: '30px', padding: '0 10px', fontSize: '0.7rem' }}
+                  >
+                    + Add
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
+                <button
+                  disabled={!activeServiceForm.name}
+                  onClick={() => {
+                    if (isEditingService) {
+                      updateService(currentUserName(), activeServiceForm);
+                    } else {
+                      addService(currentUserName(), activeServiceForm);
+                    }
+                    setShowServiceModal(false);
+                    syncDatabase();
+                  }}
+                  className="btn-brand-gold"
+                  style={{ width: '100%', justifyContent: 'center', opacity: activeServiceForm.name ? 1 : 0.4 }}
+                >
+                  {isEditingService ? 'Update Service' : 'Add Treatment'}
+                </button>
+                <button onClick={() => setShowServiceModal(false)} className="btn-brand-purple" style={{ width: '100%', justifyContent: 'center' }}>Cancel</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: CONSUMABLES DRILL DOWN BREAKDOWN */}
+      {selectedDrillDownService && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 11000 }}>
+          <div className="card-premium animate-fade-in" style={{ width: '380px', border: '1px solid #D4AF37' }}>
+            <h3 style={{ fontFamily: 'Outfit', color: '#D4AF37', margin: '0 0 8px 0' }}>Consumables Requirements</h3>
+            <span style={{ fontSize: '0.8rem', color: '#BFA6D8', display: 'block', marginBottom: '16px' }}>
+              For treatment: <strong>{selectedDrillDownService.name}</strong>
+            </span>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {(selectedDrillDownService.consumables || []).map((cons, idx) => {
+                const item = inventory.find(i => i.id === cons.itemId);
+                return (
+                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '6px' }}>
+                    <span style={{ color: 'white', fontSize: '0.8rem' }}>{item?.name || 'Unknown item'}</span>
+                    <strong style={{ color: '#D4AF37', fontSize: '0.8rem' }}>{cons.quantity} {item?.unit || 'items'}</strong>
+                  </div>
+                );
+              })}
+              {(!selectedDrillDownService.consumables || selectedDrillDownService.consumables.length === 0) && (
+                <div style={{ padding: '16px', textAlign: 'center', color: '#A89684', fontSize: '0.8rem', fontStyle: 'italic' }}>
+                  ✓ This service requires no physical consumable deductions.
+                </div>
+              )}
+            </div>
+
+            <button 
+              onClick={() => setSelectedDrillDownService(null)} 
+              className="btn-brand-purple" 
+              style={{ width: '100%', justifyContent: 'center', marginTop: '20px', height: '32px' }}
+            >
+              Close Breakdown
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: REGISTER STOCK ITEM */}
+      {showInventoryModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000 }}>
+          <div className="card-premium animate-fade-in" style={{ width: '400px' }}>
+            <h3 style={{ fontFamily: 'Outfit', color: '#D4AF37', marginBottom: '16px' }}>Register Consumable Stock</h3>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Item Name:</label>
+                <input 
+                  type="text" 
+                  className="brand-input" 
+                  value={inventoryForm.name} 
+                  onChange={(e) => setInventoryForm(prev => ({ ...prev, name: e.target.value }))} 
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Starting Qty:</label>
+                  <input 
+                    type="number" 
+                    className="brand-input" 
+                    value={inventoryForm.quantity === 0 ? '' : inventoryForm.quantity} 
+                    onChange={(e) => setInventoryForm(prev => ({ ...prev, quantity: Number(e.target.value) }))} 
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Alert Threshold:</label>
+                  <input 
+                    type="number" 
+                    className="brand-input" 
+                    value={inventoryForm.alertAt === 0 ? '' : inventoryForm.alertAt} 
+                    onChange={(e) => setInventoryForm(prev => ({ ...prev, alertAt: Number(e.target.value) }))} 
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Unit Type:</label>
+                  <input 
+                    type="text" 
+                    placeholder="e.g. ml, box, pack, items" 
+                    className="brand-input" 
+                    value={inventoryForm.unit} 
+                    onChange={(e) => setInventoryForm(prev => ({ ...prev, unit: e.target.value }))} 
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Supplier Name:</label>
+                  <input 
+                    type="text" 
+                    className="brand-input" 
+                    value={inventoryForm.supplier} 
+                    onChange={(e) => setInventoryForm(prev => ({ ...prev, supplier: e.target.value }))} 
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '10px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Unit cost (R):</label>
+                  <input 
+                    type="number" 
+                    placeholder="Optional cost" 
+                    className="brand-input" 
+                    value={inventoryForm.cost === 0 ? '' : inventoryForm.cost} 
+                    onChange={(e) => setInventoryForm(prev => ({ ...prev, cost: Number(e.target.value) }))} 
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Retail price (R):</label>
+                  <input 
+                    type="number" 
+                    placeholder="If client retailable" 
+                    className="brand-input" 
+                    value={inventoryForm.sellPrice === 0 ? '' : inventoryForm.sellPrice} 
+                    onChange={(e) => setInventoryForm(prev => ({ ...prev, sellPrice: Number(e.target.value) }))} 
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
+                <button
+                  disabled={!inventoryForm.name}
+                  onClick={() => {
+                    addInventoryItem('Dashboard Admin', inventoryForm);
+                    setShowInventoryModal(false);
+                    syncDatabase();
+                  }}
+                  className="btn-brand-gold"
+                  style={{ width: '100%', justifyContent: 'center', opacity: inventoryForm.name ? 1 : 0.4 }}
+                >
+                  Create Consumable
+                </button>
+                <button onClick={() => setShowInventoryModal(false)} className="btn-brand-purple" style={{ width: '100%', justifyContent: 'center' }}>Cancel</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: STOCK ADJUSTMENTS */}
+      {showStockAdjustModal && activeStockItem && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000 }}>
+          <div className="card-premium animate-fade-in" style={{ width: '400px' }}>
+            <h3 style={{ fontFamily: 'Outfit', color: '#D4AF37', marginBottom: '8px' }}>Audited Stock Adjustment</h3>
+            <span style={{ fontSize: '0.85rem', color: '#BFA6D8', display: 'block', marginBottom: '16px' }}>
+              Adjusting: <strong>{activeStockItem.name}</strong> (In stock: {activeStockItem.quantity} {activeStockItem.unit})
+            </span>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Adjustment Type:</label>
+                <select 
+                  className="brand-input" 
+                  value={stockAdjustForm.type} 
+                  onChange={(e) => setStockAdjustForm(prev => ({ ...prev, type: e.target.value }))}
+                >
+                  <option value="add">📦 Add Ordered Inbound Stock (+)</option>
+                  <option value="set">🔧 Set Absolute Total Count (Recount Correction)</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>
+                  {stockAdjustForm.type === 'add' ? 'Quantity to Add:' : 'New Total Quantity:'}
+                </label>
+                <input 
+                  type="number" 
+                  className="brand-input" 
+                  value={stockAdjustForm.amount === '' ? '' : stockAdjustForm.amount} 
+                  onChange={(e) => setStockAdjustForm(prev => ({ ...prev, amount: e.target.value === '' ? '' : Number(e.target.value) }))} 
+                />
+              </div>
+
+              {stockAdjustForm.type === 'set' && (
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: '#ef4444', fontWeight: 600, marginBottom: '6px' }}>
+                    Mandatory Correction Reason:
+                  </label>
+                  <input 
+                    type="text" 
+                    placeholder="e.g. Broken packaging, expiry date write-off, count correction" 
+                    className="brand-input" 
+                    value={stockAdjustForm.reason} 
+                    onChange={(e) => setStockAdjustForm(prev => ({ ...prev, reason: e.target.value }))} 
+                  />
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
+                <button
+                  disabled={stockAdjustForm.amount === '' || (stockAdjustForm.type === 'set' && !stockAdjustForm.reason.trim())}
+                  onClick={() => {
+                    const amt = Number(stockAdjustForm.amount);
+                    if (stockAdjustForm.type === 'add') {
+                      updateInventoryItemStock(currentUserName(), activeStockItem.id, amt);
+                    } else {
+                      const delta = amt - activeStockItem.quantity;
+                      updateInventoryItemStock(currentUserName(), activeStockItem.id, delta);
+                      // Custom audit log with the mandatory reason
+                      logAction(
+                        currentUserName(), 
+                        'Manual Stock Adjustment', 
+                        `Manually adjusted stock of "${activeStockItem.name}" from ${activeStockItem.quantity} to ${amt} ${activeStockItem.unit}. Reason: ${stockAdjustForm.reason}`,
+                        activeStockItem.quantity,
+                        amt
+                      );
+                    }
+                    setShowStockAdjustModal(false);
+                    syncDatabase();
+                  }}
+                  className="btn-brand-gold"
+                  style={{ 
+                    width: '100%', justifyContent: 'center', 
+                    opacity: (stockAdjustForm.amount !== '' && (stockAdjustForm.type === 'add' || stockAdjustForm.reason.trim())) ? 1 : 0.4 
+                  }}
+                >
+                  Adjust & Log Audit
+                </button>
+                <button onClick={() => setShowStockAdjustModal(false)} className="btn-brand-purple" style={{ width: '100%', justifyContent: 'center' }}>Cancel</button>
               </div>
             </div>
           </div>
