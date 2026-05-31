@@ -755,6 +755,10 @@ export default function BookingCRM() {
                                   value={apt.status}
                                   onChange={(e) => {
                                     const nextStatus = e.target.value;
+                                    if (nextStatus === 'Completed' && apt.paymentStatus !== 'Paid already') {
+                                      alert(`Admin Duty Compliance Lock:\n\nThis session cannot be marked as "Completed" because the payment has not been settled yet.\n\nPlease click "Settle Payment" to capture the payment first.`);
+                                      return;
+                                    }
                                     if (nextStatus === 'Cancelled') {
                                       setActiveCancellationApt(apt);
                                       setCancelReasonText('');
