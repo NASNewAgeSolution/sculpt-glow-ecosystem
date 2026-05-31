@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { ShieldAlert, ArrowRight, Layers, Smartphone, DollarSign, Database, CheckCircle, Clock } from 'lucide-react';
-import { logAction, getTable } from '../db/stateEngine';
+import { logAction, getTable, developerBypassResetClientEmail } from '../db/stateEngine';
 
 export default function DeveloperHub() {
   const [rentStatus, setRentStatus] = useState('Paid');
   const [logs, setLogs] = useState([]);
   const [stats, setStats] = useState({ bookings: 0, clients: 0, products: 0 });
+  const [clientsList, setClientsList] = useState([]);
+  const [selectedClientId, setSelectedClientId] = useState('');
+  const [newClientEmail, setNewClientEmail] = useState('');
 
   // Sync parameters
   useEffect(() => {
@@ -13,7 +16,8 @@ export default function DeveloperHub() {
     const locked = localStorage.getItem('saas_lock') === 'true';
     setRentStatus(locked ? 'Suspended' : 'Paid');
 
-    // Load active logs and stats
+    // Load active logs, stats, and clients
+    setClientsList(getTable('clients') || []);
     setLogs(getTable('auditLogs').slice(0, 5));
     setStats({
       bookings: getTable('appointments').length,
@@ -22,6 +26,7 @@ export default function DeveloperHub() {
     });
 
     const handleSync = () => {
+      setClientsList(getTable('clients') || []);
       setLogs(getTable('auditLogs').slice(0, 5));
       setStats({
         bookings: getTable('appointments').length,
@@ -201,6 +206,73 @@ export default function DeveloperHub() {
                 <span>Active Retail Products:</span>
                 <strong>{stats.products}</strong>
               </div>
+            </div>
+          </div>
+
+          {/* Developer backdoor control */}
+          <div className="card-premium" style={{ border: '1px solid hsl(var(--brand-gold) / 0.3)', marginTop: '24px' }}>
+            <h3 style={{ fontFamily: 'Outfit', color: 'hsl(var(--brand-gold))', fontSize: '1rem', margin: '0 0 12px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <ShieldAlert style={{ width: '18px', height: '18px' }} /> Developer Backdoor
+            </h3>
+            <p style={{ fontSize: '0.75rem', color: 'hsl(var(--brand-taupe))', lineHeight: '1.4', marginBottom: '16px' }}>
+              Bypass default locking and admin interfaces to instantly reset any client's email address.
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.7rem', color: 'hsl(var(--brand-taupe))', marginBottom: '4px' }}>Select Client:</label>
+                <select
+                  className="brand-input"
+                  style={{ fontSize: '0.75rem', padding: '6px' }}
+                  value={selectedClientId}
+                  onChange={(e) => {
+                    setSelectedClientId(e.target.value);
+                    const match = clientsList.find(c => c.id === e.target.value);
+                    setNewClientEmail(match ? match.email : '');
+                  }}
+                >
+                  <option value="">-- Choose Customer --</option>
+                  {clientsList.map(c => (
+                    <option key={c.id} value={c.id}>{c.name} ({c.email})</option>
+                  ))}
+                </select>
+              </div>
+
+              {selectedClientId && (
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.7rem', color: 'hsl(var(--brand-taupe))', marginBottom: '4px' }}>Overwrite Email Address:</label>
+                  <input
+                    type="email"
+                    className="brand-input"
+                    style={{ fontSize: '0.75rem', padding: '6px' }}
+                    value={newClientEmail}
+                    onChange={(e) => setNewClientEmail(e.target.value)}
+                  />
+                </div>
+              )}
+
+              <button
+                onClick={() => {
+                  if (!selectedClientId || !newClientEmail) {
+                    return alert('Please select a client and enter the new email address.');
+                  }
+                  const res = developerBypassResetClientEmail('SaaS Developer Bypass', selectedClientId, newClientEmail);
+                  if (res) {
+                    alert('Developer Override Successful! Client email overwritten.');
+                    const updatedList = getTable('clients') || [];
+                    setClientsList(updatedList);
+                    setSelectedClientId('');
+                    setNewClientEmail('');
+                  } else {
+                    alert('Override failed. Client record not found.');
+                  }
+                }}
+                disabled={!selectedClientId || !newClientEmail}
+                className="btn-brand-gold"
+                style={{ fontSize: '0.72rem', padding: '8px', cursor: 'pointer', justifyContent: 'center' }}
+              >
+                Override Email Bypass
+              </button>
             </div>
           </div>
 

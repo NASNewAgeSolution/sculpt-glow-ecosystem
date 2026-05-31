@@ -56,7 +56,14 @@ import {
   approveLoanRequest,
   addSalaryAdjustment,
   finalizeStaffPayslip,
-  markNotificationAsRead
+  markNotificationAsRead,
+  saveRoomMachineMapping,
+  getMachinesForRoom,
+  addMachine,
+  registerSystemUser,
+  blockSystemUser,
+  resetUserPassword,
+  saveCustomRole
 } from '../db/stateEngine';
 
 export default function BookingCRM() {
@@ -224,6 +231,27 @@ export default function BookingCRM() {
   const [notifications, setNotifications] = useState([]);
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
   
+  // Restructured Settings & Machine states
+  const [settingsSubTab, setSettingsSubTab] = useState('profile'); // profile, templates, rooms
+  const [previewTemplate, setPreviewTemplate] = useState('payslip'); // payslip, invoice, quote, slip
+  const [selectedRoomMap, setSelectedRoomMap] = useState('');
+  const [showAddMachineModal, setShowAddMachineModal] = useState(false);
+  const [addMachineForm, setAddMachineForm] = useState({ name: '', serialNumber: '', purchaseDate: '', serviceInterval: 50, hourlyRate: 100 });
+  
+  // Member & custom role management form states
+  const [newMemberForm, setNewMemberForm] = useState({ name: '', username: '', email: '', pin: '1234', role: 'therapist' });
+  const [customRoleName, setCustomRoleName] = useState('');
+  const [customRoleAllowedTabs, setCustomRoleAllowedTabs] = useState([]);
+  
+  // Bulk Campaigns marketing states
+  const [campaignChannel, setCampaignChannel] = useState('whatsapp'); // whatsapp, email
+  const [campaignTarget, setCampaignTarget] = useState('all'); // all, vip, noshow
+  const [campaignMessage, setCampaignMessage] = useState("Exciting news! Book your next HydraFacial session this week at Sculpt & Glow and receive 20 Bonus Glow Points! Click here to schedule: sculptglow.co.za/book");
+  const [campaignSubject, setCampaignSubject] = useState("🌟 Exclusive Aesthetic Atelier Offer - Sculpt & Glow");
+  const [simulationActive, setSimulationActive] = useState(false);
+  const [simulationProgress, setSimulationProgress] = useState(0);
+  const [simulationLog, setSimulationLog] = useState([]);
+  
   // Custom Search & Whitelists
   const [invoiceSearchQuery, setInvoiceSearchQuery] = useState('');
   const [quoteSearchQuery, setQuoteSearchQuery] = useState('');
@@ -239,6 +267,9 @@ export default function BookingCRM() {
   // Dynamic filter lists
   const [clientSearch, setClientSearch] = useState('');
   const [auditSearch, setAuditSearch] = useState('');
+  const [auditFilterUser, setAuditFilterUser] = useState('all');
+  const [auditFilterAction, setAuditFilterAction] = useState('all');
+  const [auditFilterDate, setAuditFilterDate] = useState('');
   const [archiveSearch, setArchiveSearch] = useState('');
 
   // Form states
@@ -387,15 +418,19 @@ export default function BookingCRM() {
     }
   }, [selectedClient]);
 
-  // Restrict access depending on simulated role boundaries
   useEffect(() => {
     const safeTabsByRole = {
-      owner: ['dashboard', 'waitlist', 'rooms', 'crm', 'loyalty', 'gallery', 'reviews', 'billing', 'quotes', 'expenses', 'payments', 'services', 'products', 'inventory', 'orders', 'therapist', 'commissions', 'settings', 'audit', 'archive', 'staff'],
-      receptionist: ['dashboard', 'waitlist', 'rooms', 'crm', 'loyalty', 'gallery', 'reviews', 'billing', 'quotes', 'payments', 'services', 'products', 'inventory', 'orders', 'therapist', 'commissions', 'staff'],
+      owner: ['dashboard', 'waitlist', 'rooms', 'crm', 'loyalty', 'gallery', 'reviews', 'campaigns', 'billing', 'quotes', 'expenses', 'payments', 'services', 'products', 'inventory', 'orders', 'therapist', 'commissions', 'settings', 'members', 'audit', 'archive', 'staff'],
+      receptionist: ['dashboard', 'waitlist', 'rooms', 'crm', 'loyalty', 'gallery', 'reviews', 'campaigns', 'billing', 'quotes', 'payments', 'services', 'products', 'inventory', 'orders', 'therapist', 'commissions', 'staff'],
       therapist: ['dashboard', 'crm', 'gallery', 'reviews', 'therapist', 'commissions', 'staff']
     };
 
-    const allowed = safeTabsByRole[currentUserRole] || [];
+    // Load dynamic custom roles from database/localStorage
+    const customRolesList = JSON.parse(localStorage.getItem('salon_customRoles') || '[]');
+    const matchedCustomRole = customRolesList.find(r => r.name.toLowerCase() === currentUserRole.toLowerCase());
+    
+    const allowed = matchedCustomRole ? matchedCustomRole.allowedTabs : (safeTabsByRole[currentUserRole] || safeTabsByRole['therapist']);
+    
     if (!allowed.includes(activeTab)) {
       setActiveTab(allowed[0] || 'dashboard');
     }
@@ -526,7 +561,8 @@ export default function BookingCRM() {
         { id: 'crm', label: 'CRM Client Folders', roles: ['owner', 'receptionist', 'therapist'] },
         { id: 'loyalty', label: 'VIP & Glow Points', roles: ['owner', 'receptionist'] },
         { id: 'gallery', label: 'Before/After Progress', roles: ['owner', 'receptionist', 'therapist'] },
-        { id: 'reviews', label: 'Google Business Reviews', roles: ['owner', 'receptionist', 'therapist'] }
+        { id: 'reviews', label: 'Google Business Reviews', roles: ['owner', 'receptionist', 'therapist'] },
+        { id: 'campaigns', label: 'Bulk Campaigns', roles: ['owner', 'receptionist'] }
       ]
     },
     billing: {
@@ -563,6 +599,7 @@ export default function BookingCRM() {
       icon: Settings,
       items: [
         { id: 'settings', label: 'Salon Settings', roles: ['owner'] },
+        { id: 'members', label: 'User & Role Manager', roles: ['owner'] },
         { id: 'audit', label: 'Security Audits', roles: ['owner'] },
         { id: 'archive', label: 'Archived Deletions', roles: ['owner'] }
       ]
@@ -601,6 +638,39 @@ export default function BookingCRM() {
           </button>
         </div>
       )}
+
+      {/* BLOCKED USER ACCOUNT OVERLAY */}
+      {(() => {
+        const activeUsername = currentUserRole === 'receptionist' ? 'receptionist' : currentUserRole === 'therapist' ? 'therapist' : 'owner';
+        const activeUserObj = users.find(u => u.username === activeUsername);
+        const isBlockedUser = activeUserObj && activeUserObj.blocked === true;
+        
+        if (isBlockedUser && currentUserRole !== 'owner') {
+          return (
+            <div style={{
+              position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+              backgroundColor: 'rgba(0,0,0,0.95)', display: 'flex', flexDirection: 'column',
+              justifyContent: 'center', alignItems: 'center', zIndex: 99999, padding: '20px', textAlign: 'center'
+            }}>
+              <Lock style={{ width: '64px', height: '64px', color: '#ef4444', filter: 'drop-shadow(0 0 10px #ef4444)', marginBottom: '16px' }} />
+              <h2 style={{ color: '#ef4444', fontFamily: 'Outfit', fontWeight: 800 }}>ACCESS BLOCKED</h2>
+              <p style={{ color: '#9ca3af', fontSize: '0.85rem', maxWidth: '400px', lineHeight: '1.5', marginTop: '10px' }}>
+                Your employee account for **{activeUserObj.name}** has been administrative-locked by the Salon Owner.
+              </p>
+              <div style={{ marginTop: '20px', fontSize: '0.78rem', color: '#ef4444' }}>
+                Please contact clinic management to review your access credentials.
+              </div>
+              <div style={{ marginTop: '30px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '16px' }}>
+                <span style={{ fontSize: '0.72rem', color: '#A89684', display: 'block', marginBottom: '8px' }}>Sandbox Bypass (Switch active role at top or select owner):</span>
+                <button onClick={() => setCurrentUserRole('owner')} className="btn-brand-gold" style={{ padding: '6px 12px', fontSize: '0.72rem' }}>
+                  Bypass: Switch to Owner
+                </button>
+              </div>
+            </div>
+          );
+        }
+        return null;
+      })()}
 
       {/* STICKY COLLAPSIBLE DIRECTORY SIDEBAR */}
       <aside style={{
@@ -5093,12 +5163,37 @@ export default function BookingCRM() {
         {/* WORKSPACE P: GLOBAL SALON SETTINGS */}
         {activeTab === 'settings' && currentUserRole === 'owner' && (
           <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            <div className="card-premium">
-              <h3 style={{ fontFamily: 'Outfit', color: 'white', marginBottom: '16px' }}>Global Salon Settings</h3>
-              <p style={{ fontSize: '0.8rem', color: '#BFA6D8', marginBottom: '20px' }}>Setup business details, VAT rates, and WhatsApp reminder lead times.</p>
+            
+            {/* SUB-TABS COORDINATOR */}
+            <div style={{ display: 'flex', borderBottom: '1px solid rgba(107, 44, 145, 0.2)', paddingBottom: '12px', gap: '16px' }}>
+              {[
+                { id: 'profile', label: 'Salon Profile Config' },
+                { id: 'templates', label: 'A4 & Thermal Template Previews' },
+                { id: 'rooms', label: 'Clinical Rooms & Hardware Maps' }
+              ].map(sub => (
+                <button
+                  key={sub.id}
+                  onClick={() => setSettingsSubTab(sub.id)}
+                  style={{
+                    backgroundColor: settingsSubTab === sub.id ? 'hsl(var(--brand-purple))' : 'transparent',
+                    border: settingsSubTab === sub.id ? '1px solid hsl(var(--brand-gold))' : '1px solid transparent',
+                    color: settingsSubTab === sub.id ? 'white' : '#A89684',
+                    padding: '8px 16px', fontSize: '0.82rem', fontWeight: 600, borderRadius: '8px', cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  {sub.label}
+                </button>
+              ))}
+            </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            {/* TAB PANEL 1: SALON PROFILE CONFIG */}
+            {settingsSubTab === 'profile' && (
+              <div className="card-premium animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <h3 style={{ fontFamily: 'Outfit', color: '#D4AF37', margin: 0 }}>Salon Profile & Core Configurations</h3>
+                <p style={{ fontSize: '0.8rem', color: '#BFA6D8', marginTop: '-8px' }}>Setup active business details, VAT rates, and WhatsApp reminder lead times.</p>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginTop: '10px' }}>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.78rem', color: '#A89684', marginBottom: '6px' }}>Salon Name:</label>
                     <input type="text" className="brand-input" id="cfgSalonName" defaultValue={settings.salonName} />
@@ -5161,78 +5256,953 @@ export default function BookingCRM() {
                   Save parameters
                 </button>
               </div>
-            </div>
+            )}
 
-            {/* DYNAMIC ROOMS & MACHINES CRUD PANEL */}
-            <div className="card-premium">
-              <h3 style={{ fontFamily: 'Outfit', color: 'white', marginBottom: '16px' }}>Dynamic Rooms & Equipment Management</h3>
-              
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '24px' }}>
-                
-                {/* Rooms CRUD */}
-                <div>
-                  <h4 style={{ color: '#D4AF37', fontSize: '0.9rem', marginBottom: '10px' }}>Clinic Treatment Rooms</h4>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '12px' }}>
-                    {rooms.map(rm => (
-                      <div key={rm} style={{ display: 'flex', justify: 'space-between', padding: '8px 12px', backgroundColor: 'hsl(var(--brand-black))', borderRadius: '8px', fontSize: '0.78rem' }}>
-                        <span>{rm}</span>
-                        <button onClick={() => {
-                          const updated = rooms.filter(r => r !== rm);
-                          setRooms(updated);
-                          localStorage.setItem('salon_rooms', JSON.stringify(updated));
-                        }} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}>✕</button>
-                      </div>
+            {/* TAB PANEL 2: TEMPLATE PREVIEWS */}
+            {settingsSubTab === 'templates' && (
+              <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                <div className="card-premium">
+                  <h3 style={{ fontFamily: 'Outfit', color: '#D4AF37', margin: '0 0 8px 0' }}>Salon Document & Thermal Print Mock Previews</h3>
+                  <p style={{ fontSize: '0.8rem', color: '#BFA6D8', margin: '0 0 20px 0' }}>Click standard templates below to preview active branding layouts, variables, and designs in real-time.</p>
+
+                  <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+                    {[
+                      { id: 'payslip', label: 'Payslip Receipt' },
+                      { id: 'invoice', label: 'Tax Invoice' },
+                      { id: 'quote', label: 'Client Quote' },
+                      { id: 'slip', label: 'Thermal Print Slip' }
+                    ].map(tpl => (
+                      <button
+                        key={tpl.id}
+                        onClick={() => setPreviewTemplate(tpl.id)}
+                        className="badge-brand"
+                        style={{
+                          backgroundColor: previewTemplate === tpl.id ? 'hsl(var(--brand-purple))' : 'rgba(255,255,255,0.05)',
+                          border: previewTemplate === tpl.id ? '1px solid #D4AF37' : '1px solid rgba(255,255,255,0.1)',
+                          color: 'white', padding: '6px 14px', borderRadius: '6px', cursor: 'pointer', transition: 'all 0.2s'
+                        }}
+                      >
+                        {tpl.label}
+                      </button>
                     ))}
                   </div>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <input type="text" className="brand-input" id="newRoomInput" placeholder="Add room..." style={{ height: '32px', fontSize: '0.78rem' }} />
-                    <button onClick={() => {
-                      const inp = document.getElementById('newRoomInput');
-                      if (inp.value) {
-                        const updated = [...rooms, inp.value];
-                        setRooms(updated);
-                        localStorage.setItem('salon_rooms', JSON.stringify(updated));
-                        inp.value = '';
-                      }
-                    }} className="btn-brand-gold" style={{ padding: '6px 12px', fontSize: '0.75rem' }}>Add</button>
+
+                  {/* PREVIEW CONTAINER CANVAS (WHITE SHEET mockup) */}
+                  <div style={{
+                    backgroundColor: 'white',
+                    color: '#1a1a1a',
+                    padding: '30px',
+                    borderRadius: '8px',
+                    boxShadow: 'inset 0 0 10px rgba(0,0,0,0.1)',
+                    fontFamily: 'Inter, sans-serif',
+                    minHeight: '400px',
+                    fontSize: '0.82rem',
+                    lineHeight: '1.4'
+                  }}>
+                    
+                    {previewTemplate === 'payslip' && (
+                      <div className="animate-fade-in">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '2px solid #6B2C91', paddingBottom: '12px', marginBottom: '16px' }}>
+                          <div>
+                            <h4 style={{ color: '#6B2C91', margin: 0, fontSize: '1.4rem', fontWeight: 800 }}>SCULPT & GLOW</h4>
+                            <span style={{ fontSize: '0.62rem', color: '#D4AF37', textTransform: 'uppercase', fontWeight: 700 }}>Clinical Aesthetic Atelier</span>
+                          </div>
+                          <div style={{ textAlign: 'right' }}>
+                            <h4 style={{ margin: 0, fontWeight: 700 }}>PAY SLIP</h4>
+                            <span style={{ color: '#666', fontSize: '0.72rem' }}>Month: May 2026</span>
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px', fontSize: '0.78rem' }}>
+                          <div>
+                            <strong>EMPLOYER:</strong> Sculpt & Glow Clinic Ltd
+                            <br />Suite 4, West End Medical Center
+                            <br />Pretoria East
+                          </div>
+                          <div>
+                            <strong>EMPLOYEE:</strong> Sarah Desk
+                            <br />Role: Reception Clerk
+                            <br />Email: sarah@sculptglow.co.za
+                          </div>
+                        </div>
+
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem', marginBottom: '20px' }}>
+                          <thead>
+                            <tr style={{ backgroundColor: '#f3f4f6', fontWeight: 700 }}>
+                              <th style={{ padding: '6px', textAlign: 'left' }}>Description</th>
+                              <th style={{ padding: '6px', textAlign: 'right' }}>Amount</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr>
+                              <td style={{ padding: '6px', borderBottom: '1px solid #e5e7eb' }}>Basic Monthly Salary</td>
+                              <td style={{ padding: '6px', textAlign: 'right', borderBottom: '1px solid #e5e7eb' }}>R 12,500.00</td>
+                            </tr>
+                            <tr>
+                              <td style={{ padding: '6px', borderBottom: '1px solid #e5e7eb' }}>Treatment & Sales Commissions</td>
+                              <td style={{ padding: '6px', textAlign: 'right', borderBottom: '1px solid #e5e7eb', color: '#10b981' }}>+ R 1,420.00</td>
+                            </tr>
+                            <tr>
+                              <td style={{ padding: '6px', borderBottom: '1px solid #e5e7eb' }}>Reimbursements & Claims</td>
+                              <td style={{ padding: '6px', textAlign: 'right', borderBottom: '1px solid #e5e7eb', color: '#10b981' }}>+ R 350.00</td>
+                            </tr>
+                            <tr>
+                              <td style={{ padding: '6px', borderBottom: '1px solid #e5e7eb' }}>Cash Loan Deduction</td>
+                              <td style={{ padding: '6px', textAlign: 'right', borderBottom: '1px solid #e5e7eb', color: '#ef4444' }}>- R 300.00</td>
+                            </tr>
+                          </tbody>
+                        </table>
+
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '2px double #6B2C91', paddingTop: '8px', fontSize: '1rem', fontWeight: 800, color: '#6B2C91' }}>
+                          <span>NET PAYOUT TRANSFERRED: R 13,970.00</span>
+                        </div>
+                        <div style={{ marginTop: '20px', fontSize: '0.68rem', color: '#666', borderTop: '1px solid #e5e7eb', paddingTop: '8px' }}>
+                          Paid to: <strong>FNB Pretoria | Account: 1029384756</strong> | Secure Operations Ledger
+                        </div>
+                      </div>
+                    )}
+
+                    {previewTemplate === 'invoice' && (
+                      <div className="animate-fade-in">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '2px solid #6B2C91', paddingBottom: '12px', marginBottom: '16px' }}>
+                          <div>
+                            <h4 style={{ color: '#6B2C91', margin: 0, fontSize: '1.4rem', fontWeight: 800 }}>SCULPT & GLOW</h4>
+                            <span style={{ fontSize: '0.62rem', color: '#D4AF37', textTransform: 'uppercase', fontWeight: 700 }}>Clinical Aesthetic Atelier</span>
+                          </div>
+                          <div style={{ textAlign: 'right' }}>
+                            <h4 style={{ margin: 0, fontWeight: 700 }}>TAX INVOICE</h4>
+                            <span style={{ color: '#666', fontSize: '0.72rem' }}>Inv No: INV-10029</span>
+                            <br /><span style={{ color: '#666', fontSize: '0.68rem' }}>Date: 2026-05-31</span>
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px', fontSize: '0.78rem' }}>
+                          <div>
+                            <strong>FROM:</strong> Sculpt & Glow Clinic Ltd
+                            <br />Suite 4, West End Medical Center
+                            <br />VAT Reg No: 4890201192
+                          </div>
+                          <div>
+                            <strong>BILL TO:</strong> Charlotte Guest
+                            <br />Email: charlotte@gmail.com
+                            <br />Phone: +27 (0) 79 123 4567
+                          </div>
+                        </div>
+
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem', marginBottom: '20px' }}>
+                          <thead>
+                            <tr style={{ backgroundColor: '#f3f4f6', fontWeight: 700 }}>
+                              <th style={{ padding: '6px', textAlign: 'left' }}>Description</th>
+                              <th style={{ padding: '6px', textAlign: 'center' }}>Qty</th>
+                              <th style={{ padding: '6px', textAlign: 'right' }}>Unit Price</th>
+                              <th style={{ padding: '6px', textAlign: 'right' }}>Total (Incl)</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr>
+                              <td style={{ padding: '6px', borderBottom: '1px solid #e5e7eb' }}><strong>Laser Hair Removal [Service]</strong></td>
+                              <td style={{ padding: '6px', textAlign: 'center', borderBottom: '1px solid #e5e7eb' }}>1</td>
+                              <td style={{ padding: '6px', textAlign: 'right', borderBottom: '1px solid #e5e7eb' }}>R 850.00</td>
+                              <td style={{ padding: '6px', textAlign: 'right', borderBottom: '1px solid #e5e7eb' }}>R 850.00</td>
+                            </tr>
+                            <tr>
+                              <td style={{ padding: '6px', borderBottom: '1px solid #e5e7eb' }}><strong>Luxury Glow Serum [Product]</strong></td>
+                              <td style={{ padding: '6px', textAlign: 'center', borderBottom: '1px solid #e5e7eb' }}>1</td>
+                              <td style={{ padding: '6px', textAlign: 'right', borderBottom: '1px solid #e5e7eb' }}>R 450.00</td>
+                              <td style={{ padding: '6px', textAlign: 'right', borderBottom: '1px solid #e5e7eb' }}>R 450.00</td>
+                            </tr>
+                          </tbody>
+                        </table>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', fontSize: '0.78rem' }}>
+                          <div style={{ width: '220px' }}>
+                            <div style={{ display: 'flex', justify: 'space-between', marginBottom: '4px' }}>
+                              <span>VAT (15%):</span>
+                              <span>R 169.57</span>
+                            </div>
+                            <div style={{ display: 'flex', justify: 'space-between', borderTop: '2px solid #6B2C91', paddingTop: '4px', fontWeight: 800, color: '#6B2C91', fontSize: '0.9rem' }}>
+                              <span>GRAND TOTAL:</span>
+                              <span>R 1,300.00</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {previewTemplate === 'quote' && (
+                      <div className="animate-fade-in">
+                        <div style={{ display: 'flex', justify: 'space-between', borderBottom: '2px solid #6B2C91', paddingBottom: '12px', marginBottom: '16px' }}>
+                          <div>
+                            <h4 style={{ color: '#6B2C91', margin: 0, fontSize: '1.4rem', fontWeight: 800 }}>SCULPT & GLOW</h4>
+                            <span style={{ fontSize: '0.62rem', color: '#D4AF37', textTransform: 'uppercase', fontWeight: 700 }}>Clinical Aesthetic Atelier</span>
+                          </div>
+                          <div style={{ textAlign: 'right' }}>
+                            <h4 style={{ margin: 0, fontWeight: 700 }}>A4 ESTIMATE & QUOTATION</h4>
+                            <span style={{ color: '#666', fontSize: '0.72rem' }}>Quote No: QTE-40012</span>
+                            <br /><span style={{ color: '#666', fontSize: '0.68rem' }}>Validity: 30 Days</span>
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px', fontSize: '0.78rem' }}>
+                          <div>
+                            <strong>ESTIMATE PREPARED FOR:</strong>
+                            <br />Charlotte Guest
+                            <br />Pretoria East
+                          </div>
+                          <div>
+                            <strong>TERMS:</strong> 50% deposit required upon acceptance to secure laser clinical room blocks.
+                          </div>
+                        </div>
+
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem', marginBottom: '20px' }}>
+                          <thead>
+                            <tr style={{ backgroundColor: '#f3f4f6', fontWeight: 700 }}>
+                              <th style={{ padding: '6px', textAlign: 'left' }}>Aesthetic Care Treatment Package</th>
+                              <th style={{ padding: '6px', textAlign: 'right' }}>Duration</th>
+                              <th style={{ padding: '6px', textAlign: 'right' }}>Total (Incl)</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr>
+                              <td style={{ padding: '6px', borderBottom: '1px solid #e5e7eb' }}><strong>Full-Body Laser & Micro-Needling Package (3x Sessions)</strong></td>
+                              <td style={{ padding: '6px', textAlign: 'right', borderBottom: '1px solid #e5e7eb' }}>180 mins</td>
+                              <td style={{ padding: '6px', textAlign: 'right', borderBottom: '1px solid #e5e7eb' }}>R 3,500.00</td>
+                            </tr>
+                            <tr>
+                              <td style={{ padding: '6px', borderBottom: '1px solid #e5e7eb' }}><strong>Active Hydration Reconditioning Atelier Treatment</strong></td>
+                              <td style={{ padding: '6px', textAlign: 'right', borderBottom: '1px solid #e5e7eb' }}>60 mins</td>
+                              <td style={{ padding: '6px', textAlign: 'right', borderBottom: '1px solid #e5e7eb' }}>R 850.00</td>
+                            </tr>
+                          </tbody>
+                        </table>
+
+                        <div style={{ display: 'flex', justify: 'flex-end', borderTop: '2px solid #6B2C91', paddingTop: '8px', fontSize: '1rem', fontWeight: 800, color: '#6B2C91' }}>
+                          <span>ESTIMATED TOTAL SUMMARY: R 4,350.00</span>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '30px', marginTop: '30px', borderTop: '1px solid #e5e7eb', paddingTop: '16px', fontSize: '0.7rem' }}>
+                          <div>
+                            <strong>ACCEPTED BY CLIENT:</strong>
+                            <br /><br />___________________________
+                            <br />Date: ____ / ____ / ________
+                          </div>
+                          <div>
+                            <strong>PREPARED BY CRM:</strong>
+                            <br /><br /><strong>Victoria Owner</strong>
+                            <br />Pretoria East Clinic Atelier
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {previewTemplate === 'slip' && (
+                      <div className="animate-fade-in" style={{ display: 'flex', justifyContent: 'center' }}>
+                        <div style={{
+                          width: '280px',
+                          border: '1px dashed #bbb',
+                          padding: '16px',
+                          backgroundColor: '#fffff8',
+                          boxShadow: '0 2px 5px rgba(0,0,0,0.05)',
+                          fontFamily: 'monospace',
+                          fontSize: '0.68rem',
+                          lineHeight: '1.3',
+                          color: '#222'
+                        }}>
+                          {/* Crescent Moon woman silhouette SVG logo */}
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '10px' }}>
+                            <svg viewBox="0 0 100 100" style={{ width: '40px', height: '40px', fill: '#6B2C91' }}>
+                              <path d="M50,10 C27.9,10 10,27.9 10,50 C10,72.1 27.9,90 50,90 C50,90 40,75 40,50 C40,25 50,10 50,10 Z M50,20 C60,40 60,60 50,80 C66.6,80 80,66.6 80,50 C80,33.4 66.6,20 50,20 Z" />
+                            </svg>
+                            <div style={{ fontSize: '0.85rem', fontWeight: 'bold', marginTop: '4px' }}>SCULPT & GLOW</div>
+                            <div style={{ fontSize: '0.55rem' }}>PRETORIA EAST</div>
+                          </div>
+
+                          <div>
+                            Date: {new Date().toISOString().split('T')[0]} {new Date().toLocaleTimeString()}
+                            <br />Settle ID: SETTLE-9031
+                            <br />Operator: Sarah Desk
+                          </div>
+                          <div style={{ borderBottom: '1px dashed #666', margin: '8px 0' }}></div>
+                          
+                          <div style={{ display: 'flex', justify: 'space-between' }}>
+                            <span>1x Full Laser Session</span>
+                            <span>R 850.00</span>
+                          </div>
+                          <div style={{ display: 'flex', justify: 'space-between' }}>
+                            <span>1x Velvet Cream Cream</span>
+                            <span>R 320.00</span>
+                          </div>
+
+                          <div style={{ borderBottom: '1px dashed #666', margin: '8px 0' }}></div>
+                          
+                          <div style={{ display: 'flex', justify: 'space-between', fontWeight: 'bold' }}>
+                            <span>SUBTOTAL:</span>
+                            <span>R 1,170.00</span>
+                          </div>
+                          <div style={{ display: 'flex', justify: 'space-between' }}>
+                            <span>VAT (15%):</span>
+                            <span>R 152.61</span>
+                          </div>
+                          <div style={{ display: 'flex', justify: 'space-between', fontWeight: 'bold', fontSize: '0.78rem' }}>
+                            <span>TOTAL PAID:</span>
+                            <span>R 1,170.00</span>
+                          </div>
+
+                          <div style={{ borderBottom: '1px dashed #666', margin: '8px 0' }}></div>
+                          
+                          <div>
+                            Payment Method: **CASH**
+                            <br />Cash Tendered: R 1,200.00
+                            <br />Change Returned: **R 30.00**
+                          </div>
+
+                          <div style={{ borderBottom: '1px dashed #666', margin: '8px 0' }}></div>
+                          
+                          <div style={{ textAlign: 'center', fontSize: '0.6rem' }}>
+                            VIP Glow Points Earned: **12 Points**
+                            <br />Total Glow Points Balance: **142 Points**
+                            <br /><br />Thank you for visiting Sculpt & Glow!
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                   </div>
                 </div>
+              </div>
+            )}
 
-                {/* Machines CRUD & Maintenance Hours config */}
-                <div>
-                  <h4 style={{ color: '#D4AF37', fontSize: '0.9rem', marginBottom: '10px' }}>Clinical Hardware & Service Parameters</h4>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '12px' }}>
-                    {machines.map(mach => (
-                      <div key={mach.id} style={{ padding: '10px', backgroundColor: 'hsl(var(--brand-black))', borderRadius: '8px', fontSize: '0.78rem' }}>
-                        <div style={{ display: 'flex', justify: 'space-between' }}>
-                          <strong>{mach.name}</strong>
-                          <button onClick={() => {
-                            const newHours = prompt(`Enter service interval hours for ${mach.name}:`, mach.serviceInterval || 50);
-                            if (newHours) {
-                              const updated = machines.map(m => m.id === mach.id ? { ...m, serviceInterval: Number(newHours) } : m);
-                              localStorage.setItem('salon_machines', JSON.stringify(updated));
-                              syncDatabase();
-                            }
-                          }} style={{ background: 'none', border: 'none', color: '#D4AF37', cursor: 'pointer', fontSize: '0.7rem' }}>
-                            Edit Service Limit ({mach.serviceInterval || 50}h)
-                          </button>
-                        </div>
-                        <div style={{ display: 'flex', justify: 'space-between', fontSize: '0.7rem', color: '#A89684', marginTop: '4px' }}>
-                          <span>Hours running: {mach.totalUsageHours}h | Times used: {appointments.filter(a => a.machineId === mach.id && a.status !== 'Cancelled').length}</span>
-                          <button onClick={() => {
-                            logMachineMaintenance(currentUserName(), mach.id, 'Reset usage hours after servicing');
-                            syncDatabase();
-                            alert('Machine flagged as Serviced! Usage hours reset.');
-                          }} style={{ border: 'none', backgroundColor: '#34d39933', color: '#34d399', padding: '2px 6px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.65rem' }}>
-                            Flag Serviced ✓
-                          </button>
-                        </div>
+            {/* TAB PANEL 3: CLINICAL ROOMS & EQUIPMENTS */}
+            {settingsSubTab === 'rooms' && (
+              <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                
+                {/* ROOM TO MACHINE MAPPER SECTION */}
+                <div className="card-premium">
+                  <h3 style={{ fontFamily: 'Outfit', color: '#D4AF37', margin: '0 0 8px 0' }}>Clinical Room-to-Hardware Configurations</h3>
+                  <p style={{ fontSize: '0.8rem', color: '#BFA6D8', margin: '0 0 20px 0' }}>Link clinical aesthetic hardware machines to treatment rooms. Multiple machines can be assigned to a single room.</p>
+
+                  <div style={{ display: 'flex', gap: '20px', alignItems: 'center', marginBottom: '16px' }}>
+                    <div style={{ width: '250px' }}>
+                      <label style={{ display: 'block', fontSize: '0.78rem', color: '#A89684', marginBottom: '6px' }}>Select Treatment Room:</label>
+                      <select
+                        className="brand-input"
+                        value={selectedRoomMap || (rooms[0] || '')}
+                        onChange={(e) => setSelectedRoomMap(e.target.value)}
+                      >
+                        {rooms.map(rm => (
+                          <option key={rm} value={rm}>{rm}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {selectedRoomMap && (
+                      <button
+                        onClick={() => {
+                          const checkedBoxes = document.querySelectorAll('.room-machine-checkbox:checked');
+                          const activeIds = Array.from(checkedBoxes).map(cb => cb.value);
+                          saveRoomMachineMapping(selectedRoomMap, activeIds);
+                          syncDatabase();
+                          alert(`Successfully mapped equipment for "${selectedRoomMap}"!`);
+                        }}
+                        className="btn-brand-gold"
+                        style={{ height: '36px', marginTop: '20px' }}
+                      >
+                        Save Room Equipment Mapping
+                      </button>
+                    )}
+                  </div>
+
+                  {selectedRoomMap ? (
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.78rem', color: '#A89684', marginBottom: '8px' }}>
+                        Check which Clinical Hardware machines are stationed inside **{selectedRoomMap}**:
+                      </label>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', backgroundColor: 'rgba(255,255,255,0.01)', padding: '12px', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '8px' }}>
+                        {machines.length === 0 ? (
+                          <span style={{ fontSize: '0.78rem', color: '#BFA6D8' }}>No clinical hardware equipment registered yet.</span>
+                        ) : (
+                          machines.map(mach => {
+                            const mappedIds = getMachinesForRoom(selectedRoomMap) || [];
+                            const isChecked = mappedIds.includes(mach.id);
+                            return (
+                              <label key={mach.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.78rem', color: 'white' }}>
+                                <input
+                                  type="checkbox"
+                                  className="room-machine-checkbox"
+                                  value={mach.id}
+                                  defaultChecked={isChecked}
+                                  key={`${selectedRoomMap}-${mach.id}-${isChecked}`}
+                                  style={{ accentColor: '#D4AF37' }}
+                                />
+                                <span>{mach.name} <em style={{ fontSize: '0.7rem', color: '#A89684' }}>({mach.serialNumber || 'SN'})</em></span>
+                              </label>
+                            );
+                          })
+                        )}
                       </div>
-                    ))}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: '0.78rem', color: '#BFA6D8' }}>Please add a clinic treatment room first in the panel below.</div>
+                  )}
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '24px' }}>
+                  {/* Clinic Rooms CRUD */}
+                  <div className="card-premium">
+                    <h3 style={{ fontFamily: 'Outfit', color: 'white', fontSize: '1rem', marginBottom: '10px' }}>Treatment Rooms</h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '12px' }}>
+                      {rooms.length === 0 ? (
+                        <span style={{ fontSize: '0.75rem', color: '#A89684' }}>No rooms added.</span>
+                      ) : (
+                        rooms.map(rm => (
+                          <div key={rm} style={{ display: 'flex', justify: 'space-between', padding: '8px 12px', backgroundColor: 'hsl(var(--brand-black))', borderRadius: '8px', fontSize: '0.78rem' }}>
+                            <span>{rm}</span>
+                            <button onClick={() => {
+                              const updated = rooms.filter(r => r !== rm);
+                              setRooms(updated);
+                              localStorage.setItem('salon_rooms', JSON.stringify(updated));
+                              if (selectedRoomMap === rm) setSelectedRoomMap(updated[0] || '');
+                            }} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}>✕</button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <input type="text" className="brand-input" id="newRoomInput" placeholder="Add room..." style={{ height: '32px', fontSize: '0.78rem' }} />
+                      <button onClick={() => {
+                        const inp = document.getElementById('newRoomInput');
+                        if (inp.value) {
+                          const updated = [...rooms, inp.value];
+                          setRooms(updated);
+                          localStorage.setItem('salon_rooms', JSON.stringify(updated));
+                          if (!selectedRoomMap) setSelectedRoomMap(inp.value);
+                          inp.value = '';
+                        }
+                      }} className="btn-brand-gold" style={{ padding: '6px 12px', fontSize: '0.75rem' }}>Add</button>
+                    </div>
+                  </div>
+
+                  {/* Clinical Hardware parameters list */}
+                  <div className="card-premium">
+                    <div style={{ display: 'flex', justify: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                      <h3 style={{ fontFamily: 'Outfit', color: 'white', fontSize: '1rem', margin: 0 }}>Clinical Hardware Service Parameters</h3>
+                      <button
+                        onClick={() => setShowAddMachineModal(true)}
+                        className="btn-brand-gold"
+                        style={{ padding: '4px 10px', fontSize: '0.72rem' }}
+                      >
+                        + Add New Machine
+                      </button>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '250px', overflowY: 'auto' }}>
+                      {machines.length === 0 ? (
+                        <div style={{ color: '#BFA6D8', fontSize: '0.78rem', textAlign: 'center', padding: '20px 0' }}>
+                          No clinical hardware registered.
+                        </div>
+                      ) : (
+                        machines.map(mach => (
+                          <div key={mach.id} style={{ padding: '10px', backgroundColor: 'hsl(var(--brand-black))', borderRadius: '8px', fontSize: '0.78rem' }}>
+                            <div style={{ display: 'flex', justify: 'space-between' }}>
+                              <strong>{mach.name}</strong>
+                              <button onClick={() => {
+                                const newHours = prompt(`Enter service interval hours for ${mach.name}:`, mach.serviceInterval || 50);
+                                if (newHours) {
+                                  const updated = machines.map(m => m.id === mach.id ? { ...m, serviceInterval: Number(newHours) } : m);
+                                  localStorage.setItem('salon_machines', JSON.stringify(updated));
+                                  syncDatabase();
+                                }
+                              }} style={{ background: 'none', border: 'none', color: '#D4AF37', cursor: 'pointer', fontSize: '0.7rem' }}>
+                                Edit Service Limit ({mach.serviceInterval || 50}h)
+                              </button>
+                            </div>
+                            <div style={{ display: 'flex', justify: 'space-between', fontSize: '0.7rem', color: '#A89684', marginTop: '4px' }}>
+                              <span>Hours running: {mach.totalUsageHours || 0}h | Times used: {appointments.filter(a => a.machineId === mach.id && a.status !== 'Cancelled').length}</span>
+                              <button onClick={() => {
+                                logMachineMaintenance(currentUserName(), mach.id, 'Reset usage hours after servicing');
+                                syncDatabase();
+                                alert('Machine flagged as Serviced! Usage hours reset.');
+                              }} style={{ border: 'none', backgroundColor: '#34d39933', color: '#34d399', padding: '2px 6px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.65rem' }}>
+                                Flag Serviced ✓
+                              </button>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
                   </div>
                 </div>
 
               </div>
+            )}
+
+          </div>
+        )}
+
+        {/* WORKSPACE O.3: BULK MARKETING CAMPAIGNS */}
+        {activeTab === 'campaigns' && (currentUserRole === 'owner' || currentUserRole === 'receptionist') && (
+          <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <h1 style={{ fontSize: '1.75rem', fontWeight: 800, margin: 0, fontFamily: 'Outfit' }}>Marketing & Bulk Campaigns</h1>
+            <p style={{ color: '#BFA6D8', margin: '4px 0 0 0', fontSize: '0.85rem' }}>Send targeted promotional broadcasts, discounts, or medical reminders to clients via WhatsApp or Email.</p>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: '24px', alignItems: 'start' }}>
+              
+              {/* CAMPAIGN CONFIGURATION CARD */}
+              <div className="card-premium" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <h3 style={{ fontFamily: 'Outfit', color: '#D4AF37', margin: 0, fontSize: '1.1rem' }}>Compose Campaign Blast</h3>
+                
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.78rem', color: '#A89684', marginBottom: '6px' }}>Select Broadcast Channel:</label>
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <button
+                      onClick={() => setCampaignChannel('whatsapp')}
+                      className="badge-brand"
+                      style={{
+                        flex: 1,
+                        backgroundColor: campaignChannel === 'whatsapp' ? '#128C7E' : 'rgba(255,255,255,0.05)',
+                        border: campaignChannel === 'whatsapp' ? '1px solid #34d399' : '1px solid rgba(255,255,255,0.1)',
+                        color: 'white', padding: '10px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
+                      }}
+                    >
+                      <MessageSquare style={{ width: '14px', height: '14px' }} /> WhatsApp Broadcast
+                    </button>
+                    <button
+                      onClick={() => setCampaignChannel('email')}
+                      className="badge-brand"
+                      style={{
+                        flex: 1,
+                        backgroundColor: campaignChannel === 'email' ? 'hsl(var(--brand-purple))' : 'rgba(255,255,255,0.05)',
+                        border: campaignChannel === 'email' ? '1px solid #D4AF37' : '1px solid rgba(255,255,255,0.1)',
+                        color: 'white', padding: '10px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
+                      }}
+                    >
+                      <Mail style={{ width: '14px', height: '14px' }} /> Email Newsletter
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.78rem', color: '#A89684', marginBottom: '6px' }}>Target Customer Segment:</label>
+                  <select
+                    className="brand-input"
+                    value={campaignTarget}
+                    onChange={(e) => setCampaignTarget(e.target.value)}
+                  >
+                    <option value="all">All Registered Customers ({clients.length} Recipients)</option>
+                    <option value="vip">VIP Loyalty Members ({clients.filter(c => c.glowPoints > 50).length} Recipients)</option>
+                    <option value="noshow">Recent No-Show Cases ({clients.filter(c => c.notes && c.notes.toLowerCase().includes('no-show')).length} Recipients)</option>
+                  </select>
+                </div>
+
+                {campaignChannel === 'email' && (
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.78rem', color: '#A89684', marginBottom: '6px' }}>Email Subject Line:</label>
+                    <input
+                      type="text"
+                      className="brand-input"
+                      value={campaignSubject}
+                      onChange={(e) => setCampaignSubject(e.target.value)}
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.78rem', color: '#A89684', marginBottom: '6px' }}>Message Body Content:</label>
+                  <p style={{ fontSize: '0.65rem', color: '#BFA6D8', marginTop: '-4px', marginBottom: '6px' }}>
+                    Tip: Use dynamic tags like <code>{`{{client_name}}`}</code> or <code>{`{{points}}`}</code> for personalized copy.
+                  </p>
+                  <textarea
+                    className="brand-input"
+                    rows={6}
+                    value={campaignMessage}
+                    onChange={(e) => setCampaignMessage(e.target.value)}
+                  />
+                </div>
+
+                {/* Simulated credit and cost estimation */}
+                <div style={{ backgroundColor: 'hsl(var(--brand-black))', padding: '12px', borderRadius: '8px', border: '1px solid rgba(107, 44, 145, 0.15)', fontSize: '0.75rem' }}>
+                  <strong style={{ color: '#D4AF37', display: 'block', marginBottom: '4px' }}>Cost Estimation Matrix</strong>
+                  <span>Channel Rate: <strong>{campaignChannel === 'whatsapp' ? 'R0.45 per WhatsApp' : 'R0.05 per Email'}</strong></span>
+                  <br /><span>Total Recipients: <strong>{
+                    campaignTarget === 'all' ? clients.length :
+                    campaignTarget === 'vip' ? clients.filter(c => c.glowPoints > 50).length :
+                    clients.filter(c => c.notes && c.notes.toLowerCase().includes('no-show')).length
+                  } clients</strong></span>
+                  <br /><span style={{ display: 'block', marginTop: '6px', fontSize: '0.8rem', color: '#34d399' }}>
+                    Total Estimated Cost: <strong>R {(
+                      (campaignChannel === 'whatsapp' ? 0.45 : 0.05) * 
+                      (campaignTarget === 'all' ? clients.length :
+                       campaignTarget === 'vip' ? clients.filter(c => c.glowPoints > 50).length :
+                       clients.filter(c => c.notes && c.notes.toLowerCase().includes('no-show')).length)
+                    ).toFixed(2)}</strong>
+                  </span>
+                </div>
+
+                <button
+                  onClick={() => {
+                    const recps = 
+                      campaignTarget === 'all' ? clients :
+                      campaignTarget === 'vip' ? clients.filter(c => c.glowPoints > 50) :
+                      clients.filter(c => c.notes && c.notes.toLowerCase().includes('no-show'));
+
+                    if (recps.length === 0) {
+                      return alert('No matching recipients in the selected segment.');
+                    }
+
+                    setSimulationActive(true);
+                    setSimulationProgress(0);
+                    setSimulationLog([`[Info] Initiating simulated ${campaignChannel.toUpperCase()} marketing campaign...`, `[Info] Resolving ${recps.length} recipient details...`]);
+
+                    let pct = 0;
+                    const interval = setInterval(() => {
+                      pct += 20;
+                      setSimulationProgress(pct);
+                      
+                      if (pct === 20) {
+                        setSimulationLog(prev => [...prev, `[Processing] Applying dynamic message body templates for segment...`]);
+                      } else if (pct === 40) {
+                        setSimulationLog(prev => [...prev, `[Connecting] Queueing messages in Elysium ${campaignChannel === 'whatsapp' ? 'SMS-WhatsApp gateway' : 'STMP bulk mailserver'}...`]);
+                      } else if (pct === 60) {
+                        setSimulationLog(prev => [...prev, `[Sending] Blasting packet 1 to ${Math.floor(recps.length/2)} clients: Successful.`]);
+                      } else if (pct === 80) {
+                        setSimulationLog(prev => [...prev, `[Sending] Blasting packet 2 to remaining clients: Successful.`]);
+                      } else if (pct === 100) {
+                        clearInterval(interval);
+                        setSimulationLog(prev => [...prev, `[Completed] Campaign blast finished successfully! 100% send rate, 0 delivery failures.`]);
+                        
+                        logAction(currentUserName(), 'Marketing Campaign Blast', `Sent bulk ${campaignChannel.toUpperCase()} campaign to ${recps.length} clients: "${campaignMessage.substr(0, 45)}..."`);
+                        syncDatabase();
+                      }
+                    }, 800);
+                  }}
+                  disabled={simulationActive && simulationProgress < 100}
+                  className="btn-brand-gold"
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', cursor: 'pointer' }}
+                >
+                  <Send style={{ width: '14px', height: '14px' }} /> 
+                  {simulationActive && simulationProgress < 100 ? 'Simulating Broadcast...' : `Run Simulated Campaign Blast`}
+                </button>
+              </div>
+
+              {/* SIMULATED LAUNCH LOGGER PANEL */}
+              <div className="card-premium" style={{ display: 'flex', flexDirection: 'column', gap: '16px', minHeight: '380px' }}>
+                <h3 style={{ fontFamily: 'Outfit', color: 'white', margin: 0, fontSize: '1.1rem' }}>Simulated Broadcast Ledger</h3>
+                
+                {simulationActive ? (
+                  <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '16px', flex: 1 }}>
+                    {/* Progress bar */}
+                    <div>
+                      <div style={{ display: 'flex', justify: 'space-between', fontSize: '0.78rem', color: '#BFA6D8', marginBottom: '6px' }}>
+                        <span>Broadcast Progress:</span>
+                        <strong>{simulationProgress}%</strong>
+                      </div>
+                      <div style={{ width: '100%', height: '8px', backgroundColor: 'hsl(var(--brand-black))', borderRadius: '4px', overflow: 'hidden' }}>
+                        <div style={{ width: `${simulationProgress}%`, height: '100%', backgroundColor: '#D4AF37', boxShadow: '0 0 8px #D4AF37', transition: 'width 0.3s ease-out' }}></div>
+                      </div>
+                    </div>
+
+                    {/* Simulation logs console */}
+                    <div style={{
+                      flex: 1, backgroundColor: 'hsl(var(--brand-black))', border: '1px solid rgba(107, 44, 145, 0.2)',
+                      padding: '12px', borderRadius: '8px', fontFamily: 'monospace', fontSize: '0.72rem', color: '#34d399',
+                      overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px', height: '220px'
+                    }}>
+                      {simulationLog.map((log, i) => (
+                        <div key={i}>{log}</div>
+                      ))}
+                    </div>
+                    
+                    {simulationProgress === 100 && (
+                      <button
+                        onClick={() => {
+                          setSimulationActive(false);
+                          setSimulationLog([]);
+                          setSimulationProgress(0);
+                        }}
+                        className="btn-brand-purple"
+                        style={{ alignSelf: 'flex-end', padding: '6px 12px', fontSize: '0.72rem' }}
+                      >
+                        Clear Ledger
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, color: '#A89684', gap: '12px' }}>
+                    <Smartphone style={{ width: '48px', height: '48px', opacity: 0.3 }} />
+                    <span style={{ fontSize: '0.78rem', textAlign: 'center', maxWidth: '280px', lineHeight: '1.4' }}>
+                      Ready to blast campaign. Choose your channel and message body on the left to initiate simulator ledger.
+                    </span>
+                  </div>
+                )}
+
+              </div>
+
+            </div>
+          </div>
+        )}
+
+        {/* WORKSPACE O.2: ACCESS & ROLE MANAGER */}
+        {activeTab === 'members' && currentUserRole === 'owner' && (
+          <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <h1 style={{ fontSize: '1.75rem', fontWeight: 800, margin: 0, fontFamily: 'Outfit' }}>User & Access Role Manager</h1>
+            <p style={{ color: '#BFA6D8', margin: '4px 0 0 0', fontSize: '0.85rem' }}>Administrate system member credentials, toggle account blocking, and define custom role access matrices.</p>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: '24px', alignItems: 'start' }}>
+              
+              {/* STAFF DIRECTORY TABLE */}
+              <div className="card-premium">
+                <h3 style={{ fontFamily: 'Outfit', color: '#D4AF37', margin: '0 0 16px 0', fontSize: '1.1rem' }}>Registered System Members</h3>
+                <div style={{ overflowX: 'auto' }}>
+                  <table className="table-premium">
+                    <thead>
+                      <tr>
+                        <th>Member Details</th>
+                        <th>Username</th>
+                        <th>Assigned Role</th>
+                        <th>Access Status</th>
+                        <th style={{ textAlign: 'right' }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {users.map(u => (
+                        <tr key={u.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                          <td>
+                            <strong>{u.name}</strong>
+                            <span style={{ display: 'block', fontSize: '0.7rem', color: '#A89684' }}>{u.email}</span>
+                          </td>
+                          <td><code>{u.username}</code></td>
+                          <td>
+                            <span className="badge-brand purple" style={{ textTransform: 'uppercase', fontSize: '0.62rem' }}>
+                              {u.role}
+                            </span>
+                          </td>
+                          <td>
+                            {u.blocked ? (
+                              <span className="badge-brand red" style={{ fontSize: '0.6rem' }}>ACCOUNT LOCKED</span>
+                            ) : (
+                              <span className="badge-brand green" style={{ fontSize: '0.6rem' }}>ACTIVE ACCESS</span>
+                            )}
+                          </td>
+                          <td style={{ textAlign: 'right' }}>
+                            <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                              <button
+                                onClick={() => {
+                                  const newPin = prompt(`Enter new security password/PIN for ${u.name}:`, u.pin);
+                                  if (newPin) {
+                                    resetUserPassword(currentUserName(), u.id, newPin);
+                                    syncDatabase();
+                                    alert(`Successfully reset PIN for ${u.name}!`);
+                                  }
+                                }}
+                                className="badge-brand gold"
+                                style={{ border: 'none', cursor: 'pointer', fontSize: '0.65rem', padding: '3px 8px' }}
+                              >
+                                Reset PIN
+                              </button>
+                              
+                              {u.username !== 'owner' && (
+                                <button
+                                  onClick={() => {
+                                    blockSystemUser(currentUserName(), u.id, !u.blocked);
+                                    syncDatabase();
+                                  }}
+                                  className={`badge-brand ${u.blocked ? 'green' : 'red'}`}
+                                  style={{ border: 'none', cursor: 'pointer', fontSize: '0.65rem', padding: '3px 8px' }}
+                                >
+                                  {u.blocked ? 'Unblock' : 'Block'}
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* SIDEBAR FORMS */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                
+                {/* ADD SYSTEM USER FORM */}
+                <div className="card-premium">
+                  <h3 style={{ fontFamily: 'Outfit', color: 'white', fontSize: '1rem', margin: '0 0 12px 0' }}>Add Access Member</h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.75rem', color: '#A89684', marginBottom: '4px' }}>Full Name:</label>
+                      <input
+                        type="text"
+                        className="brand-input"
+                        placeholder="e.g. Jessica Laser"
+                        value={newMemberForm.name}
+                        onChange={(e) => setNewMemberForm(prev => ({ ...prev, name: e.target.value }))}
+                      />
+                    </div>
+                    
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.75rem', color: '#A89684', marginBottom: '4px' }}>Username:</label>
+                        <input
+                          type="text"
+                          className="brand-input"
+                          placeholder="e.g. jessica"
+                          value={newMemberForm.username}
+                          onChange={(e) => setNewMemberForm(prev => ({ ...prev, username: e.target.value.toLowerCase().replace(/\s+/g, '') }))}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.75rem', color: '#A89684', marginBottom: '4px' }}>Security PIN:</label>
+                        <input
+                          type="text"
+                          className="brand-input"
+                          placeholder="e.g. 1234"
+                          value={newMemberForm.pin}
+                          onChange={(e) => setNewMemberForm(prev => ({ ...prev, pin: e.target.value }))}
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.75rem', color: '#A89684', marginBottom: '4px' }}>Email Address:</label>
+                      <input
+                        type="email"
+                        className="brand-input"
+                        placeholder="jessica@sculptglow.co.za"
+                        value={newMemberForm.email}
+                        onChange={(e) => setNewMemberForm(prev => ({ ...prev, email: e.target.value }))}
+                      />
+                    </div>
+
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.75rem', color: '#A89684', marginBottom: '4px' }}>Assign Permission Role:</label>
+                      <select
+                        className="brand-input"
+                        value={newMemberForm.role}
+                        onChange={(e) => setNewMemberForm(prev => ({ ...prev, role: e.target.value }))}
+                      >
+                        <option value="therapist">Therapist / Staff (Standard)</option>
+                        <option value="receptionist">Receptionist (Standard)</option>
+                        <option value="owner">Owner / Manager (Standard)</option>
+                        {/* Dynamic custom roles list */}
+                        {JSON.parse(localStorage.getItem('salon_customRoles') || '[]').map(cr => (
+                          <option key={cr.id} value={cr.name}>{cr.name} (Custom)</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        if (!newMemberForm.name || !newMemberForm.username || !newMemberForm.email) {
+                          return alert('Please fill in all employee access particulars.');
+                        }
+                        const res = registerSystemUser(currentUserName(), newMemberForm);
+                        if (res.success) {
+                          syncDatabase();
+                          setNewMemberForm({ name: '', username: '', email: '', pin: '1234', role: 'therapist' });
+                          alert('System member registered and granted access successfully!');
+                        } else {
+                          alert(`Registration error: ${res.error}`);
+                        }
+                      }}
+                      className="btn-brand-gold"
+                      style={{ marginTop: '8px', justifyContent: 'center' }}
+                    >
+                      Grant Portal Access
+                    </button>
+                  </div>
+                </div>
+
+                {/* CREATE DYNAMIC CUSTOM ROLE CARD */}
+                <div className="card-premium">
+                  <h3 style={{ fontFamily: 'Outfit', color: 'hsl(var(--brand-gold))', fontSize: '1rem', margin: '0 0 8px 0' }}>Create Custom Access Role</h3>
+                  <p style={{ fontSize: '0.72rem', color: '#BFA6D8', margin: '0 0 12px 0' }}>Enter a custom role name and check which functional CRM workspaces this role is authorized to view.</p>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.75rem', color: '#A89684', marginBottom: '4px' }}>Custom Role Name:</label>
+                      <input
+                        type="text"
+                        className="brand-input"
+                        placeholder="e.g. Trainee Therapist"
+                        value={customRoleName}
+                        onChange={(e) => setCustomRoleName(e.target.value)}
+                      />
+                    </div>
+
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.75rem', color: '#A89684', marginBottom: '6px' }}>Select Permissible Workspaces:</label>
+                      <div style={{
+                        maxHeight: '180px', overflowY: 'auto', backgroundColor: 'rgba(0,0,0,0.15)',
+                        padding: '10px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)',
+                        display: 'flex', flexDirection: 'column', gap: '6px'
+                      }}>
+                        {[
+                          { id: 'dashboard', label: 'Calendar Grid' },
+                          { id: 'waitlist', label: 'Roster Waitlist' },
+                          { id: 'rooms', label: 'Room & Machine Booking' },
+                          { id: 'crm', label: 'CRM Client Folders' },
+                          { id: 'loyalty', label: 'VIP & Glow Points' },
+                          { id: 'gallery', label: 'Before/After Progress' },
+                          { id: 'reviews', label: 'Google Business Reviews' },
+                          { id: 'campaigns', label: 'Bulk Campaigns' },
+                          { id: 'billing', label: 'Invoices Ledger' },
+                          { id: 'quotes', label: 'Quotes Generator' },
+                          { id: 'expenses', label: 'Operating Expenses' },
+                          { id: 'payments', label: 'Refunds & Payments Log' },
+                          { id: 'services', label: 'Services Config' },
+                          { id: 'products', label: 'Atelier Shop Sync' },
+                          { id: 'inventory', label: 'Consumables Stock' },
+                          { id: 'orders', label: 'Client Orders' },
+                          { id: 'staff', label: 'Staff Profile & HR Portal' },
+                          { id: 'therapist', label: 'Shift Roster Timeline' },
+                          { id: 'commissions', label: 'Commission Splits' },
+                        ].map(t => {
+                          const isChecked = customRoleAllowedTabs.includes(t.id);
+                          return (
+                            <label key={t.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.75rem', color: 'white', cursor: 'pointer' }}>
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setCustomRoleAllowedTabs(prev => [...prev, t.id]);
+                                  } else {
+                                    setCustomRoleAllowedTabs(prev => prev.filter(tab => tab !== t.id));
+                                  }
+                                }}
+                                style={{ accentColor: '#D4AF37' }}
+                              />
+                              <span>{t.label}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        if (!customRoleName) {
+                          return alert('Please enter a custom role name.');
+                        }
+                        if (customRoleAllowedTabs.length === 0) {
+                          return alert('Please select at least one permissible workspace.');
+                        }
+                        saveCustomRole(currentUserName(), customRoleName, customRoleAllowedTabs);
+                        syncDatabase();
+                        setCustomRoleName('');
+                        setCustomRoleAllowedTabs([]);
+                        alert(`Custom permission criteria for "${customRoleName}" saved! You can now assign this role to system users.`);
+                      }}
+                      className="btn-brand-gold"
+                      style={{ marginTop: '8px', justifyContent: 'center' }}
+                    >
+                      Save Custom Role Criteria
+                    </button>
+                  </div>
+                </div>
+
+              </div>
+
             </div>
           </div>
         )}
@@ -5241,47 +6211,146 @@ export default function BookingCRM() {
         {activeTab === 'audit' && currentUserRole === 'owner' && (
           <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             <h1 style={{ fontSize: '1.75rem', fontWeight: 800, margin: 0, fontFamily: 'Outfit' }}>Security Audit Trails</h1>
-            <p style={{ color: '#BFA6D8', margin: '4px 0 0 0', fontSize: '0.85rem' }}>Track all system updates, role switches, and stock levels alterations.</p>
+            <p style={{ color: '#BFA6D8', margin: '4px 0 0 0', fontSize: '0.85rem' }}>Track all system updates, role switches, password changes, and stock level alterations in a secure immutable ledger.</p>
 
-            <div className="card-premium">
-              <div style={{ position: 'relative', marginBottom: '16px' }}>
-                <Search style={{ position: 'absolute', top: '10px', left: '10px', width: '16px', height: '16px', color: '#A89684' }} />
-                <input
-                  type="text"
-                  placeholder="Search audit trail logs..."
-                  className="brand-input"
-                  style={{ paddingLeft: '34px' }}
-                  value={auditSearch}
-                  onChange={(e) => setAuditSearch(e.target.value)}
-                />
+            {/* MULTI-FILTER BAR */}
+            <div className="card-premium" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <strong style={{ color: '#D4AF37', fontSize: '0.85rem', fontFamily: 'Outfit' }}>Advanced Query & Multi-Filters</strong>
+              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr 1fr', gap: '12px' }}>
+                {/* Search */}
+                <div style={{ position: 'relative' }}>
+                  <Search style={{ position: 'absolute', top: '10px', left: '10px', width: '16px', height: '16px', color: '#A89684' }} />
+                  <input
+                    type="text"
+                    placeholder="Search keywords..."
+                    className="brand-input"
+                    style={{ paddingLeft: '34px', fontSize: '0.78rem' }}
+                    value={auditSearch}
+                    onChange={(e) => setAuditSearch(e.target.value)}
+                  />
+                </div>
+
+                {/* User Dropdown */}
+                <div>
+                  <select
+                    className="brand-input"
+                    style={{ fontSize: '0.78rem' }}
+                    value={auditFilterUser}
+                    onChange={(e) => setAuditFilterUser(e.target.value)}
+                  >
+                    <option value="all">All Users / Operators</option>
+                    {Array.from(new Set(auditLogs.map(l => l.username))).map(u => (
+                      <option key={u} value={u}>{u}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Action Dropdown */}
+                <div>
+                  <select
+                    className="brand-input"
+                    style={{ fontSize: '0.78rem' }}
+                    value={auditFilterAction}
+                    onChange={(e) => setAuditFilterAction(e.target.value)}
+                  >
+                    <option value="all">All Action Categories</option>
+                    {Array.from(new Set(auditLogs.map(l => l.action))).map(act => (
+                      <option key={act} value={act}>{act}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Date Picker */}
+                <div>
+                  <input
+                    type="date"
+                    className="brand-input"
+                    style={{ fontSize: '0.78rem' }}
+                    value={auditFilterDate}
+                    onChange={(e) => setAuditFilterDate(e.target.value)}
+                  />
+                </div>
               </div>
 
-              <table className="table-premium">
-                <thead>
-                  <tr>
-                    <th>User</th>
-                    <th>Action</th>
-                    <th>Details</th>
-                    <th>Previous Val</th>
-                    <th>New Val</th>
-                    <th>Time</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {auditLogs
-                    .filter(log => log.username.toLowerCase().includes(auditSearch.toLowerCase()) || log.action.toLowerCase().includes(auditSearch.toLowerCase()))
-                    .map(log => (
-                      <tr key={log.id}>
-                        <td><strong>{log.username}</strong></td>
-                        <td><span className="badge-brand purple" style={{ fontSize: '0.55rem' }}>{log.action}</span></td>
-                        <td style={{ fontSize: '0.78rem' }}>{log.details}</td>
-                        <td style={{ fontSize: '0.72rem', color: '#A89684' }}><code>{log.prevValue || '—'}</code></td>
-                        <td style={{ fontSize: '0.72rem', color: '#a7f3d0' }}><code>{log.newValue || '—'}</code></td>
-                        <td style={{ fontSize: '0.72rem', color: '#A89684' }}>{new Date(log.timestamp).toLocaleTimeString()}</td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
+              {/* Reset filter buttons */}
+              {(auditSearch || auditFilterUser !== 'all' || auditFilterAction !== 'all' || auditFilterDate) && (
+                <button
+                  onClick={() => {
+                    setAuditSearch('');
+                    setAuditFilterUser('all');
+                    setAuditFilterAction('all');
+                    setAuditFilterDate('');
+                  }}
+                  className="badge-brand purple"
+                  style={{ alignSelf: 'flex-end', border: 'none', padding: '4px 10px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.7rem' }}
+                >
+                  Clear Filters ✕
+                </button>
+              )}
+            </div>
+
+            {/* AUDIT LOGS TABLE */}
+            <div className="card-premium">
+              <div style={{ display: 'flex', justify: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                <span style={{ fontSize: '0.82rem', color: '#BFA6D8' }}>
+                  Showing {
+                    auditLogs.filter(log => {
+                      const matchesSearch = !auditSearch || 
+                        log.username.toLowerCase().includes(auditSearch.toLowerCase()) || 
+                        log.action.toLowerCase().includes(auditSearch.toLowerCase()) ||
+                        log.details.toLowerCase().includes(auditSearch.toLowerCase());
+                      const matchesUser = auditFilterUser === 'all' || log.username === auditFilterUser;
+                      const matchesAction = auditFilterAction === 'all' || log.action === auditFilterAction;
+                      const matchesDate = !auditFilterDate || log.timestamp.startsWith(auditFilterDate);
+                      return matchesSearch && matchesUser && matchesAction && matchesDate;
+                    }).length
+                  } log events
+                </span>
+              </div>
+
+              <div style={{ overflowX: 'auto' }}>
+                <table className="table-premium">
+                  <thead>
+                    <tr>
+                      <th>User / Operator</th>
+                      <th>Action Category</th>
+                      <th>Details</th>
+                      <th>Before Value</th>
+                      <th>After Value</th>
+                      <th>Timestamp</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {auditLogs
+                      .filter(log => {
+                        const matchesSearch = !auditSearch || 
+                          log.username.toLowerCase().includes(auditSearch.toLowerCase()) || 
+                          log.action.toLowerCase().includes(auditSearch.toLowerCase()) ||
+                          log.details.toLowerCase().includes(auditSearch.toLowerCase());
+                        const matchesUser = auditFilterUser === 'all' || log.username === auditFilterUser;
+                        const matchesAction = auditFilterAction === 'all' || log.action === auditFilterAction;
+                        const matchesDate = !auditFilterDate || log.timestamp.startsWith(auditFilterDate);
+                        return matchesSearch && matchesUser && matchesAction && matchesDate;
+                      })
+                      .map(log => (
+                        <tr key={log.id}>
+                          <td><strong>{log.username}</strong></td>
+                          <td>
+                            <span className="badge-brand purple" style={{ fontSize: '0.55rem', textTransform: 'uppercase' }}>
+                              {log.action}
+                            </span>
+                          </td>
+                          <td style={{ fontSize: '0.78rem', color: 'white' }}>{log.details}</td>
+                          <td style={{ fontSize: '0.72rem', color: '#A89684' }}><code>{log.prevValue || '—'}</code></td>
+                          <td style={{ fontSize: '0.72rem', color: '#a7f3d0' }}><code>{log.newValue || '—'}</code></td>
+                          <td style={{ fontSize: '0.72rem', color: '#A89684' }}>
+                            {log.timestamp.includes(' ') ? log.timestamp : new Date(log.timestamp).toISOString().split('T')[0] + ' ' + new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}
@@ -6054,7 +7123,7 @@ export default function BookingCRM() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Select Room:</label>
-                  <select className="brand-input" value={bookingForm.room} onChange={(e) => setBookingForm(prev => ({ ...prev, room: e.target.value }))}>
+                  <select className="brand-input" value={bookingForm.room} onChange={(e) => setBookingForm(prev => ({ ...prev, room: e.target.value, machineId: '' }))}>
                     {rooms.map(r => <option key={r} value={r}>{r}</option>)}
                   </select>
                 </div>
@@ -6067,6 +7136,30 @@ export default function BookingCRM() {
                   </select>
                 </div>
               </div>
+
+              {/* DYNAMIC ROOM-TO-MACHINES SELECTOR */}
+              {(() => {
+                const mappedMachineIds = getMachinesForRoom(bookingForm.room) || [];
+                const roomMachines = machines.filter(m => mappedMachineIds.includes(m.id));
+                if (roomMachines.length > 0) {
+                  return (
+                    <div style={{ marginTop: '8px' }}>
+                      <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Select Clinical Hardware inside Room:</label>
+                      <select
+                        className="brand-input"
+                        value={bookingForm.machineId}
+                        onChange={(e) => setBookingForm(prev => ({ ...prev, machineId: e.target.value }))}
+                      >
+                        <option value="">-- No Machine Required --</option>
+                        {roomMachines.map(m => (
+                          <option key={m.id} value={m.id}>{m.name} ({m.serialNumber || 'SN'})</option>
+                        ))}
+                      </select>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
 
               <div>
                 <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Date:</label>
@@ -7508,6 +8601,97 @@ export default function BookingCRM() {
                 <br />Bank: <strong>Elysium Private Bank</strong> | Account: <strong>1020491022</strong> | Branch Code: <strong>250655</strong>
                 <br /><em style={{ display: 'block', marginTop: '8px', textAlign: 'center' }}>Thank you for choosing Sculpt & Glow Clinical Atelier. We appreciate your valued business!</em>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* POPUP MODAL: ADD CLINICAL HARDWARE MACHINE */}
+      {showAddMachineModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 12500 }}>
+          <div className="card-premium animate-fade-in" style={{ width: '400px' }}>
+            <h3 style={{ fontFamily: 'Outfit', color: '#D4AF37', marginBottom: '16px' }}>Add Clinical Hardware Machine</h3>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '4px' }}>Machine Name:</label>
+                <input
+                  type="text"
+                  className="brand-input"
+                  placeholder="e.g. Endermologie Cellu M6"
+                  value={addMachineForm.name}
+                  onChange={(e) => setAddMachineForm(prev => ({ ...prev, name: e.target.value }))}
+                />
+              </div>
+              
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '4px' }}>Serial Number:</label>
+                <input
+                  type="text"
+                  className="brand-input"
+                  placeholder="e.g. SN-EL90123"
+                  value={addMachineForm.serialNumber}
+                  onChange={(e) => setAddMachineForm(prev => ({ ...prev, serialNumber: e.target.value }))}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '4px' }}>Hourly Cost (R):</label>
+                  <input
+                    type="number"
+                    className="brand-input"
+                    value={addMachineForm.hourlyRate}
+                    onChange={(e) => setAddMachineForm(prev => ({ ...prev, hourlyRate: Number(e.target.value) }))}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '4px' }}>Service Threshold (Hours):</label>
+                  <input
+                    type="number"
+                    className="brand-input"
+                    value={addMachineForm.serviceInterval}
+                    onChange={(e) => setAddMachineForm(prev => ({ ...prev, serviceInterval: Number(e.target.value) }))}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '4px' }}>Purchase Date:</label>
+                <input
+                  type="date"
+                  className="brand-input"
+                  value={addMachineForm.purchaseDate || new Date().toISOString().split('T')[0]}
+                  onChange={(e) => setAddMachineForm(prev => ({ ...prev, purchaseDate: e.target.value }))}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', marginTop: '16px' }}>
+                <button
+                  onClick={() => {
+                    if (!addMachineForm.name) {
+                      return alert('Please enter the clinical machine name.');
+                    }
+                    addMachine(currentUserName(), addMachineForm);
+                    syncDatabase();
+                    setShowAddMachineModal(false);
+                    setAddMachineForm({ name: '', serialNumber: '', purchaseDate: '', serviceInterval: 50, hourlyRate: 100 });
+                    alert('Successfully registered new clinical hardware device!');
+                  }}
+                  className="btn-brand-gold"
+                  style={{ flex: 1, justifyContent: 'center' }}
+                >
+                  Register Device
+                </button>
+                <button
+                  onClick={() => setShowAddMachineModal(false)}
+                  className="btn-brand-purple"
+                  style={{ width: '100px', justifyContent: 'center', border: '1px solid rgba(255,255,255,0.15)', background: 'none' }}
+                >
+                  Cancel
+                </button>
+              </div>
+
             </div>
           </div>
         </div>

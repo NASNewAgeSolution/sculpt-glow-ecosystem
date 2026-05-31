@@ -1690,3 +1690,134 @@ export const markNotificationAsRead = (recipientId, notifId) => {
   }
   return false;
 };
+
+// ========================================================
+//   PHASE 6: SYSTEM ADMINISTRATION DATABASE HELPERS
+// ========================================================
+
+export const saveRoomMachineMapping = (roomName, machineIds) => {
+  const mappings = getTable('roomMachines') || [];
+  const idx = mappings.findIndex(m => m.roomName === roomName);
+  if (idx !== -1) {
+    mappings[idx].machineIds = machineIds;
+  } else {
+    mappings.push({ roomName, machineIds });
+  }
+  saveTable('roomMachines', mappings);
+  logAction('System', 'Update Room Machines', `Updated machines list for room "${roomName}" to: ${machineIds.join(', ')}`);
+  return true;
+};
+
+export const getMachinesForRoom = (roomName) => {
+  const mappings = getTable('roomMachines') || [];
+  const match = mappings.find(m => m.roomName === roomName);
+  return match ? match.machineIds : [];
+};
+
+export const addMachine = (username, machData) => {
+  const machines = getTable('machines') || [];
+  const newMach = {
+    id: `mac-${Date.now()}`,
+    name: machData.name,
+    serialNumber: machData.serialNumber || `SN-${Math.floor(Math.random()*1000000)}`,
+    purchaseDate: machData.purchaseDate || new Date().toISOString().split('T')[0],
+    serviceInterval: Number(machData.serviceInterval || 50),
+    totalUsageHours: 0,
+    hourlyRate: Number(machData.hourlyRate || 100),
+    totalSessionsUsed: 0
+  };
+  machines.push(newMach);
+  saveTable('machines', machines);
+  logAction(username, 'Add New Equipment', `Registered clinical hardware device: ${newMach.name} (${newMach.serialNumber})`);
+  return newMach;
+};
+
+export const registerSystemUser = (username, userData) => {
+  const users = getTable('users') || [];
+  if (users.some(u => u.username === userData.username)) {
+    return { success: false, error: 'A staff member with this username already exists.' };
+  }
+  const newUser = {
+    id: `usr-${Date.now()}`,
+    name: userData.name,
+    username: userData.username,
+    email: userData.email,
+    role: userData.role,
+    pin: userData.pin || '1234',
+    blocked: false,
+    salary: Number(userData.salary || 10000),
+    bankName: userData.bankName || 'FNB Pretoria',
+    accountHolder: userData.name,
+    accountNumber: userData.accountNumber || `102938${Date.now().toString().substr(8)}`,
+    branchCode: userData.branchCode || '250655',
+    contracts: [],
+    commissionRate: userData.role === 'therapist' ? 10 : userData.role === 'receptionist' ? 5 : 0,
+    salesTarget: userData.role === 'receptionist' ? 10000 : 15000,
+    servicesTarget: userData.role === 'therapist' ? 15000 : 10000,
+    leaveBalance: 15,
+    monthlyLeaveAccrual: 1.25,
+    sickLeaveBalance: 10,
+    sickLeaveRenewCycle: '1 year',
+    familyLeaveBalance: 3,
+    claims: [],
+    loans: [],
+    bonuses: [],
+    payslips: [],
+    leaveRequests: []
+  };
+  users.push(newUser);
+  saveTable('users', users);
+  logAction(username, 'Create User Account', `Registered new member: ${newUser.name} with role "${newUser.role}"`);
+  return { success: true, user: newUser };
+};
+
+export const blockSystemUser = (username, userId, blockState) => {
+  const users = getTable('users') || [];
+  const idx = users.findIndex(u => u.id === userId);
+  if (idx === -1) return false;
+  
+  users[idx].blocked = blockState;
+  saveTable('users', users);
+  logAction(username, blockState ? 'Block User Account' : 'Unblock User Account', `${blockState ? 'BLOCKED' : 'UNBLOCKED'} access for ${users[idx].name}`);
+  return true;
+};
+
+export const resetUserPassword = (username, userId, newPin) => {
+  const users = getTable('users') || [];
+  const idx = users.findIndex(u => u.id === userId);
+  if (idx === -1) return false;
+  
+  users[idx].pin = newPin;
+  saveTable('users', users);
+  logAction(username, 'Reset User PIN', `Reset access PIN for ${users[idx].name}`);
+  return true;
+};
+
+export const saveCustomRole = (username, roleName, allowedTabs) => {
+  const roles = getTable('customRoles') || [];
+  const idx = roles.findIndex(r => r.name.toLowerCase() === roleName.toLowerCase());
+  if (idx !== -1) {
+    roles[idx].allowedTabs = allowedTabs;
+  } else {
+    roles.push({
+      id: `rol-${Date.now()}`,
+      name: roleName,
+      allowedTabs
+    });
+  }
+  saveTable('customRoles', roles);
+  logAction(username, 'Configure Custom Role', `Saved permission criteria for custom role: "${roleName}" (${allowedTabs.length} tabs allowed)`);
+  return true;
+};
+
+export const developerBypassResetClientEmail = (developerName, clientId, newEmail) => {
+  const clients = getTable('clients') || [];
+  const idx = clients.findIndex(c => c.id === clientId);
+  if (idx === -1) return false;
+  
+  const prevEmail = clients[idx].email;
+  clients[idx].email = newEmail;
+  saveTable('clients', clients);
+  logAction('System', 'SaaS Developer Bypass Action', `Bypassed standard client email check to overwrite ${clients[idx].name}'s email from "${prevEmail}" to "${newEmail}"`);
+  return true;
+};
