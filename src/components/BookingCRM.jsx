@@ -94,6 +94,7 @@ export default function BookingCRM() {
   const [showQuoteModal, setShowQuoteModal] = useState(false);
   const [showWaitlistModal, setShowWaitlistModal] = useState(false);
   const [showShiftModal, setShowShiftModal] = useState(false);
+  const [isSidebarMinimized, setIsSidebarMinimized] = useState(false);
 
   // New Modals for Rescheduling & Capturing Payments
   const [showRescheduleModal, setShowRescheduleModal] = useState(false);
@@ -437,48 +438,109 @@ export default function BookingCRM() {
 
       {/* STICKY COLLAPSIBLE DIRECTORY SIDEBAR */}
       <aside style={{
-        width: '320px',
-        minWidth: '320px',
+        width: isSidebarMinimized ? '74px' : '320px',
+        minWidth: isSidebarMinimized ? '74px' : '320px',
         backgroundColor: 'hsl(var(--brand-charcoal))',
         borderRight: '1px solid rgba(107, 44, 145, 0.2)',
-        padding: '24px 16px',
+        padding: isSidebarMinimized ? '24px 10px' : '24px 16px',
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'space-between',
         height: '100vh',
         position: 'sticky',
         top: 0,
-        overflowY: 'auto'
+        overflowY: isSidebarMinimized ? 'visible' : 'auto',
+        transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1), min-width 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        boxSizing: 'border-box'
       }}>
+        {/* Absolute-positioned Collapse/Expand Trigger Button */}
+        <button
+          onClick={() => setIsSidebarMinimized(!isSidebarMinimized)}
+          style={{
+            position: 'absolute',
+            top: '24px',
+            right: '-14px',
+            width: '28px',
+            height: '28px',
+            borderRadius: '50%',
+            backgroundColor: 'hsl(var(--brand-purple))',
+            border: '1px solid hsl(var(--brand-gold))',
+            color: 'white',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            boxShadow: '0 0 10px rgba(107, 44, 145, 0.5), 0 0 5px rgba(212, 175, 55, 0.3)',
+            zIndex: 100,
+            transition: 'transform 0.3s ease, background-color 0.2s ease',
+            outline: 'none'
+          }}
+          title={isSidebarMinimized ? 'Expand Sidebar' : 'Collapse Sidebar'}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = 'hsl(var(--brand-black))';
+            e.currentTarget.style.boxShadow = '0 0 15px rgba(212, 175, 55, 0.6)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = 'hsl(var(--brand-purple))';
+            e.currentTarget.style.boxShadow = '0 0 10px rgba(107, 44, 145, 0.5), 0 0 5px rgba(212, 175, 55, 0.3)';
+          }}
+        >
+          <ChevronRight style={{
+            width: '14px',
+            height: '14px',
+            color: 'hsl(var(--brand-gold))',
+            transform: isSidebarMinimized ? 'none' : 'rotate(180deg)',
+            transition: 'transform 0.3s ease'
+          }} />
+        </button>
+
         <div>
           {/* Brand Header */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px', paddingLeft: '4px' }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: isSidebarMinimized ? 'center' : 'flex-start',
+            gap: '12px',
+            marginBottom: '24px',
+            paddingLeft: isSidebarMinimized ? 0 : '4px',
+            transition: 'padding 0.3s ease'
+          }}>
             <div style={{
               width: '38px', height: '38px', borderRadius: '50%',
               backgroundImage: 'url(/logo.jpg)', backgroundSize: 'cover',
-              border: '1px solid hsl(var(--brand-gold))', boxShadow: '0 0 10px rgba(212,175,55,0.2)'
+              border: '1px solid hsl(var(--brand-gold))', boxShadow: '0 0 10px rgba(212,175,55,0.2)',
+              flexShrink: 0
             }} />
-            <div>
-              <h2 style={{ fontSize: '1.1rem', fontWeight: 800, color: 'white', fontFamily: 'Outfit', margin: 0, letterSpacing: '-0.02em' }}>SCULPT CRM</h2>
-              <span style={{ fontSize: '0.62rem', letterSpacing: '0.12em', color: '#D4AF37', fontWeight: 700, textTransform: 'uppercase' }}>Reception Grid Suite</span>
+            {!isSidebarMinimized && (
+              <div style={{ animation: 'fadeIn 0.2s ease-out forwards' }}>
+                <h2 style={{ fontSize: '1.1rem', fontWeight: 800, color: 'white', fontFamily: 'Outfit', margin: 0, letterSpacing: '-0.02em' }}>SCULPT CRM</h2>
+                <span style={{ fontSize: '0.62rem', letterSpacing: '0.12em', color: '#D4AF37', fontWeight: 700, textTransform: 'uppercase' }}>Reception Grid Suite</span>
+              </div>
+            )}
+          </div>
+
+          {/* Quick-Search Filter inside the sidebar menu (Hidden in minimized state) */}
+          {!isSidebarMinimized && (
+            <div style={{ position: 'relative', marginBottom: '20px', animation: 'fadeIn 0.2s ease-out forwards' }}>
+              <Search style={{ position: 'absolute', top: '9px', left: '10px', width: '14px', height: '14px', color: '#A89684' }} />
+              <input
+                type="text"
+                placeholder="Search CRM operations..."
+                className="brand-input"
+                style={{ paddingLeft: '32px', fontSize: '0.78rem', height: '32px' }}
+                value={sidebarSearch}
+                onChange={(e) => setSidebarSearch(e.target.value)}
+              />
             </div>
-          </div>
+          )}
 
-          {/* Quick-Search Filter inside the sidebar menu */}
-          <div style={{ position: 'relative', marginBottom: '20px' }}>
-            <Search style={{ position: 'absolute', top: '9px', left: '10px', width: '14px', height: '14px', color: '#A89684' }} />
-            <input
-              type="text"
-              placeholder="Search CRM operations..."
-              className="brand-input"
-              style={{ paddingLeft: '32px', fontSize: '0.78rem', height: '32px' }}
-              value={sidebarSearch}
-              onChange={(e) => setSidebarSearch(e.target.value)}
-            />
-          </div>
-
-          {/* Accordion folders layout */}
-          <nav style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {/* Accordion/Icon folders layout */}
+          <nav style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: isSidebarMinimized ? '14px' : '10px',
+            alignItems: isSidebarMinimized ? 'center' : 'stretch'
+          }}>
             {Object.keys(sidebarNavigation).map(folderKey => {
               const folder = sidebarNavigation[folderKey];
               const FolderIcon = folder.icon;
@@ -490,6 +552,68 @@ export default function BookingCRM() {
               });
 
               if (filteredItems.length === 0) return null;
+
+              const isFolderActive = filteredItems.some(item => item.id === activeTab);
+
+              // Minimized vertical folder button view
+              if (isSidebarMinimized) {
+                return (
+                  <button
+                    key={folderKey}
+                    onClick={() => {
+                      if (filteredItems.length > 0) {
+                        setActiveTab(filteredItems[0].id);
+                      }
+                    }}
+                    title={folder.label}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: '46px',
+                      height: '46px',
+                      borderRadius: '12px',
+                      backgroundColor: isFolderActive ? 'hsl(var(--brand-purple))' : 'transparent',
+                      border: isFolderActive ? '1px solid hsl(var(--brand-gold))' : '1px solid rgba(107, 44, 145, 0.1)',
+                      color: isFolderActive ? 'white' : '#A89684',
+                      cursor: 'pointer',
+                      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                      position: 'relative',
+                      boxShadow: isFolderActive ? '0 0 10px rgba(107, 44, 145, 0.5)' : 'none',
+                      outline: 'none'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isFolderActive) {
+                        e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+                        e.currentTarget.style.color = 'white';
+                        e.currentTarget.style.borderColor = 'rgba(107, 44, 145, 0.3)';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isFolderActive) {
+                        e.currentTarget.style.backgroundColor = 'transparent';
+                        e.currentTarget.style.color = '#A89684';
+                        e.currentTarget.style.borderColor = 'rgba(107, 44, 145, 0.1)';
+                      }
+                    }}
+                  >
+                    <FolderIcon style={{ width: '18px', height: '18px', color: isFolderActive ? 'hsl(var(--brand-gold))' : '#D4AF37' }} />
+                    
+                    {/* Active dot indicator */}
+                    {isFolderActive && (
+                      <span style={{
+                        position: 'absolute',
+                        bottom: '5px',
+                        width: '4px',
+                        height: '4px',
+                        borderRadius: '50%',
+                        backgroundColor: 'hsl(var(--brand-gold))',
+                        boxShadow: '0 0 4px hsl(var(--brand-gold))'
+                      }} />
+                    )}
+                  </button>
+                );
+              }
 
               const isExpanded = expandedFolders[folderKey] || sidebarSearch.length > 0;
 
@@ -546,20 +670,46 @@ export default function BookingCRM() {
         </div>
 
         {/* User Card info inside sidebar */}
-        <div style={{ borderTop: '1px solid rgba(107, 44, 145, 0.2)', paddingTop: '16px' }}>
-          <div style={{
-            backgroundColor: 'hsl(var(--brand-black))', padding: '12px',
-            borderRadius: '12px', border: '1px solid rgba(107, 44, 145, 0.2)', fontSize: '0.78rem'
-          }}>
-            <span style={{ color: '#A89684', display: 'block', marginBottom: '2px', fontSize: '0.7rem' }}>Reception Session:</span>
-            <strong style={{ display: 'block', color: 'white', fontSize: '0.82rem' }}>{currentUserName()}</strong>
-            <span style={{
-              fontSize: '0.65rem', color: getRoleBadgeColor(currentUserRole),
-              fontWeight: 700, textTransform: 'uppercase', tracking: '0.05em'
+        <div style={{ borderTop: '1px solid rgba(107, 44, 145, 0.2)', paddingTop: '16px', display: 'flex', justifyContent: 'center' }}>
+          {isSidebarMinimized ? (
+            <div
+              title={`Active User: ${currentUserName()} (${currentUserRole.toUpperCase()})`}
+              style={{
+                width: '42px',
+                height: '42px',
+                borderRadius: '50%',
+                backgroundColor: 'hsl(var(--brand-purple))',
+                border: `1px solid ${getRoleBadgeColor(currentUserRole) || 'hsl(var(--brand-gold))'}`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'white',
+                fontWeight: 700,
+                fontSize: '0.82rem',
+                cursor: 'default',
+                boxShadow: '0 0 8px rgba(107, 44, 145, 0.3)',
+                transition: 'all 0.3s ease'
+              }}
+            >
+              {currentUserName().split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2)}
+            </div>
+          ) : (
+            <div style={{
+              width: '100%',
+              backgroundColor: 'hsl(var(--brand-black))', padding: '12px',
+              borderRadius: '12px', border: '1px solid rgba(107, 44, 145, 0.2)', fontSize: '0.78rem',
+              animation: 'fadeIn 0.2s ease-out forwards'
             }}>
-              Role: {currentUserRole}
-            </span>
-          </div>
+              <span style={{ color: '#A89684', display: 'block', marginBottom: '2px', fontSize: '0.7rem' }}>Reception Session:</span>
+              <strong style={{ display: 'block', color: 'white', fontSize: '0.82rem' }}>{currentUserName()}</strong>
+              <span style={{
+                fontSize: '0.65rem', color: getRoleBadgeColor(currentUserRole),
+                fontWeight: 700, textTransform: 'uppercase', tracking: '0.05em'
+              }}>
+                Role: {currentUserRole}
+              </span>
+            </div>
+          )}
         </div>
       </aside>
 
