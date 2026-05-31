@@ -287,9 +287,9 @@ export default function BookingCRM() {
   // Restrict access depending on simulated role boundaries
   useEffect(() => {
     const safeTabsByRole = {
-      owner: ['dashboard', 'waitlist', 'rooms', 'crm', 'loyalty', 'gallery', 'billing', 'quotes', 'expenses', 'payments', 'services', 'products', 'inventory', 'therapist', 'commissions', 'settings', 'audit'],
-      receptionist: ['dashboard', 'waitlist', 'rooms', 'crm', 'loyalty', 'gallery', 'billing', 'quotes', 'payments', 'services', 'products', 'inventory', 'therapist', 'commissions'],
-      therapist: ['dashboard', 'crm', 'gallery', 'therapist', 'commissions']
+      owner: ['dashboard', 'waitlist', 'rooms', 'crm', 'loyalty', 'gallery', 'reviews', 'billing', 'quotes', 'expenses', 'payments', 'services', 'products', 'inventory', 'therapist', 'commissions', 'settings', 'audit'],
+      receptionist: ['dashboard', 'waitlist', 'rooms', 'crm', 'loyalty', 'gallery', 'reviews', 'billing', 'quotes', 'payments', 'services', 'products', 'inventory', 'therapist', 'commissions'],
+      therapist: ['dashboard', 'crm', 'gallery', 'reviews', 'therapist', 'commissions']
     };
 
     const allowed = safeTabsByRole[currentUserRole] || [];
