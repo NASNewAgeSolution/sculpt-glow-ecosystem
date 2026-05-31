@@ -209,6 +209,10 @@ export default function BookingCRM() {
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [activeViewInvoice, setActiveViewInvoice] = useState(null);
   
+  const [showPayslipModal, setShowPayslipModal] = useState(false);
+  const [activeViewPayslip, setActiveViewPayslip] = useState(null);
+  const [activeViewPayslipStaff, setActiveViewPayslipStaff] = useState(null);
+  
   const [showQuoteViewModal, setShowQuoteViewModal] = useState(false);
   const [activeViewQuote, setActiveViewQuote] = useState(null);
   
@@ -4892,30 +4896,14 @@ export default function BookingCRM() {
                                     <td style={{ textAlign: 'right' }}>
                                       <button
                                         onClick={() => {
-                                          alert(`
-========================================
-       SCULPT & GLOW PAYSLIP RECEIPT
-========================================
-Employee: ${displayStaff.name}
-Billing Month: ${p.month}
-Generated At: ${p.generatedAt}
-Emailed At: ${p.emailedAt}
-
-- Basic Salary: R ${p.baseSalary.toFixed(2)}
-- Commissions: R ${p.commissionEarned.toFixed(2)}
-- Reimbursements: R ${(p.claimsApproved + p.bonusApproved).toFixed(2)}
-- Loan Repayment: - R ${p.loanDeduction.toFixed(2)}
-----------------------------------------
-NET PAYOUT PAID: R ${p.finalSalary.toFixed(2)}
-========================================
-Banking details paid to: ${displayStaff.bankName} Account: ${displayStaff.accountNumber}
-Transferred successfully.
-`);
+                                          setActiveViewPayslip(p);
+                                          setActiveViewPayslipStaff(displayStaff);
+                                          setShowPayslipModal(true);
                                         }}
                                         className="badge-brand purple"
-                                        style={{ border: 'none', cursor: 'pointer', fontSize: '0.68rem', padding: '4px 10px' }}
+                                        style={{ border: 'none', cursor: 'pointer', fontSize: '0.68rem', padding: '4px 10px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
                                       >
-                                        View Payslip
+                                        <Printer style={{ width: '10px', height: '10px' }} /> View & Print
                                       </button>
                                     </td>
                                   </tr>
@@ -7352,6 +7340,165 @@ Transferred successfully.
                 <br />Payment is due upon receipt of invoice. Please use the invoice number <strong>{activeViewInvoice.invoiceNumber}</strong> as reference.
                 <br />Bank: <strong>Elysium Private Bank</strong> | Account: <strong>1020491022</strong> | Branch Code: <strong>250655</strong>
                 <br /><em style={{ display: 'block', marginTop: '8px', textAlign: 'center' }}>Thank you for choosing Sculpt & Glow Clinical Atelier. We appreciate your valued business!</em>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PROFESSIONAL A4 CORPORATE PAYSLIP MODAL */}
+      {showPayslipModal && activeViewPayslip && activeViewPayslipStaff && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 12000, padding: '20px' }} className="no-print">
+          <div style={{ backgroundColor: 'white', color: '#1a1a1a', width: '100%', maxWidth: '800px', maxHeight: '95vh', overflowY: 'auto', borderRadius: '12px', boxShadow: 'var(--shadow-premium)', display: 'flex', flexDirection: 'column' }}>
+            {/* Header Toolbar */}
+            <div style={{ backgroundColor: 'hsl(var(--brand-charcoal))', padding: '12px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTopLeftRadius: '12px', borderTopRightRadius: '12px' }} className="no-print">
+              <span style={{ color: 'white', fontWeight: 600, fontSize: '0.9rem' }}>Corporate Payslip Viewer</span>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  onClick={() => {
+                    logAction(currentUserName(), 'Print Payslip', `Printed/Downloaded PDF payslip for ${activeViewPayslipStaff.name} (${activeViewPayslip.month})`);
+                    window.print();
+                  }}
+                  className="btn-brand-gold"
+                  style={{ padding: '6px 12px', fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+                >
+                  <Printer style={{ width: '12px', height: '12px' }} /> Print & Save PDF
+                </button>
+                <button
+                  onClick={() => {
+                    alert(`Payslip for ${activeViewPayslip.month} successfully emailed to ${activeViewPayslipStaff.email}!`);
+                    logAction(currentUserName(), 'Email Payslip', `Emailed payslip to ${activeViewPayslipStaff.name} (${activeViewPayslip.month})`);
+                  }}
+                  className="btn-brand-purple"
+                  style={{ padding: '6px 12px', fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+                >
+                  <Mail style={{ width: '12px', height: '12px' }} /> Share Email
+                </button>
+                <button
+                  onClick={() => {
+                    setShowPayslipModal(false);
+                    setActiveViewPayslip(null);
+                    setActiveViewPayslipStaff(null);
+                  }}
+                  style={{ border: 'none', background: 'none', color: '#ef4444', fontSize: '1.25rem', cursor: 'pointer', marginLeft: '12px' }}
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* A4 Sheet Canvas */}
+            <div className="printable-area" style={{ padding: '40px', fontFamily: 'Inter, system-ui, sans-serif', backgroundColor: 'white', flex: 1 }}>
+              {/* Payslip Header & Logo */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '3px solid #6B2C91', paddingBottom: '20px', marginBottom: '24px' }}>
+                <div>
+                  <h1 style={{ color: '#6B2C91', margin: 0, fontSize: '2rem', fontFamily: 'Outfit', fontWeight: 800 }}>SCULPT & GLOW</h1>
+                  <span style={{ color: '#D4AF37', fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Clinical Aesthetic Atelier</span>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <h2 style={{ color: '#1a1a1a', margin: 0, fontSize: '1.8rem', fontWeight: 700 }}>PAY SLIP</h2>
+                  <span style={{ color: '#666', fontSize: '0.85rem' }}>Billing Cycle: <strong>{activeViewPayslip.month}</strong></span>
+                  <br /><span style={{ color: '#666', fontSize: '0.85rem' }}>Payslip ID: <strong>{activeViewPayslip.id}</strong></span>
+                </div>
+              </div>
+
+              {/* Company & Employee Details */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '40px', marginBottom: '32px', fontSize: '0.85rem', lineHeight: '1.5' }}>
+                <div>
+                  <strong style={{ color: '#6B2C91', textTransform: 'uppercase', fontSize: '0.78rem', display: 'block', marginBottom: '8px', borderBottom: '1px solid #e5e7eb', paddingBottom: '4px' }}>EMPLOYER:</strong>
+                  <strong>Sculpt & Glow Clinic Ltd</strong>
+                  <br />Suite 4, West End Medical Center
+                  <br />Atelier Row, Pretoria East
+                  <br />Tel: +27 (0) 12 555 0192
+                  <br />VAT Reg No: 4890201192
+                </div>
+                <div>
+                  <strong style={{ color: '#6B2C91', textTransform: 'uppercase', fontSize: '0.78rem', display: 'block', marginBottom: '8px', borderBottom: '1px solid #e5e7eb', paddingBottom: '4px' }}>EMPLOYEE:</strong>
+                  <strong>{activeViewPayslipStaff.name}</strong>
+                  <br />Designation / Role: <span style={{ textTransform: 'capitalize' }}>{activeViewPayslipStaff.role}</span>
+                  <br />Email: {activeViewPayslipStaff.email}
+                  <br />Staff ID: {activeViewPayslipStaff.id}
+                  <br />Generation Date: {activeViewPayslip.generatedAt}
+                </div>
+              </div>
+
+              {/* Earnings & Deductions Table */}
+              <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '32px', fontSize: '0.85rem' }}>
+                <thead>
+                  <tr style={{ backgroundColor: '#f3f4f6', color: '#1a1a1a', textAlign: 'left', fontWeight: 700 }}>
+                    <th style={{ padding: '10px 12px', borderBottom: '2px solid #e5e7eb' }}>Description</th>
+                    <th style={{ padding: '10px 12px', borderBottom: '2px solid #e5e7eb', textAlign: 'right' }}>Type</th>
+                    <th style={{ padding: '10px 12px', borderBottom: '2px solid #e5e7eb', textAlign: 'right' }}>Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {/* Earnings */}
+                  <tr style={{ borderBottom: '1px solid #e5e7eb', color: '#1a1a1a' }}>
+                    <td style={{ padding: '10px 12px' }}><strong>Basic Monthly Salary</strong></td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', color: '#34d399' }}>Basic Pay</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600 }}>R {activeViewPayslip.baseSalary.toFixed(2)}</td>
+                  </tr>
+                  <tr style={{ borderBottom: '1px solid #e5e7eb', color: '#1a1a1a' }}>
+                    <td style={{ padding: '10px 12px' }}><strong>Treatment & Sales Commissions</strong></td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', color: '#34d399' }}>Variable Pay</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600 }}>R {activeViewPayslip.commissionEarned.toFixed(2)}</td>
+                  </tr>
+                  {(activeViewPayslip.claimsApproved > 0 || activeViewPayslip.bonusApproved > 0) && (
+                    <tr style={{ borderBottom: '1px solid #e5e7eb', color: '#1a1a1a' }}>
+                      <td style={{ padding: '10px 12px' }}><strong>Reimbursements & Performance Bonuses</strong></td>
+                      <td style={{ padding: '10px 12px', textAlign: 'right', color: '#34d399' }}>Adjustments</td>
+                      <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600 }}>R {(activeViewPayslip.claimsApproved + activeViewPayslip.bonusApproved).toFixed(2)}</td>
+                    </tr>
+                  )}
+                  {/* Deductions */}
+                  {activeViewPayslip.loanDeduction > 0 && (
+                    <tr style={{ borderBottom: '1px solid #e5e7eb', color: '#1a1a1a' }}>
+                      <td style={{ padding: '10px 12px' }}><strong>Active Emergency Cash Loan Deduction</strong></td>
+                      <td style={{ padding: '10px 12px', textAlign: 'right', color: '#ef4444' }}>Deduction</td>
+                      <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, color: '#ef4444' }}>- R {activeViewPayslip.loanDeduction.toFixed(2)}</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+
+              {/* Total Payout Section */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
+                <div style={{ width: '100%', maxWidth: '350px', fontSize: '0.85rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#4b5563', marginBottom: '8px' }}>
+                    <span>Gross Earnings:</span>
+                    <span>R {(activeViewPayslip.baseSalary + activeViewPayslip.commissionEarned + activeViewPayslip.claimsApproved + activeViewPayslip.bonusApproved).toFixed(2)}</span>
+                  </div>
+                  {activeViewPayslip.loanDeduction > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#4b5563', marginBottom: '8px' }}>
+                      <span>Total Deductions:</span>
+                      <span style={{ color: '#ef4444' }}>- R {activeViewPayslip.loanDeduction.toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '3px double #6B2C91', paddingTop: '10px', marginTop: '10px', fontSize: '1.2rem', fontWeight: 800, color: '#6B2C91' }}>
+                    <span>NET SALARY PAID:</span>
+                    <span>R {activeViewPayslip.finalSalary.toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Payment Particulars / Banking details */}
+              <div style={{ marginTop: '48px', borderTop: '1px solid #e5e7eb', paddingTop: '16px', fontSize: '0.78rem', color: '#6b7280', lineHeight: '1.5' }}>
+                <strong>BANK DISBURSEMENT DETAILS</strong>
+                <br />This payout has been securely processed and transferred electronically to:
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginTop: '8px', backgroundColor: '#f9fafb', padding: '12px', borderRadius: '6px', color: '#1a1a1a', border: '1px solid #e5e7eb' }}>
+                  <div>
+                    <span>Account Holder: <strong>{activeViewPayslipStaff.name}</strong></span>
+                    <br /><span>Bank Name: <strong>{activeViewPayslipStaff.bankName || 'FNB Pretoria'}</strong></span>
+                  </div>
+                  <div>
+                    <span>Account Number: <strong>{activeViewPayslipStaff.accountNumber}</strong></span>
+                    <br /><span>Branch Code: <strong>{activeViewPayslipStaff.branchCode || '250655'}</strong></span>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '24px', fontStyle: 'italic', fontSize: '0.72rem', color: '#9ca3af' }}>
+                  <span>E-signature Security Token: ESG-PAY-{activeViewPayslip.id.split('-')[1] || 'SECURE'}</span>
+                  <span>Sculpt & Glow Operations Ledger © 2026</span>
+                </div>
               </div>
             </div>
           </div>

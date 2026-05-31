@@ -15,3 +15,34 @@ body {
   font-family: 'Inter', sans-serif;
   -webkit-font-smoothing: antialiased;
 }
+
+/* Premium printing system for A4 modals */
+@media print {
+  /* Hide every single element on the page */
+  body * {
+    visibility: hidden;
+  }
+  /* Show only the printable container and its children */
+  .printable-area, .printable-area * {
+    visibility: visible;
+  }
+  /* Format the printable container to occupy full A4 page width without margins or frames */
+  .printable-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    background: white !important;
+    color: #1a1a1a !important;
+    box-shadow: none !important;
+    border: none !important;
+    padding: 20px !important;
+    margin: 0 !important;
+  }
+  /* Hide the toolbar, buttons, and other interactive elements from print output */
+  .no-print {
+    display: none !important;
+  }
+}
