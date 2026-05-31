@@ -459,7 +459,7 @@ export default function BookingCRM() {
           style={{
             position: 'absolute',
             top: '24px',
-            right: '-14px',
+            right: '-6px',
             width: '28px',
             height: '28px',
             borderRadius: '50%',
