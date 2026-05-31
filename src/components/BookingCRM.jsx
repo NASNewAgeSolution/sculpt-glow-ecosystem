@@ -63,7 +63,9 @@ import {
   registerSystemUser,
   blockSystemUser,
   resetUserPassword,
-  saveCustomRole
+  saveCustomRole,
+  addStaffDeduction,
+  removeStaffDeduction
 } from '../db/stateEngine';
 
 export default function BookingCRM() {
@@ -242,6 +244,7 @@ export default function BookingCRM() {
   const [newMemberForm, setNewMemberForm] = useState({ name: '', username: '', email: '', pin: '1234', role: 'therapist' });
   const [customRoleName, setCustomRoleName] = useState('');
   const [customRoleAllowedTabs, setCustomRoleAllowedTabs] = useState([]);
+  const [deductionForm, setDeductionForm] = useState({ name: 'UIF', amount: 150 });
   
   // Bulk Campaigns marketing states
   const [campaignChannel, setCampaignChannel] = useState('whatsapp'); // whatsapp, email
@@ -4069,7 +4072,7 @@ export default function BookingCRM() {
           if (!currentStaff) return <div style={{ color: 'white' }}>Loading staff profiles...</div>;
 
           const isOwner = currentUserRole === 'owner';
-          const activeUserObj = users.find(u => u.username === (currentUserRole === 'receptionist' ? 'reception' : currentUserRole === 'therapist' ? 'therapist' : 'owner')) || currentStaff;
+          const activeUserObj = users.find(u => u.username === (currentUserRole === 'receptionist' ? 'receptionist' : currentUserRole === 'therapist' ? 'therapist' : 'owner')) || currentStaff;
           const displayStaff = isOwner ? currentStaff : activeUserObj;
 
           // Calculate Target Progress
@@ -4090,7 +4093,10 @@ export default function BookingCRM() {
           const activeLoans = (displayStaff.loans || []).filter(l => l.status === 'approved' && l.repaymentMonthsLeft > 0);
           const loansAmt = activeLoans.reduce((acc, l) => acc + l.monthlyRepayment, 0);
 
-          const netSalary = Number((displayStaff.salary + comm.total + claimsAmt + bonusesAmt - loansAmt).toFixed(2));
+          const customDeductions = displayStaff.deductions || [];
+          const customDeductionsAmt = customDeductions.reduce((acc, d) => acc + Number(d.amount), 0);
+
+          const netSalary = Number((displayStaff.salary + comm.total + claimsAmt + bonusesAmt - loansAmt - customDeductionsAmt).toFixed(2));
 
           return (
             <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -4353,6 +4359,76 @@ export default function BookingCRM() {
                               style={{ height: '36px' }}
                             >
                               Award Adjustment
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* ACCESSORY PAYROLL DEDUCTIONS (UIF, TAX, etc.) - Owner Only */}
+                      {isOwner && (
+                        <div style={{ borderTop: '1px solid rgba(107,44,145,0.15)', paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '16px' }}>
+                          <h3 style={{ fontFamily: 'Outfit', fontSize: '1rem', color: '#D4AF37', margin: 0 }}>Salary Deductions (UIF, TAX, PAYE)</h3>
+                          
+                          {/* Active Deductions List */}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            {(!displayStaff.deductions || displayStaff.deductions.length === 0) ? (
+                              <span style={{ fontSize: '0.72rem', color: '#A89684' }}>No deductions configured for this employee.</span>
+                            ) : (
+                              displayStaff.deductions.map(ded => (
+                                <div key={ded.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.02)', padding: '6px 12px', borderRadius: '6px', fontSize: '0.78rem' }}>
+                                  <span>{ded.name}</span>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <strong style={{ color: '#ef4444' }}>- R {ded.amount.toFixed(2)}</strong>
+                                    <button
+                                      onClick={() => {
+                                        removeStaffDeduction(currentUserName(), displayStaff.id, ded.id);
+                                        syncDatabase();
+                                      }}
+                                      style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '0.78rem' }}
+                                    >
+                                      ✕
+                                    </button>
+                                  </div>
+                                </div>
+                              ))
+                            )}
+                          </div>
+
+                          {/* Add New Deduction Form */}
+                          <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', marginTop: '6px' }}>
+                            <div style={{ flex: 1 }}>
+                              <label style={{ display: 'block', fontSize: '0.72rem', color: '#A89684', marginBottom: '4px' }}>Deduction Name:</label>
+                              <input
+                                type="text"
+                                className="brand-input"
+                                placeholder="e.g. UIF or PAYE Tax"
+                                value={deductionForm.name}
+                                onChange={(e) => setDeductionForm(prev => ({ ...prev, name: e.target.value }))}
+                              />
+                            </div>
+                            <div style={{ width: '120px' }}>
+                              <label style={{ display: 'block', fontSize: '0.72rem', color: '#A89684', marginBottom: '4px' }}>Amount (R):</label>
+                              <input
+                                type="number"
+                                className="brand-input"
+                                placeholder="e.g. 150"
+                                value={deductionForm.amount}
+                                onChange={(e) => setDeductionForm(prev => ({ ...prev, amount: e.target.value }))}
+                              />
+                            </div>
+                            <button
+                              onClick={() => {
+                                if (!deductionForm.name || !deductionForm.amount) {
+                                  return alert('Please enter both deduction name and amount.');
+                                }
+                                addStaffDeduction(currentUserName(), displayStaff.id, deductionForm);
+                                setDeductionForm({ name: 'UIF', amount: 150 });
+                                syncDatabase();
+                              }}
+                              className="btn-brand-gold"
+                              style={{ height: '36px' }}
+                            >
+                              Add Deduction
                             </button>
                           </div>
                         </div>
@@ -8809,6 +8885,13 @@ export default function BookingCRM() {
                       <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, color: '#ef4444' }}>- R {activeViewPayslip.loanDeduction.toFixed(2)}</td>
                     </tr>
                   )}
+                  {activeViewPayslip.customDeductions && activeViewPayslip.customDeductions.map(d => (
+                    <tr key={d.id} style={{ borderBottom: '1px solid #e5e7eb', color: '#1a1a1a' }}>
+                      <td style={{ padding: '10px 12px' }}><strong>Payroll Deduction: {d.name}</strong></td>
+                      <td style={{ padding: '10px 12px', textAlign: 'right', color: '#ef4444' }}>Deduction</td>
+                      <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, color: '#ef4444' }}>- R {d.amount.toFixed(2)}</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
 
@@ -8819,12 +8902,18 @@ export default function BookingCRM() {
                     <span>Gross Earnings:</span>
                     <span>R {(activeViewPayslip.baseSalary + activeViewPayslip.commissionEarned + activeViewPayslip.claimsApproved + activeViewPayslip.bonusApproved).toFixed(2)}</span>
                   </div>
-                  {activeViewPayslip.loanDeduction > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#4b5563', marginBottom: '8px' }}>
-                      <span>Total Deductions:</span>
-                      <span style={{ color: '#ef4444' }}>- R {activeViewPayslip.loanDeduction.toFixed(2)}</span>
-                    </div>
-                  )}
+                  {(() => {
+                    const dedTotal = activeViewPayslip.loanDeduction + (activeViewPayslip.customDeductionsTotal || 0);
+                    if (dedTotal > 0) {
+                      return (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', color: '#4b5563', marginBottom: '8px' }}>
+                          <span>Total Deductions:</span>
+                          <span style={{ color: '#ef4444' }}>- R {dedTotal.toFixed(2)}</span>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
                   <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '3px double #6B2C91', paddingTop: '10px', marginTop: '10px', fontSize: '1.2rem', fontWeight: 800, color: '#6B2C91' }}>
                     <span>NET SALARY PAID:</span>
                     <span>R {activeViewPayslip.finalSalary.toFixed(2)}</span>

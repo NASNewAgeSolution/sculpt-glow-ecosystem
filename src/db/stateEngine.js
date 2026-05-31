@@ -1590,8 +1590,12 @@ export const finalizeStaffPayslip = (username, staffId, monthName) => {
   const activeLoans = (user.loans || []).filter(l => l.status === 'approved' && l.repaymentMonthsLeft > 0);
   const loansAmt = activeLoans.reduce((acc, l) => acc + l.monthlyRepayment, 0);
   
+  // 4.1. Calculate Custom Deductions (UIF, PAYE Tax, etc.)
+  const customDeductions = user.deductions || [];
+  const customDeductionsAmt = customDeductions.reduce((acc, d) => acc + Number(d.amount), 0);
+  
   // 5. Total Pay
-  const netSalary = Number((user.salary + commTotal + claimsAmt + bonusesAmt - loansAmt).toFixed(2));
+  const netSalary = Number((user.salary + commTotal + claimsAmt + bonusesAmt - loansAmt - customDeductionsAmt).toFixed(2));
   
   // 6. Archive Payslip
   const archived = user.payslips || [];
@@ -1603,6 +1607,8 @@ export const finalizeStaffPayslip = (username, staffId, monthName) => {
     claimsApproved: claimsAmt,
     loanDeduction: loansAmt,
     bonusApproved: bonusesAmt,
+    customDeductions: customDeductions,
+    customDeductionsTotal: customDeductionsAmt,
     finalSalary: netSalary,
     generatedAt: new Date().toISOString().split('T')[0] + ' ' + new Date().toLocaleTimeString(),
     emailedAt: new Date().toISOString().split('T')[0]
@@ -1819,5 +1825,40 @@ export const developerBypassResetClientEmail = (developerName, clientId, newEmai
   clients[idx].email = newEmail;
   saveTable('clients', clients);
   logAction('System', 'SaaS Developer Bypass Action', `Bypassed standard client email check to overwrite ${clients[idx].name}'s email from "${prevEmail}" to "${newEmail}"`);
+  return true;
+};
+
+export const addStaffDeduction = (username, staffId, deductionData) => {
+  const users = getTable('users');
+  const idx = users.findIndex(u => u.id === staffId);
+  if (idx === -1) return null;
+  
+  const user = users[idx];
+  const deductions = user.deductions || [];
+  const newDeduction = {
+    id: `ded-${Date.now()}`,
+    name: deductionData.name,
+    amount: Number(deductionData.amount),
+    recurring: deductionData.recurring !== false
+  };
+  
+  users[idx] = { ...user, deductions: [...deductions, newDeduction] };
+  saveTable('users', users);
+  logAction(username, 'Add Payroll Deduction', `Added deduction "${newDeduction.name}" of R${newDeduction.amount} for ${user.name}`);
+  return users[idx];
+};
+
+export const removeStaffDeduction = (username, staffId, deductionId) => {
+  const users = getTable('users');
+  const idx = users.findIndex(u => u.id === staffId);
+  if (idx === -1) return false;
+  
+  const user = users[idx];
+  const deductions = user.deductions || [];
+  const filtered = deductions.filter(d => d.id !== deductionId);
+  
+  users[idx] = { ...user, deductions: filtered };
+  saveTable('users', users);
+  logAction(username, 'Remove Payroll Deduction', `Removed payroll deduction for ${user.name}`);
   return true;
 };
