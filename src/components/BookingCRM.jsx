@@ -3,7 +3,7 @@ import {
   Users, Calendar as CalendarIcon, CreditCard, Layers, Shield, Settings,
   TrendingUp, Award, FileText, BarChart2, Trash2, Plus, Check, ArrowRight,
   UserCheck, AlertTriangle, RefreshCw, Printer, Search, Mail, Bell,
-  User, CheckCircle, Clock, Send, ShieldAlert, DollarSign, Briefcase, Wrench,
+  User, CheckCircle, Clock, Send, ShieldAlert, DollarSign, Briefcase, Wrench, Smartphone,
   Package, Lock, ChevronDown, ChevronRight, Image as ImageIcon, Heart,
   Sliders, Star, Percent, MessageSquare, PhoneCall, Volume2, ShieldCheck, Download
 } from 'lucide-react';
