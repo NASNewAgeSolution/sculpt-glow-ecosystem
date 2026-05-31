@@ -2483,11 +2483,21 @@ export default function BookingCRM() {
         </div>
       )}
 
-      {/* MODAL: MANUAL BOOKINGS FORM */}
       {showBookingModal && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000 }}>
-          <div className="card-premium animate-fade-in" style={{ width: '420px' }}>
-            <h3 style={{ fontFamily: 'Outfit', color: '#D4AF37', marginBottom: '16px' }}>Manual Booking</h3>
+          <div className="card-premium animate-fade-in" style={{ width: '420px', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ fontFamily: 'Outfit', color: '#D4AF37', margin: 0 }}>Manual Booking</h3>
+              <button 
+                onClick={() => { setShowBookingModal(false); setManualClientSearch(''); }} 
+                style={{
+                  background: 'none', border: 'none', color: '#BFA6D8', fontSize: '1.5rem', cursor: 'pointer', padding: '0 4px', lineHeight: 1
+                }}
+                title="Exit Modal"
+              >
+                &times;
+              </button>
+            </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               
