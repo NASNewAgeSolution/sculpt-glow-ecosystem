@@ -2670,7 +2670,7 @@ export default function BookingCRM() {
                                       syncDatabase();
                                     }}
                                     className="btn-brand-gold"
-                                    style={{ padding: '2px 6px', fontSize: '0.65rem', height: '22px' }}
+                                    style={{ padding: '4px 10px', fontSize: '0.7rem', height: '26px', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
                                   >
                                     🔄 Sync Shop
                                   </button>
