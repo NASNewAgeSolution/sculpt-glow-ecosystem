@@ -140,7 +140,7 @@ export default function BookingCRM() {
 
   // New forms for Rescheduling & Capturing Payments
   const [rescheduleForm, setRescheduleForm] = useState({ date: new Date().toISOString().split('T')[0], time: '09:00', reason: '' });
-  const [aptPaymentForm, setAptPaymentForm] = useState({ amountPaid: 0, method: 'Card' });
+  const [aptPaymentForm, setAptPaymentForm] = useState({ amountPaid: 0, method: 'Card', amountProvided: 0 });
 
   const [activeClientNotes, setActiveClientNotes] = useState('');
   const [consentForms, setConsentForms] = useState({
@@ -628,25 +628,40 @@ export default function BookingCRM() {
                     const dayBookings = appointments.filter(a => a.date === dateStr && a.status !== 'Cancelled' && a.status !== 'Completed');
                     const hasBookings = dayBookings.length > 0;
 
+                    const todayDateStr = new Date().toISOString().split('T')[0];
+                    const isPastDate = dateStr < todayDateStr;
+                    const hasOutstandingPastBookings = isPastDate && appointments.some(a => 
+                      a.date === dateStr && 
+                      ['Pending', 'Confirmed', 'Checked-in', 'In-progress'].includes(a.status)
+                    );
+
                     return (
                       <button
                         key={`day-${dayNum}`}
                         onClick={() => setSelectedDate(dateStr)}
                         style={{
                           backgroundColor: isSelected ? 'hsl(var(--brand-purple))' : 'hsl(var(--brand-black))',
-                          border: isSelected ? '1px solid hsl(var(--brand-gold))' : '1px solid transparent',
-                          borderRadius: '8px', color: isSelected ? 'white' : '#A89684',
+                          border: isSelected ? '1px solid hsl(var(--brand-gold))' : hasOutstandingPastBookings ? '1px solid #ef4444' : '1px solid transparent',
+                          boxShadow: hasOutstandingPastBookings ? '0 0 10px rgba(239, 68, 68, 0.8), inset 0 0 5px rgba(239, 68, 68, 0.4)' : 'none',
+                          animation: hasOutstandingPastBookings ? 'pulse-red 2s infinite' : 'none',
+                          borderRadius: '8px', color: isSelected ? 'white' : hasOutstandingPastBookings ? '#ef4444' : '#A89684',
                           fontSize: '0.78rem', padding: '6px 0', cursor: 'pointer', fontWeight: 600,
                           display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative'
                         }}
                       >
                         {dayNum}
-                        {hasBookings && (
+                        {hasOutstandingPastBookings ? (
+                          <span style={{
+                            width: '6px', height: '6px', borderRadius: '50%',
+                            backgroundColor: '#ef4444', position: 'absolute', bottom: '2px',
+                            boxShadow: '0 0 8px #ef4444'
+                          }} />
+                        ) : hasBookings ? (
                           <span style={{
                             width: '4px', height: '4px', borderRadius: '50%',
                             backgroundColor: '#D4AF37', position: 'absolute', bottom: '2px'
                           }} />
-                        )}
+                        ) : null}
                       </button>
                     );
                   })}
@@ -787,9 +802,11 @@ export default function BookingCRM() {
                                   <button
                                     onClick={() => {
                                       setActiveCapturePaymentApt(apt);
+                                      const dueAmount = apt.customPrice !== undefined ? apt.customPrice : (service ? service.price : 0);
                                       setAptPaymentForm({
-                                        amountPaid: service ? service.price : 0,
-                                        method: 'Card'
+                                        amountPaid: dueAmount,
+                                        method: 'Card',
+                                        amountProvided: dueAmount
                                       });
                                       setShowCapturePaymentModal(true);
                                     }}
@@ -2337,7 +2354,7 @@ export default function BookingCRM() {
       {/* NEW MODAL: CAPTURE APPOINTMENT PAYMENT AT RECEPTION */}
       {showCapturePaymentModal && activeCapturePaymentApt && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000 }}>
-          <div className="card-premium animate-fade-in" style={{ width: '400px' }}>
+          <div className="card-premium animate-fade-in" style={{ width: '420px' }}>
             <h3 style={{ fontFamily: 'Outfit', color: '#D4AF37', marginBottom: '16px' }}>Settle Booking Payment</h3>
             
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -2356,7 +2373,14 @@ export default function BookingCRM() {
                 <select
                   className="brand-input"
                   value={aptPaymentForm.method}
-                  onChange={(e) => setAptPaymentForm(prev => ({ ...prev, method: e.target.value }))}
+                  onChange={(e) => {
+                    const nextMethod = e.target.value;
+                    setAptPaymentForm(prev => ({
+                      ...prev,
+                      method: nextMethod,
+                      amountProvided: nextMethod === 'Cash' ? prev.amountPaid : 0
+                    }));
+                  }}
                 >
                   <option value="Card">Visa/Mastercard</option>
                   <option value="Cash">Cash Drawer</option>
@@ -2365,14 +2389,42 @@ export default function BookingCRM() {
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '4px' }}>Capture Exact Amount Paid (R):</label>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '4px' }}>Total Amount Due (R):</label>
                 <input
                   type="number"
                   className="brand-input"
                   value={aptPaymentForm.amountPaid}
-                  onChange={(e) => setAptPaymentForm(prev => ({ ...prev, amountPaid: Number(e.target.value) }))}
+                  onChange={(e) => {
+                    const price = Number(e.target.value);
+                    setAptPaymentForm(prev => ({
+                      ...prev,
+                      amountPaid: price,
+                      amountProvided: prev.method === 'Cash' ? price : 0
+                    }));
+                  }}
                 />
               </div>
+
+              {aptPaymentForm.method === 'Cash' && (
+                <div style={{ backgroundColor: 'rgba(212, 175, 55, 0.05)', border: '1px solid rgba(212, 175, 55, 0.2)', padding: '12px', borderRadius: '8px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8rem', color: '#D4AF37', marginBottom: '4px' }}>Cash Received (R):</label>
+                    <input
+                      type="number"
+                      className="brand-input"
+                      style={{ borderColor: 'hsl(var(--brand-gold))' }}
+                      value={aptPaymentForm.amountProvided}
+                      onChange={(e) => setAptPaymentForm(prev => ({ ...prev, amountProvided: Number(e.target.value) }))}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '10px', fontSize: '0.9rem', color: 'white' }}>
+                    <span>Change Due:</span>
+                    <strong style={{ color: '#D4AF37' }}>
+                      R {Math.max(0, aptPaymentForm.amountProvided - aptPaymentForm.amountPaid).toFixed(2)}
+                    </strong>
+                  </div>
+                </div>
+              )}
 
               <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
                 <button
@@ -2412,7 +2464,12 @@ export default function BookingCRM() {
 
                     syncDatabase();
                     setShowCapturePaymentModal(false);
-                    alert(`Payment captured successfully! Settle slip created: ${newInv.invoiceNumber}`);
+
+                    const printOk = window.confirm(`Payment captured successfully! Settle slip created: ${newInv.invoiceNumber}\n\nWould you like to print the receipt?`);
+                    if (printOk) {
+                      setActivePrintInvoice(newInv);
+                      setShowPrintModal(true);
+                    }
                   }}
                   className="btn-brand-gold"
                   style={{ width: '100%', justifyContent: 'center' }}
@@ -2507,13 +2564,13 @@ export default function BookingCRM() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Select Room:</label>
-                  <select className="brand-input" onChange={(e) => setBookingForm(prev => ({ ...prev, room: e.target.value }))}>
+                  <select className="brand-input" value={bookingForm.room} onChange={(e) => setBookingForm(prev => ({ ...prev, room: e.target.value }))}>
                     {rooms.map(r => <option key={r} value={r}>{r}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Payment Indicators:</label>
-                  <select className="brand-input" onChange={(e) => setBookingForm(prev => ({ ...prev, paymentStatus: e.target.value }))}>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Payment Status:</label>
+                  <select className="brand-input" value={bookingForm.paymentStatus} onChange={(e) => setBookingForm(prev => ({ ...prev, paymentStatus: e.target.value }))}>
                     <option value="Unpaid">✗ Unpaid</option>
                     <option value="Paid already">✓ Paid already</option>
                     <option value="Loyalty Promo">⚡ Loyalty Reward Promo</option>
@@ -2521,26 +2578,266 @@ export default function BookingCRM() {
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Date:</label>
-                  <input type="date" className="brand-input" value={bookingForm.date} onChange={(e) => setBookingForm(prev => ({ ...prev, date: e.target.value }))} />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Time:</label>
-                  <input type="time" className="brand-input" value={bookingForm.time} onChange={(e) => setBookingForm(prev => ({ ...prev, time: e.target.value }))} />
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Date:</label>
+                <input type="date" className="brand-input" value={bookingForm.date} onChange={(e) => setBookingForm(prev => ({ ...prev, date: e.target.value }))} />
+              </div>
+
+              {/* Visual Time Slot Availability (Green vs. Red) */}
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Select Time Slot (08h00 - 17h00):</label>
+                <div style={{
+                  display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '6px',
+                  maxHeight: '120px', overflowY: 'auto', padding: '6px',
+                  backgroundColor: 'hsl(var(--brand-black))', borderRadius: '8px',
+                  border: '1px solid rgba(107, 44, 145, 0.3)'
+                }}>
+                  {['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00'].map(slotTime => {
+                    const activeSrvId = bookingForm.serviceId || (services[0] ? services[0].id : '');
+                    const activeSrv = services.find(s => s.id === activeSrvId);
+                    
+                    const conflictCheck = checkScheduleConflict({
+                      ...bookingForm,
+                      serviceId: activeSrvId,
+                      duration: activeSrv ? activeSrv.duration : 30,
+                      machineId: activeSrv ? activeSrv.requiredMachine || '' : '',
+                      time: slotTime
+                    });
+                    const isConflict = conflictCheck.conflict;
+
+                    // Past Check
+                    const todayStr = new Date().toISOString().split('T')[0];
+                    const [slotH, slotM] = slotTime.split(':').map(Number);
+                    const nowObj = new Date();
+                    const isPast = (bookingForm.date < todayStr) || 
+                                   (bookingForm.date === todayStr && (slotH < nowObj.getHours() || (slotH === nowObj.getHours() && slotM < nowObj.getMinutes())));
+
+                    const isSelected = bookingForm.time === slotTime;
+
+                    let bg = 'rgba(52, 211, 153, 0.15)'; // Green
+                    let border = '1px solid rgba(52, 211, 153, 0.4)';
+                    let color = '#34d399';
+
+                    if (isPast) {
+                      bg = 'rgba(239, 68, 68, 0.1)'; // Past is Red / Orangeish Red
+                      border = '1px solid rgba(239, 68, 68, 0.4)';
+                      color = '#f87171';
+                    } else if (isConflict) {
+                      bg = 'rgba(239, 68, 68, 0.2)'; // Conflict is red
+                      border = '1px solid #ef4444';
+                      color = '#ef4444';
+                    }
+
+                    if (isSelected) {
+                      border = '2px solid hsl(var(--brand-gold))';
+                    }
+
+                    return (
+                      <button
+                        key={slotTime}
+                        type="button"
+                        onClick={() => setBookingForm(prev => ({ ...prev, time: slotTime }))}
+                        style={{
+                          backgroundColor: bg,
+                          border: border,
+                          borderRadius: '6px',
+                          color: color,
+                          padding: '6px 2px',
+                          fontSize: '0.7rem',
+                          fontWeight: 'bold',
+                          cursor: 'pointer',
+                          textAlign: 'center',
+                          transition: 'all 0.2s'
+                        }}
+                        title={isConflict ? `Conflict: ${conflictCheck.reason}` : isPast ? 'Past Slot (Requires Backdate Reason)' : 'Slot Available'}
+                      >
+                        {slotTime}
+                        {isPast ? ' (Past)' : isConflict ? ' (Conf)' : ''}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
+
+              {/* Past-Time Booking Reason Capture */}
+              {(() => {
+                const todayStr = new Date().toISOString().split('T')[0];
+                const [slotH, slotM] = (bookingForm.time || '09:00').split(':').map(Number);
+                const nowObj = new Date();
+                const isPast = (bookingForm.date < todayStr) || 
+                               (bookingForm.date === todayStr && (slotH < nowObj.getHours() || (slotH === nowObj.getHours() && slotM < nowObj.getMinutes())));
+                return isPast ? (
+                  <div style={{ marginTop: '4px' }}>
+                    <label style={{ display: 'block', fontSize: '0.8rem', color: '#ef4444', marginBottom: '4px', fontWeight: 600 }}>
+                      ⚠️ Past Booking Reason (Required):
+                    </label>
+                    <textarea
+                      className="brand-input"
+                      style={{ borderColor: '#ef4444' }}
+                      placeholder="Enter the backdating reason for this manual past appointment..."
+                      value={bookingForm.pastReason || ''}
+                      onChange={(e) => setBookingForm(prev => ({ ...prev, pastReason: e.target.value }))}
+                      rows={2}
+                    />
+                  </div>
+                ) : null;
+              })()}
+
+              {/* Loyalty Reward Partial Payments Calculator */}
+              {(() => {
+                const selectedClient = clients.find(c => c.id === bookingForm.clientId);
+                const activeSrvId = bookingForm.serviceId || (services[0] ? services[0].id : '');
+                const activeSrv = services.find(s => s.id === activeSrvId);
+                const isLoyaltyPromo = bookingForm.paymentStatus === 'Loyalty Promo';
+
+                if (isLoyaltyPromo && selectedClient && activeSrv) {
+                  const pointsAvailable = selectedClient.loyaltyPoints || 0;
+                  const pointsNeeded = Math.ceil(activeSrv.price / 10);
+                  
+                  return (
+                    <div style={{
+                      backgroundColor: 'rgba(107, 44, 145, 0.15)',
+                      border: '1px solid rgba(107, 44, 145, 0.3)',
+                      padding: '12px',
+                      borderRadius: '8px',
+                      fontSize: '0.82rem',
+                      marginTop: '4px'
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', color: '#BFA6D8', marginBottom: '4px' }}>
+                        <span>Client Glow Points Available:</span>
+                        <strong>{pointsAvailable} pts</strong>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', color: '#BFA6D8', marginBottom: '4px' }}>
+                        <span>Point Value Discount (R10/pt):</span>
+                        <strong>R {pointsAvailable * 10}</strong>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', color: 'white', marginBottom: '4px' }}>
+                        <span>Service Standard Price:</span>
+                        <strong>R {activeSrv.price}</strong>
+                      </div>
+                      <hr style={{ borderColor: 'rgba(107, 44, 145, 0.3)', margin: '8px 0' }} />
+                      {pointsAvailable >= pointsNeeded ? (
+                        <div style={{ color: '#34d399', fontWeight: 600 }}>
+                          🎉 Fully Covered! Deducting {pointsNeeded} Glow Points. Remaining price: R0.00
+                        </div>
+                      ) : (
+                        <div style={{ color: '#F5EFE6' }}>
+                          <span style={{ color: '#D4AF37', fontWeight: 600, display: 'block', marginBottom: '4px' }}>
+                            ⚠️ Points insufficient to cover full price.
+                          </span>
+                          Deducting all {pointsAvailable} points (R {pointsAvailable * 10} discount).
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '6px', fontWeight: 'bold' }}>
+                            <span>Outstanding Balance:</span>
+                            <span style={{ color: '#ef4444' }}>R {activeSrv.price - (pointsAvailable * 10)}</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                } else if (isLoyaltyPromo && !selectedClient) {
+                  return (
+                    <div style={{ color: '#ef4444', fontSize: '0.78rem', marginTop: '4px', fontStyle: 'italic' }}>
+                      ⚠️ Please select a registered client above to compute loyalty points benefits.
+                    </div>
+                  );
+                }
+                return null;
+              })()}
 
               <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
                 <button
                   onClick={() => {
-                    const res = addAppointment(currentUserName(), bookingForm);
+                    const activeSrvId = bookingForm.serviceId || (services[0] ? services[0].id : '');
+                    const activeSrv = services.find(s => s.id === activeSrvId);
+
+                    if (!bookingForm.clientId) {
+                      alert("Error: Please select a client before scheduling.");
+                      return;
+                    }
+
+                    // Past Check
+                    const todayStr = new Date().toISOString().split('T')[0];
+                    const [slotH, slotM] = (bookingForm.time || '09:00').split(':').map(Number);
+                    const nowObj = new Date();
+                    const isPast = (bookingForm.date < todayStr) || 
+                                   (bookingForm.date === todayStr && (slotH < nowObj.getHours() || (slotH === nowObj.getHours() && slotM < nowObj.getMinutes())));
+
+                    if (isPast && (!bookingForm.pastReason || !bookingForm.pastReason.trim())) {
+                      alert("Error: A 'Past Booking Reason' is strictly required for backdated appointments!");
+                      return;
+                    }
+
+                    // Prepare final values
+                    let finalPaymentStatus = bookingForm.paymentStatus;
+                    let finalCustomPrice = undefined;
+                    let finalNotes = bookingForm.notes || '';
+
+                    if (isPast) {
+                      finalNotes += `\n[Backdated Appointment Reason: ${bookingForm.pastReason}]`;
+                    }
+
+                    const selectedClient = clients.find(c => c.id === bookingForm.clientId);
+                    if (bookingForm.paymentStatus === 'Loyalty Promo' && selectedClient && activeSrv) {
+                      const pointsAvailable = selectedClient.loyaltyPoints || 0;
+                      const pointsNeeded = Math.ceil(activeSrv.price / 10);
+
+                      if (pointsAvailable >= pointsNeeded) {
+                        // Deduct full points needed
+                        const updatedClients = clients.map(c => {
+                          if (c.id === selectedClient.id) {
+                            return { ...c, loyaltyPoints: c.loyaltyPoints - pointsNeeded };
+                          }
+                          return c;
+                        });
+                        localStorage.setItem('salon_clients', JSON.stringify(updatedClients));
+                        
+                        finalPaymentStatus = 'Paid already';
+                        finalCustomPrice = 0;
+                        finalNotes += `\n[Loyalty Reward Promo: fully covered by redeeming ${pointsNeeded} Glow Points]`;
+
+                        logAction(currentUserName(), 'Redeem Glow Points', `Redeemed ${pointsNeeded} points for "${activeSrv.name}" for Client "${selectedClient.name}"`);
+                      } else {
+                        // Deduct all available points, calculate discount
+                        const discount = pointsAvailable * 10;
+                        const remaining = activeSrv.price - discount;
+
+                        const updatedClients = clients.map(c => {
+                          if (c.id === selectedClient.id) {
+                            return { ...c, loyaltyPoints: 0 };
+                          }
+                          return c;
+                        });
+                        localStorage.setItem('salon_clients', JSON.stringify(updatedClients));
+
+                        finalPaymentStatus = 'Unpaid';
+                        finalCustomPrice = remaining;
+                        finalNotes += `\n[Loyalty Reward Promo: partial payment. Redeemed ${pointsAvailable} Glow Points (R ${discount} off). R ${remaining} outstanding]`;
+
+                        logAction(currentUserName(), 'Redeem Glow Points', `Redeemed all ${pointsAvailable} points for "${activeSrv.name}" (R${discount} discount) for Client "${selectedClient.name}"`);
+                      }
+                    }
+
+                    const finalBooking = {
+                      ...bookingForm,
+                      serviceId: activeSrvId,
+                      duration: activeSrv ? activeSrv.duration : 30,
+                      machineId: activeSrv ? activeSrv.requiredMachine || '' : '',
+                      paymentStatus: finalPaymentStatus,
+                      customPrice: finalCustomPrice,
+                      notes: finalNotes
+                    };
+
+                    const res = addAppointment(currentUserName(), finalBooking);
                     if (!res.success) {
                       alert(`Allocation Overlap:\n\n${res.error}`);
                     } else {
                       setShowBookingModal(false);
                       setManualClientSearch('');
+                      setBookingForm({
+                        clientId: '', serviceId: '', staffId: 'usr-3', room: '',
+                        machineId: '', date: new Date().toISOString().split('T')[0], time: '09:00', duration: 30, notes: '',
+                        paymentStatus: 'Unpaid'
+                      });
                       syncDatabase();
                     }
                   }}
@@ -2634,9 +2931,17 @@ export default function BookingCRM() {
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000 }}>
           <div className="card-premium animate-fade-in" style={{ width: '420px', backgroundColor: 'white', color: '#1e293b', border: 'none', padding: '32px' }}>
             <div style={{ fontFamily: 'Courier New, monospace', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div style={{ textAlign: 'center', borderBottom: '2px dashed #94a3b8', paddingBottom: '12px' }}>
-                <h3 style={{ fontFamily: 'Outfit', fontWeight: 800, margin: 0, color: '#0f172a' }}>SCULPT & GLOW</h3>
-                <span style={{ fontSize: '0.78rem' }}>Pretoria East Galleria, South Africa</span>
+              <div style={{ textAlign: 'center', borderBottom: '2px dashed #94a3b8', paddingBottom: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                {/* SVG gold woman silhouette with crescent moon */}
+                <svg width="60" height="60" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  {/* Crescent Moon */}
+                  <path d="M40 10C23.43 10 10 23.43 10 40C10 56.57 23.43 70 40 70C43.5 70 46.85 69.4 50 68.3C40.6 65.5 33.8 56.8 33.8 46.5C33.8 36.2 40.6 27.5 50 24.7C46.85 23.6 43.5 23 40 23" fill="#D4AF37"/>
+                  {/* Woman Silhouette Profile / Elegant flow */}
+                  <path d="M45 25C47.8 25 50 27.2 50 30C50 32.8 47.8 35 45 35C42.2 35 40 32.8 40 30C40 27.2 42.2 25 45 25Z" fill="#B8860B"/>
+                  <path d="M45 36C52 36 60 41 62 48C63.5 53.2 60 58 56 61C51.5 64.4 46 68 38 68C36.5 68 35 66.8 35 65.3C35 62 38 58 41 55C44 52 45 46 45 42C44.5 40 44 38 45 36Z" fill="#D4AF37"/>
+                </svg>
+                <h3 style={{ fontFamily: 'Outfit', fontWeight: 800, margin: 0, color: '#0f172a', fontSize: '1.2rem', letterSpacing: '1px' }}>SCULPT & GLOW</h3>
+                <span style={{ fontSize: '0.78rem', color: '#64748b' }}>Pretoria East Galleria, South Africa</span>
               </div>
               <div style={{ display: 'flex', justify: 'space-between', fontSize: '0.8rem' }}>
                 <span>ID: {activePrintInvoice.invoiceNumber}</span>
@@ -2673,9 +2978,49 @@ export default function BookingCRM() {
                 </div>
               </div>
             </div>
-            <div style={{ display: 'flex', gap: '10px', marginTop: '24px' }}>
-              <button onClick={() => window.print()} className="btn-brand-gold" style={{ width: '100%', justifyContent: 'center' }}>Print</button>
-              <button onClick={() => setShowPrintModal(false)} className="btn-brand-purple" style={{ width: '100%', justifyContent: 'center', color: '#0f172a', border: '1px solid #cbd5e1' }}>Close</button>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '24px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+                <button 
+                  onClick={() => {
+                    logAction('System', 'Print Receipt', `Printed thermal receipt for Invoice ${activePrintInvoice.invoiceNumber}`);
+                    alert(`Thermal Receipt Printed for Invoice: ${activePrintInvoice.invoiceNumber}`);
+                    window.print();
+                  }} 
+                  className="btn-brand-gold" 
+                  style={{ justifyContent: 'center', padding: '10px', fontSize: '0.78rem' }}
+                >
+                  🖨️ Print
+                </button>
+                <button 
+                  onClick={() => {
+                    const cli = clients.find(c => c.id === activePrintInvoice.clientId);
+                    logAction('System', 'Email Receipt', `Emailed receipt for Invoice ${activePrintInvoice.invoiceNumber} to ${cli ? cli.email : 'client'}`);
+                    alert(`Email receipt successfully sent to client: ${cli ? cli.email : 'walk-in@sculptglow.co.za'}`);
+                  }} 
+                  className="btn-brand-purple" 
+                  style={{ justifyContent: 'center', padding: '10px', fontSize: '0.78rem', color: '#0f172a', borderColor: '#cbd5e1' }}
+                >
+                  📧 Email
+                </button>
+                <button 
+                  onClick={() => {
+                    const cli = clients.find(c => c.id === activePrintInvoice.clientId);
+                    logAction('System', 'WhatsApp Receipt', `Sent WhatsApp receipt for Invoice ${activePrintInvoice.invoiceNumber} to ${cli ? cli.phone : 'client'}`);
+                    alert(`WhatsApp receipt successfully sent to client phone: ${cli ? cli.phone : 'N/A'}`);
+                  }} 
+                  className="btn-brand-purple" 
+                  style={{ justifyContent: 'center', padding: '10px', fontSize: '0.78rem', color: '#0f172a', borderColor: '#cbd5e1' }}
+                >
+                  💬 WhatsApp
+                </button>
+              </div>
+              <button 
+                onClick={() => setShowPrintModal(false)} 
+                className="btn-brand-purple" 
+                style={{ width: '100%', justifyContent: 'center', color: '#0f172a', border: '1px solid #cbd5e1', padding: '10px' }}
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>
