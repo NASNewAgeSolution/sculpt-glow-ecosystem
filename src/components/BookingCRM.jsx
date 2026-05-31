@@ -222,6 +222,7 @@ export default function BookingCRM() {
 
   // Client progress tracking uploader
   const [progressForm, setProgressForm] = useState({ weight: 65, waist: 72, hips: 94 });
+  const [gallerySearch, setGallerySearch] = useState('');
 
   // Custom quotes dynamic item builder
   const [quoteItems, setQuoteItems] = useState([{ name: '', quantity: 1, price: 0 }]);
@@ -1619,19 +1620,38 @@ export default function BookingCRM() {
               {/* Progress Gallery card */}
               <div className="card-premium">
                 <h3 style={{ fontFamily: 'Outfit', fontSize: '1.1rem', marginBottom: '16px', color: 'white' }}>Active Progress Gallery Dossiers</h3>
-                <div style={{ marginBottom: '16px' }}>
-                  <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Select Client Folder:</label>
-                  <select
-                    className="brand-input"
-                    onChange={(e) => {
-                      const cli = clients.find(c => c.id === e.target.value);
-                      setSelectedClient(cli);
-                    }}
-                    value={selectedClient?.id || ''}
-                  >
-                    <option value="">-- Choose Profile --</option>
-                    {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
+                <div style={{ marginBottom: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Search Client:</label>
+                    <div style={{ position: 'relative' }}>
+                      <Search style={{ position: 'absolute', top: '9px', left: '10px', width: '14px', height: '14px', color: '#A89684' }} />
+                      <input
+                        type="text"
+                        placeholder="Search dossier by name..."
+                        className="brand-input"
+                        style={{ paddingLeft: '32px', fontSize: '0.78rem', height: '32px' }}
+                        value={gallerySearch}
+                        onChange={(e) => setGallerySearch(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Select Client Folder:</label>
+                    <select
+                      className="brand-input"
+                      onChange={(e) => {
+                        const cli = clients.find(c => c.id === e.target.value);
+                        setSelectedClient(cli);
+                      }}
+                      value={selectedClient?.id || ''}
+                    >
+                      <option value="">-- Choose Profile --</option>
+                      {clients
+                        .filter(c => c.name.toLowerCase().includes(gallerySearch.toLowerCase()))
+                        .map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </div>
                 </div>
 
                 {selectedClient ? (
