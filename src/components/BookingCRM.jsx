@@ -101,6 +101,8 @@ export default function BookingCRM() {
 
   // Dynamic Waitlist Cancellation Match Alert state
   const [activeWaitlistMatch, setActiveWaitlistMatch] = useState(null);
+  const [activeReleaseWt, setActiveReleaseWt] = useState(null);
+  const [showReleaseModal, setShowReleaseModal] = useState(false);
 
   // Cancellation Reason Prompt Modal state
   const [activeCancellationApt, setActiveCancellationApt] = useState(null);
@@ -135,7 +137,16 @@ export default function BookingCRM() {
   });
   const [paymentForm, setPaymentForm] = useState({ amount: 0, method: 'Card' });
   const [expenseForm, setExpenseForm] = useState({ category: 'Utilities', description: '', amount: 0 });
-  const [waitlistForm, setWaitlistForm] = useState({ clientId: '', serviceId: '', notes: '' });
+  const [waitlistForm, setWaitlistForm] = useState({
+    clientId: '',
+    serviceId: '',
+    notes: '',
+    dayPref: 'Any Day',
+    waitDate: new Date().toISOString().split('T')[0],
+    weekPref: 'Current Week',
+    timePref: 'Any Time',
+    waitTime: '09:00'
+  });
   const [shiftForm, setShiftForm] = useState({ staffId: 'usr-3', date: new Date().toISOString().split('T')[0], startTime: '08:00', endTime: '17:00', type: 'Shift', isLeave: false });
 
   // New forms for Rescheduling & Capturing Payments
@@ -254,6 +265,74 @@ export default function BookingCRM() {
     const isToday = apt.date === now.toISOString().split('T')[0];
     
     return isToday && currentMins > endMins;
+  };
+
+  const getReleaseCandidateSlots = (wt) => {
+    if (!wt) return [];
+    const client = clients.find(c => c.id === wt.clientId);
+    const service = services.find(s => s.id === wt.serviceId);
+
+    // 1. Calculate candidate dates
+    const dates = [];
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    if (wt.dayPref === 'Specific Date') {
+      dates.push(wt.waitDate || todayStr);
+    } else if (wt.dayPref === 'Specific Week') {
+      const startOffset = wt.weekPref === 'Next Week' ? 7 : 0;
+      for (let i = 0; i < 7; i++) {
+        const d = new Date();
+        d.setDate(d.getDate() + startOffset + i);
+        dates.push(d.toISOString().split('T')[0]);
+      }
+    } else {
+      // Any Day - next 5 days
+      for (let i = 0; i < 5; i++) {
+        const d = new Date();
+        d.setDate(d.getDate() + i);
+        dates.push(d.toISOString().split('T')[0]);
+      }
+    }
+
+    // 2. Filter hours based on timePref
+    let hours = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00'];
+    if (wt.timePref === 'Morning') {
+      hours = ['08:00', '09:00', '10:00', '11:00'];
+    } else if (wt.timePref === 'Afternoon') {
+      hours = ['12:00', '13:00', '14:00', '15:00', '16:00', '17:00'];
+    } else if (wt.timePref === 'Specific Time') {
+      hours = [wt.waitTime || '09:00'];
+    }
+
+    // 3. Check conflicts for each date and hour combo
+    const candidates = [];
+    for (const dStr of dates) {
+      for (const hr of hours) {
+        // Double check past time
+        const [h, m] = hr.split(':').map(Number);
+        const nowObj = new Date();
+        const isPast = (dStr < todayStr) || 
+                       (dStr === todayStr && (h < nowObj.getHours() || (h === nowObj.getHours() && m < nowObj.getMinutes())));
+
+        // Check scheduling conflicts
+        const conflictCheck = checkScheduleConflict({
+          clientId: wt.clientId,
+          serviceId: wt.serviceId,
+          staffId: wt.preferredStaffId || 'usr-3',
+          room: 'Treatment Room 1',
+          machineId: service?.requiredMachine || '',
+          date: dStr,
+          time: hr,
+          duration: service?.duration || 30
+        });
+
+        if (!conflictCheck.conflict && !isPast) {
+          candidates.push({ date: dStr, time: hr });
+        }
+      }
+    }
+
+    return candidates.slice(0, 15); // Show top 15 matches to keep layout clean
   };
 
   const getDaysInMonth = (month, year) => {
@@ -937,6 +1016,11 @@ export default function BookingCRM() {
                           <span style={{ display: 'block', fontSize: '0.78rem', color: '#A89684' }}>
                             📞 Phone: {client?.phone || 'No phone'} | Join Date: {wt.date}
                           </span>
+                          <span style={{ display: 'block', fontSize: '0.75rem', color: '#BFA6D8', marginTop: '4px' }}>
+                            📅 Prefer Day: <strong>{wt.dayPref === 'Specific Date' ? wt.waitDate : wt.dayPref === 'Specific Week' ? (wt.weekPref === 'Current Week' ? 'This Week' : 'Next Week') : 'Any Day'}</strong>
+                            {' | '}
+                            ⏰ Prefer Time: <strong>{wt.timePref === 'Specific Time' ? wt.waitTime : wt.timePref === 'Morning' ? 'Morning (08:00-12:00)' : wt.timePref === 'Afternoon' ? 'Afternoon (12:00-17:00)' : 'Any Time'}</strong>
+                          </span>
                           {wt.notes && (
                             <div style={{ marginTop: '8px', padding: '6px 10px', backgroundColor: 'hsl(var(--brand-charcoal))', borderRadius: '8px', fontSize: '0.75rem', color: '#BFA6D8', fontStyle: 'italic' }}>
                               Notes: "{wt.notes}"
@@ -946,27 +1030,8 @@ export default function BookingCRM() {
                         <div style={{ display: 'flex', gap: '10px' }}>
                           <button
                             onClick={() => {
-                              const confirmAssign = window.confirm(`Release waitlist for ${client?.name || 'Client'} and convert to active appointment?`);
-                              if (confirmAssign) {
-                                const res = addAppointment(currentUserName(), {
-                                  clientId: wt.clientId,
-                                  serviceId: wt.serviceId,
-                                  staffId: wt.preferredStaffId || 'usr-3',
-                                  room: 'Treatment Room 1',
-                                  machineId: service?.requiredMachine || '',
-                                  date: new Date().toISOString().split('T')[0],
-                                  time: '12:00',
-                                  duration: service?.duration || 30,
-                                  notes: 'Released from waitlist queue'
-                                });
-                                if (res.success) {
-                                  deleteFromWaitlist(currentUserName(), wt.id);
-                                  syncDatabase();
-                                  alert('Success! Waitlisted client allocated to active schedule.');
-                                } else {
-                                  alert(`Allocation conflict! ${res.error}`);
-                                }
-                              }
+                              setActiveReleaseWt(wt);
+                              setShowReleaseModal(true);
                             }}
                             className="btn-brand-gold"
                             style={{ fontSize: '0.78rem', padding: '8px 16px' }}
@@ -3179,21 +3244,75 @@ export default function BookingCRM() {
       {/* MODAL: JOIN WAITLIST */}
       {showWaitlistModal && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000 }}>
-          <div className="card-premium animate-fade-in" style={{ width: '400px' }}>
+          <div className="card-premium animate-fade-in" style={{ width: '420px', maxHeight: '90vh', overflowY: 'auto' }}>
             <h3 style={{ fontFamily: 'Outfit', color: '#D4AF37', marginBottom: '16px' }}>Join Waitlist Queue</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Select Client:</label>
-                <select className="brand-input" onChange={(e) => setWaitlistForm(prev => ({ ...prev, clientId: e.target.value }))}>
+                <select className="brand-input" value={waitlistForm.clientId} onChange={(e) => setWaitlistForm(prev => ({ ...prev, clientId: e.target.value }))}>
+                  <option value="">-- Choose Client --</option>
                   {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
+              
               <div>
                 <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Select Treatment:</label>
-                <select className="brand-input" onChange={(e) => setWaitlistForm(prev => ({ ...prev, serviceId: e.target.value }))}>
+                <select className="brand-input" value={waitlistForm.serviceId} onChange={(e) => setWaitlistForm(prev => ({ ...prev, serviceId: e.target.value }))}>
+                  <option value="">-- Choose Treatment --</option>
                   {services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
               </div>
+
+              {/* Wait Day Specificity */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Day Preference:</label>
+                  <select className="brand-input" value={waitlistForm.dayPref} onChange={(e) => setWaitlistForm(prev => ({ ...prev, dayPref: e.target.value }))}>
+                    <option value="Any Day">Any Day</option>
+                    <option value="Specific Date">Specific Date</option>
+                    <option value="Specific Week">Specific Week</option>
+                  </select>
+                </div>
+                <div>
+                  {waitlistForm.dayPref === 'Specific Date' && (
+                    <>
+                      <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Select Date:</label>
+                      <input type="date" className="brand-input" value={waitlistForm.waitDate} onChange={(e) => setWaitlistForm(prev => ({ ...prev, waitDate: e.target.value }))} />
+                    </>
+                  )}
+                  {waitlistForm.dayPref === 'Specific Week' && (
+                    <>
+                      <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Select Week:</label>
+                      <select className="brand-input" value={waitlistForm.weekPref} onChange={(e) => setWaitlistForm(prev => ({ ...prev, weekPref: e.target.value }))}>
+                        <option value="Current Week">This Week (Next 7 Days)</option>
+                        <option value="Next Week">Next Week (Days 8-14)</option>
+                      </select>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Wait Time Specificity */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Time Preference:</label>
+                  <select className="brand-input" value={waitlistForm.timePref} onChange={(e) => setWaitlistForm(prev => ({ ...prev, timePref: e.target.value }))}>
+                    <option value="Any Time">Any Time</option>
+                    <option value="Morning">Morning (08:00 - 12:00)</option>
+                    <option value="Afternoon">Afternoon (12:00 - 17:00)</option>
+                    <option value="Specific Time">Specific Time</option>
+                  </select>
+                </div>
+                <div>
+                  {waitlistForm.timePref === 'Specific Time' && (
+                    <>
+                      <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Select Time:</label>
+                      <input type="time" className="brand-input" value={waitlistForm.waitTime} onChange={(e) => setWaitlistForm(prev => ({ ...prev, waitTime: e.target.value }))} />
+                    </>
+                  )}
+                </div>
+              </div>
+
               <div>
                 <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Private Request Notes:</label>
                 <input type="text" className="brand-input" placeholder="e.g. Prefers morning slots" value={waitlistForm.notes} onChange={(e) => setWaitlistForm(prev => ({ ...prev, notes: e.target.value }))} />
@@ -3202,8 +3321,36 @@ export default function BookingCRM() {
               <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
                 <button
                   onClick={() => {
-                    addToWaitlist(currentUserName(), waitlistForm);
+                    const finalClientId = waitlistForm.clientId || (clients[0] ? clients[0].id : '');
+                    const finalServiceId = waitlistForm.serviceId || (services[0] ? services[0].id : '');
+                    
+                    if (!finalClientId) {
+                      alert("Please select a valid client.");
+                      return;
+                    }
+                    if (!finalServiceId) {
+                      alert("Please select a valid treatment.");
+                      return;
+                    }
+
+                    addToWaitlist(currentUserName(), {
+                      ...waitlistForm,
+                      clientId: finalClientId,
+                      serviceId: finalServiceId
+                    });
+                    
                     setShowWaitlistModal(false);
+                    // Reset waitlistForm
+                    setWaitlistForm({
+                      clientId: '',
+                      serviceId: '',
+                      notes: '',
+                      dayPref: 'Any Day',
+                      waitDate: new Date().toISOString().split('T')[0],
+                      weekPref: 'Current Week',
+                      timePref: 'Any Time',
+                      waitTime: '09:00'
+                    });
                     syncDatabase();
                   }}
                   className="btn-brand-gold"
@@ -3214,6 +3361,151 @@ export default function BookingCRM() {
                 <button onClick={() => setShowWaitlistModal(false)} className="btn-brand-purple" style={{ width: '100%', justifyContent: 'center' }}>Cancel</button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: RELEASE WAITLIST SLOT SELECTOR */}
+      {showReleaseModal && activeReleaseWt && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000 }}>
+          <div className="card-premium animate-fade-in" style={{ width: '500px', maxHeight: '90vh', overflowY: 'auto' }}>
+            <h3 style={{ fontFamily: 'Outfit', color: '#D4AF37', marginBottom: '12px' }}>Release & Allocate Time Slot</h3>
+            
+            {(() => {
+              const client = clients.find(c => c.id === activeReleaseWt.clientId);
+              const service = services.find(s => s.id === activeReleaseWt.serviceId);
+              const candidates = getReleaseCandidateSlots(activeReleaseWt);
+
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <div style={{ backgroundColor: 'rgba(107, 44, 145, 0.1)', padding: '12px', borderRadius: '10px', fontSize: '0.8rem', border: '1px solid rgba(107, 44, 145, 0.2)' }}>
+                    <div style={{ color: 'white', fontWeight: 'bold', marginBottom: '4px' }}>Client: {client?.name}</div>
+                    <div style={{ color: '#BFA6D8', marginBottom: '4px' }}>Treatment: {service?.name}</div>
+                    <div style={{ color: '#A89684' }}>
+                      Wait Preference: {activeReleaseWt.dayPref} ({activeReleaseWt.timePref})
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.85rem', color: '#D4AF37', fontWeight: 600, marginBottom: '8px' }}>
+                      🟢 Available Matching Slots:
+                    </label>
+                    
+                    {candidates.length === 0 ? (
+                      <div style={{ color: '#ef4444', fontSize: '0.8rem', fontStyle: 'italic', padding: '10px', backgroundColor: 'rgba(239, 68, 68, 0.05)', borderRadius: '8px', border: '1px solid rgba(239, 68, 68, 0.15)' }}>
+                        ⚠️ No vacant slots found matching their specific day/time preferences for the target week.
+                      </div>
+                    ) : (
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', maxHeight: '180px', overflowY: 'auto', padding: '4px' }}>
+                        {candidates.map((cand, idx) => (
+                          <button
+                            key={idx}
+                            onClick={() => {
+                              const res = addAppointment(currentUserName(), {
+                                clientId: activeReleaseWt.clientId,
+                                serviceId: activeReleaseWt.serviceId,
+                                staffId: activeReleaseWt.preferredStaffId || 'usr-3',
+                                room: 'Treatment Room 1',
+                                machineId: service?.requiredMachine || '',
+                                date: cand.date,
+                                time: cand.time,
+                                duration: service?.duration || 30,
+                                notes: 'Allocated from waitlist preference queue'
+                              });
+                              if (res.success) {
+                                deleteFromWaitlist(currentUserName(), activeReleaseWt.id);
+                                syncDatabase();
+                                setShowReleaseModal(false);
+                                alert(`Success! Allocated client to slot: ${cand.date} at ${cand.time}`);
+                              } else {
+                                alert(`Allocation error: ${res.error}`);
+                              }
+                            }}
+                            className="btn-brand-purple"
+                            style={{ padding: '8px 10px', fontSize: '0.72rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', border: '1px solid rgba(52, 211, 153, 0.4)' }}
+                          >
+                            <span style={{ color: '#34d399', fontWeight: 'bold' }}>{cand.date}</span>
+                            <span style={{ color: 'white' }}>⏰ {cand.time} (Vacant)</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Manual Override Form */}
+                  <div style={{ borderTop: '1px solid rgba(107, 44, 145, 0.2)', paddingTop: '16px' }}>
+                    <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', fontWeight: 600, marginBottom: '8px' }}>
+                      ⚙️ Manual Override Allocation:
+                    </label>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                      <div>
+                        <span style={{ fontSize: '0.72rem', color: '#BFA6D8', display: 'block', marginBottom: '4px' }}>Select Date:</span>
+                        <input 
+                          type="date" 
+                          id="manualReleaseDate" 
+                          className="brand-input" 
+                          defaultValue={activeReleaseWt.waitDate || new Date().toISOString().split('T')[0]} 
+                        />
+                      </div>
+                      <div>
+                        <span style={{ fontSize: '0.72rem', color: '#BFA6D8', display: 'block', marginBottom: '4px' }}>Select Time:</span>
+                        <input 
+                          type="time" 
+                          id="manualReleaseTime" 
+                          className="brand-input" 
+                          defaultValue={activeReleaseWt.waitTime || '12:00'} 
+                        />
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        const dateVal = document.getElementById('manualReleaseDate').value;
+                        const timeVal = document.getElementById('manualReleaseTime').value;
+
+                        if (!dateVal || !timeVal) {
+                          alert('Please select both date and time.');
+                          return;
+                        }
+
+                        const res = addAppointment(currentUserName(), {
+                          clientId: activeReleaseWt.clientId,
+                          serviceId: activeReleaseWt.serviceId,
+                          staffId: activeReleaseWt.preferredStaffId || 'usr-3',
+                          room: 'Treatment Room 1',
+                          machineId: service?.requiredMachine || '',
+                          date: dateVal,
+                          time: timeVal,
+                          duration: service?.duration || 30,
+                          notes: 'Allocated from waitlist override'
+                        });
+
+                        if (res.success) {
+                          deleteFromWaitlist(currentUserName(), activeReleaseWt.id);
+                          syncDatabase();
+                          setShowReleaseModal(false);
+                          alert(`Success! Bypassed preferences and scheduled for: ${dateVal} at ${timeVal}`);
+                        } else {
+                          alert(`Conflict: ${res.error}`);
+                        }
+                      }}
+                      className="btn-brand-gold"
+                      style={{ width: '100%', justifyContent: 'center', marginTop: '12px', fontSize: '0.78rem' }}
+                    >
+                      Bypass Preferences & Allocate Slot
+                    </button>
+                  </div>
+
+                  <button 
+                    onClick={() => setShowReleaseModal(false)} 
+                    className="btn-brand-purple" 
+                    style={{ width: '100%', justifyContent: 'center' }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}
