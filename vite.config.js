@@ -5,12 +5,21 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   build: {
-    chunkSizeWarningLimit: 1600, // Silences warnings by raising the size warning threshold
+    chunkSizeWarningLimit: 2000,
     rollupOptions: {
       output: {
         manualChunks(id) {
           if (id.includes('node_modules')) {
-            return 'vendor'; // Splits larger npm modules into a separate cached bundle
+            if (id.includes('react') || id.includes('scheduler')) {
+              return 'react-core';
+            }
+            if (id.includes('recharts') || id.includes('d3') || id.includes('resize-detector')) {
+              return 'recharts';
+            }
+            if (id.includes('lucide-react')) {
+              return 'lucide';
+            }
+            return 'vendor';
           }
         }
       }

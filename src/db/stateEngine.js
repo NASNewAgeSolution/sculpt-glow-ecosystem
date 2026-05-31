@@ -857,6 +857,9 @@ export const addToWaitlist = (username, wt) => {
 
 export const deleteFromWaitlist = (username, wtId) => {
   const waitlist = getTable('waitlist');
+  const idx = waitlist.findIndex(w => w.id === wtId);
+  if (idx === -1) return false;
+  const prev = waitlist[idx];
   
   if (useSupabase()) {
     cloudFetch('waitlist', {
@@ -867,7 +870,14 @@ export const deleteFromWaitlist = (username, wtId) => {
 
   const filtered = waitlist.filter(w => w.id !== wtId);
   saveTable('waitlist', filtered);
+  
+  // Archival logic
+  const client = getTable('clients').find(c => c.id === prev.clientId);
+  const clientName = client ? client.name : 'Unknown Client';
+  archiveItem(username, 'Waitlist', `Waitlist: ${clientName}`, prev);
+
   logAction(username, 'Clear Waitlist Entry', `Removed waitlist entry ${wtId}`);
+  return true;
 };
 
 // Shift rosters CRUD
@@ -901,6 +911,9 @@ export const addShiftOrLeave = (username, shift) => {
 
 export const deleteShiftOrLeave = (username, shiftId) => {
   const shifts = getTable('staffShifts');
+  const idx = shifts.findIndex(s => s.id === shiftId);
+  if (idx === -1) return false;
+  const prev = shifts[idx];
 
   if (useSupabase()) {
     cloudFetch('staff_shifts', {
@@ -911,7 +924,14 @@ export const deleteShiftOrLeave = (username, shiftId) => {
 
   const filtered = shifts.filter(s => s.id !== shiftId);
   saveTable('staffShifts', filtered);
+  
+  // Archival logic
+  const staff = getTable('users').find(u => u.id === prev.staffId);
+  const staffName = staff ? staff.name : 'Unknown Staff';
+  archiveItem(username, 'Shift', `${staffName} - ${prev.date} (${prev.startTime}-${prev.endTime})`, prev);
+
   logAction(username, 'Cancel Schedule Slot', `Removed scheduling entry ${shiftId}`);
+  return true;
 };
 
 // Global settings configurations
@@ -1048,6 +1068,212 @@ export const deleteService = (username, serviceId) => {
 
   const filtered = services.filter(s => s.id !== serviceId);
   saveTable('services', filtered);
+  
+  // Archival logic
+  archiveItem(username, 'Service', prev.name, prev);
+
   logAction(username, 'Delete Service', `Deleted service "${prev.name}"`, prev, '');
+  return true;
+};
+
+export const deleteProduct = (username, productId) => {
+  const products = getTable('products');
+  const idx = products.findIndex(p => p.id === productId);
+  if (idx === -1) return false;
+  const prev = products[idx];
+
+  if (useSupabase()) {
+    cloudFetch('products', {
+      method: 'DELETE',
+      query: `id=eq.${productId}`
+    }).catch(err => console.error('Cloud product delete failed:', err));
+  }
+
+  const filtered = products.filter(p => p.id !== productId);
+  saveTable('products', filtered);
+  
+  // Archival logic
+  archiveItem(username, 'Product', prev.name, prev);
+
+  logAction(username, 'Delete Product', `Deleted retail product "${prev.name}"`, prev, '');
+  return true;
+};
+
+// Global Archiving & Recovery API Helpers
+export const archiveItem = (username, itemType, name, originalData) => {
+  const archive = JSON.parse(localStorage.getItem('salon_archive') || '[]');
+  const newArchiveItem = {
+    id: `arc-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+    itemType,
+    name,
+    deletedAt: new Date().toISOString().split('T')[0] + ' ' + new Date().toLocaleTimeString(),
+    deletedBy: username,
+    originalData
+  };
+  archive.push(newArchiveItem);
+  localStorage.setItem('salon_archive', JSON.stringify(archive));
+  logAction(username, 'Archive Deleted Item', `Moved deleted ${itemType} "${name}" to archive.`);
+  return newArchiveItem;
+};
+
+export const restoreItem = (username, archiveId) => {
+  const archive = JSON.parse(localStorage.getItem('salon_archive') || '[]');
+  const idx = archive.findIndex(a => a.id === archiveId);
+  if (idx === -1) return { success: false, error: 'Item not found in archive.' };
+  
+  const item = archive[idx];
+  const data = item.originalData;
+  let success = false;
+  
+  if (item.itemType === 'Service') {
+    const services = getTable('services');
+    services.push(data);
+    saveTable('services', services);
+    success = true;
+  } else if (item.itemType === 'Product') {
+    const products = getTable('products');
+    products.push(data);
+    saveTable('products', products);
+    success = true;
+  } else if (item.itemType === 'Inventory') {
+    const inventory = getTable('inventory');
+    inventory.push(data);
+    saveTable('inventory', inventory);
+    success = true;
+  } else if (item.itemType === 'Expense') {
+    const expenses = getTable('expenses');
+    expenses.push(data);
+    saveTable('expenses', expenses);
+    success = true;
+  } else if (item.itemType === 'Shift') {
+    const shifts = getTable('staffShifts');
+    shifts.push(data);
+    saveTable('staffShifts', shifts);
+    success = true;
+  } else if (item.itemType === 'Waitlist') {
+    const waitlist = getTable('waitlist');
+    waitlist.push(data);
+    saveTable('waitlist', waitlist);
+    success = true;
+  }
+  
+  if (success) {
+    const filtered = archive.filter(a => a.id !== archiveId);
+    localStorage.setItem('salon_archive', JSON.stringify(filtered));
+    logAction(username, 'Restore Archived Item', `Restored ${item.itemType} "${item.name}" from archive.`);
+    return { success: true };
+  }
+  
+  return { success: false, error: 'Unsupported item type.' };
+};
+
+export const purgeItem = (username, archiveId) => {
+  const archive = JSON.parse(localStorage.getItem('salon_archive') || '[]');
+  const idx = archive.findIndex(a => a.id === archiveId);
+  if (idx === -1) return false;
+  
+  const item = archive[idx];
+  const filtered = archive.filter(a => a.id !== archiveId);
+  localStorage.setItem('salon_archive', JSON.stringify(filtered));
+  logAction(username, 'Permanent Purge Item', `Permanently purged ${item.itemType} "${item.name}" from archive.`);
+  return true;
+};
+
+// Operating Expenses CRUD
+export const updateExpense = (username, expense) => {
+  const expenses = getTable('expenses');
+  const idx = expenses.findIndex(e => e.id === expense.id);
+  if (idx === -1) return null;
+  const prev = expenses[idx];
+  const updated = { ...prev, ...expense };
+
+  if (useSupabase()) {
+    cloudFetch('expenses', {
+      method: 'PATCH',
+      query: `id=eq.${expense.id}`,
+      body: {
+        category: updated.category,
+        description: updated.description,
+        amount: updated.amount,
+        machineId: updated.machineId,
+        frequency: updated.frequency,
+        date: updated.date
+      }
+    }).catch(err => console.error('Cloud expense update failed:', err));
+  }
+
+  expenses[idx] = updated;
+  saveTable('expenses', expenses);
+  logAction(username, 'Update Operating Expense', `Updated expense "${expense.category}"`, prev, updated);
+  return expenses[idx];
+};
+
+export const deleteExpense = (username, expenseId) => {
+  const expenses = getTable('expenses');
+  const idx = expenses.findIndex(e => e.id === expenseId);
+  if (idx === -1) return false;
+  const prev = expenses[idx];
+
+  if (useSupabase()) {
+    cloudFetch('expenses', {
+      method: 'DELETE',
+      query: `id=eq.${expenseId}`
+    }).catch(err => console.error('Cloud expense delete failed:', err));
+  }
+
+  const filtered = expenses.filter(e => e.id !== expenseId);
+  saveTable('expenses', filtered);
+  archiveItem(username, 'Expense', prev.category, prev);
+  logAction(username, 'Delete Operating Expense', `Deleted expense "${prev.category}" of R${prev.amount}`, prev, '');
+  return true;
+};
+
+// Consumables Stock ledger CRUD
+export const updateInventoryItem = (username, item) => {
+  const inventory = getTable('inventory');
+  const idx = inventory.findIndex(i => i.id === item.id);
+  if (idx === -1) return null;
+  const prev = inventory[idx];
+  const updated = { ...prev, ...item };
+
+  if (useSupabase()) {
+    cloudFetch('inventory', {
+      method: 'PATCH',
+      query: `id=eq.${item.id}`,
+      body: {
+        name: updated.name,
+        quantity: updated.quantity,
+        alertAt: updated.alertAt,
+        unit: updated.unit,
+        cost: updated.cost,
+        sellPrice: updated.sellPrice,
+        supplier: updated.supplier
+      }
+    }).catch(err => console.error('Cloud stock update failed:', err));
+  }
+
+  inventory[idx] = updated;
+  saveTable('inventory', inventory);
+  logAction(username, 'Update Consumable Stock Item', `Updated stock parameters for "${item.name}"`, prev, updated);
+  return inventory[idx];
+};
+
+export const deleteInventoryItem = (username, itemId) => {
+  const inventory = getTable('inventory');
+  const idx = inventory.findIndex(item => item.id === itemId);
+  if (idx === -1) return false;
+  const prev = inventory[idx];
+
+  if (useSupabase()) {
+    cloudFetch('inventory', {
+      method: 'DELETE',
+      query: `id=eq.${itemId}`
+    }).catch(err => console.error('Cloud inventory delete failed:', err));
+  }
+
+  const filtered = inventory.filter(item => item.id !== itemId);
+  saveTable('inventory', filtered);
+  archiveItem(username, 'Inventory', prev.name, prev);
+  logAction(username, 'Delete Inventory Item', `Deleted stock item "${prev.name}"`, prev, '');
   return true;
 };

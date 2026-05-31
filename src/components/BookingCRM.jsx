@@ -38,7 +38,14 @@ import {
   updateSettings,
   addService,
   updateService,
-  deleteService
+  deleteService,
+  deleteProduct,
+  updateExpense,
+  deleteExpense,
+  updateInventoryItem,
+  deleteInventoryItem,
+  restoreItem,
+  purgeItem
 } from '../db/stateEngine';
 
 export default function BookingCRM() {
@@ -98,6 +105,14 @@ export default function BookingCRM() {
   const [showWaitlistModal, setShowWaitlistModal] = useState(false);
   const [showShiftModal, setShowShiftModal] = useState(false);
   const [isSidebarMinimized, setIsSidebarMinimized] = useState(false);
+
+  // Phase 4 operating expenses filters & edit states
+  const [expensesFilterType, setExpensesFilterType] = useState('all');
+  const [expensesStartDate, setExpensesStartDate] = useState('');
+  const [expensesEndDate, setExpensesEndDate] = useState('');
+  const [editingExpense, setEditingExpense] = useState(null);
+  const [editingInventoryItem, setEditingInventoryItem] = useState(null);
+  const [editingProduct, setEditingProduct] = useState(null);
 
   // Google Reviews Feed State
   const [googleReviews, setGoogleReviews] = useState(() => {
@@ -204,6 +219,7 @@ export default function BookingCRM() {
   // Dynamic filter lists
   const [clientSearch, setClientSearch] = useState('');
   const [auditSearch, setAuditSearch] = useState('');
+  const [archiveSearch, setArchiveSearch] = useState('');
 
   // Form states
   const [bookingForm, setBookingForm] = useState({
@@ -267,6 +283,7 @@ export default function BookingCRM() {
   const [showCustomCategoryInput, setShowCustomCategoryInput] = useState(false);
   const [customCategoryText, setCustomCategoryText] = useState('');
   const [inventorySearchQuery, setInventorySearchQuery] = useState('');
+  const [archiveList, setArchiveList] = useState([]);
 
   const syncDatabase = () => {
     // Check SaaS rent lock status
@@ -287,6 +304,7 @@ export default function BookingCRM() {
     setAuditLogs(getTable('auditLogs'));
     setSettings(getTable('settings'));
     setShifts(getTable('staffShifts'));
+    setArchiveList(JSON.parse(localStorage.getItem('salon_archive') || '[]'));
 
     // Automatically set default items inside dropdown modals
     if (activeClients.length > 0 && !bookingForm.clientId) {
@@ -327,8 +345,8 @@ export default function BookingCRM() {
   // Restrict access depending on simulated role boundaries
   useEffect(() => {
     const safeTabsByRole = {
-      owner: ['dashboard', 'waitlist', 'rooms', 'crm', 'loyalty', 'gallery', 'reviews', 'billing', 'quotes', 'expenses', 'payments', 'services', 'products', 'inventory', 'therapist', 'commissions', 'settings', 'audit'],
-      receptionist: ['dashboard', 'waitlist', 'rooms', 'crm', 'loyalty', 'gallery', 'reviews', 'billing', 'quotes', 'payments', 'services', 'products', 'inventory', 'therapist', 'commissions'],
+      owner: ['dashboard', 'waitlist', 'rooms', 'crm', 'loyalty', 'gallery', 'reviews', 'billing', 'quotes', 'expenses', 'payments', 'services', 'products', 'inventory', 'orders', 'therapist', 'commissions', 'settings', 'audit', 'archive'],
+      receptionist: ['dashboard', 'waitlist', 'rooms', 'crm', 'loyalty', 'gallery', 'reviews', 'billing', 'quotes', 'payments', 'services', 'products', 'inventory', 'orders', 'therapist', 'commissions'],
       therapist: ['dashboard', 'crm', 'gallery', 'reviews', 'therapist', 'commissions']
     };
 
@@ -499,7 +517,8 @@ export default function BookingCRM() {
       icon: Settings,
       items: [
         { id: 'settings', label: 'Salon Settings', roles: ['owner'] },
-        { id: 'audit', label: 'Security Audits', roles: ['owner'] }
+        { id: 'audit', label: 'Security Audits', roles: ['owner'] },
+        { id: 'archive', label: 'Archived Deletions', roles: ['owner'] }
       ]
     }
   };
@@ -1374,8 +1393,9 @@ export default function BookingCRM() {
                           </div>
                         </div>
                         
-                        <div style={{ fontSize: '0.75rem', color: '#BFA6D8', marginBottom: '8px' }}>
-                          Usage Hours: <strong>{mach.totalUsageHours} / {serviceLimit} hrs</strong>
+                        <div style={{ fontSize: '0.75rem', color: '#BFA6D8', marginBottom: '8px', display: 'flex', gap: '16px' }}>
+                          <span>Usage Hours: <strong>{mach.totalUsageHours} / {serviceLimit} hrs</strong></span>
+                          <span>Sessions Used: <strong>{appointments.filter(a => a.machineId === mach.id && a.status !== 'Cancelled').length} times</strong></span>
                         </div>
 
                         {currentUserRole === 'owner' && (() => {
@@ -2500,15 +2520,22 @@ export default function BookingCRM() {
                           <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
                             <button
                               onClick={() => {
-                                const newPrice = prompt(`Enter new price for ${prod.name}:`, prod.price);
-                                if (newPrice) {
-                                  updateProduct(currentUserName(), { id: prod.id, name: prod.name, price: Number(newPrice) });
-                                  syncDatabase();
-                                }
+                                setEditingProduct(prod);
+                                setProductForm({
+                                  name: prod.name,
+                                  price: prod.price,
+                                  stock: prod.stock,
+                                  category: prod.category,
+                                  image: prod.image,
+                                  description: prod.description || ''
+                                });
+                                setShowCustomCategoryInput(false);
+                                setCustomCategoryText('');
+                                setShowProductModal(true);
                               }}
                               style={{ border: 'none', backgroundColor: 'hsl(var(--brand-black))', color: 'white', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.72rem' }}
                             >
-                              Edit Price
+                              Edit
                             </button>
                             <button
                               onClick={() => {
@@ -2523,6 +2550,17 @@ export default function BookingCRM() {
                               }}
                             >
                               {prod.stock === 0 ? 'In-Stock' : 'Out-Stock'}
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (confirm(`Are you sure you want to delete "${prod.name}" completely from the Atelier Shop?`)) {
+                                  deleteProduct(currentUserName(), prod.id);
+                                  syncDatabase();
+                                }
+                              }}
+                              style={{ border: 'none', backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.72rem' }}
+                            >
+                              Delete
                             </button>
                           </div>
                         </td>
@@ -2648,6 +2686,37 @@ export default function BookingCRM() {
                                 style={{ padding: '4px 8px', fontSize: '0.72rem', height: '26px' }}
                               >
                                 Adjust Stock
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setEditingInventoryItem(item);
+                                  setInventoryForm({
+                                    name: item.name,
+                                    quantity: item.quantity,
+                                    alertAt: item.alertAt,
+                                    unit: item.unit,
+                                    cost: item.cost || 0,
+                                    sellPrice: item.sellPrice || 0,
+                                    supplier: item.supplier || ''
+                                  });
+                                  setShowInventoryModal(true);
+                                }}
+                                className="btn-brand-purple"
+                                style={{ padding: '4px 8px', fontSize: '0.72rem', height: '26px', backgroundColor: 'rgba(96, 165, 250, 0.1)', color: '#60a5fa', border: '1px solid rgba(96,165,250,0.3)' }}
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => {
+                                  if (confirm(`Are you sure you want to delete "${item.name}" from the stock ledger? (It will be preserved in the deletions archive)`)) {
+                                    deleteInventoryItem(currentUserName(), item.id);
+                                    syncDatabase();
+                                  }
+                                }}
+                                className="btn-brand-purple"
+                                style={{ padding: '4px 8px', fontSize: '0.72rem', height: '26px', backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.3)' }}
+                              >
+                                Delete
                               </button>
                             </div>
                           </td>
@@ -3106,91 +3175,228 @@ export default function BookingCRM() {
         })()}
 
         {/* WORKSPACE M: ANALYTICS & P&L CHARTS */}
-        {activeTab === 'expenses' && currentUserRole === 'owner' && (
-          <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            <div style={{ display: 'flex', justify: 'space-between', alignItems: 'center' }}>
-              <div>
-                <h1 style={{ fontSize: '1.75rem', fontWeight: 800, margin: 0, fontFamily: 'Outfit' }}>Financial Operating Expenses</h1>
-                <p style={{ color: '#BFA6D8', margin: '4px 0 0 0', fontSize: '0.85rem' }}>P&L analysis, rent logs, utility bills, and hardware amortization.</p>
-              </div>
-              <button onClick={() => setShowExpenseModal(true)} className="btn-brand-gold">
-                + Log Expense
-              </button>
-            </div>
+        {activeTab === 'expenses' && currentUserRole === 'owner' && (() => {
+          const isExpenseDateInRange = (dateStr) => {
+            if (!dateStr) return false;
+            const itemDate = new Date(dateStr);
+            itemDate.setHours(0,0,0,0);
+            
+            const now = new Date();
+            now.setHours(0,0,0,0);
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '24px' }}>
-              <div className="card-premium">
-                <h3 style={{ fontFamily: 'Outfit', fontSize: '1.1rem', marginBottom: '16px', color: 'white' }}>Expenses Tally</h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {expenses.map(exp => {
-                    const linkedMachine = machines.find(m => m.id === exp.machineId);
-                    let computedAmount = exp.amount;
-                    let useInfo = '';
-                    if (exp.frequency === 'per_use' && exp.machineId) {
-                      const usageCount = appointments.filter(a => a.machineId === exp.machineId && a.status !== 'Cancelled').length;
-                      computedAmount = exp.amount * usageCount;
-                      useInfo = ` (R ${exp.amount.toFixed(2)} x ${usageCount} uses)`;
-                    }
-                    
-                    let billingTypeLabel = 'Once-off';
-                    if (exp.frequency === 'monthly') billingTypeLabel = 'Monthly Recurrent';
-                    if (exp.frequency === 'per_use') billingTypeLabel = 'Per Session';
+            if (expensesFilterType === 'all') {
+              return true;
+            }
+            if (expensesFilterType === 'today') {
+              const todayStr = now.toISOString().split('T')[0];
+              return dateStr === todayStr;
+            }
+            if (expensesFilterType === 'last_week') {
+              const oneWeekAgo = new Date(now);
+              oneWeekAgo.setDate(now.getDate() - 7);
+              return itemDate >= oneWeekAgo && itemDate <= now;
+            }
+            if (expensesFilterType === 'last_month') {
+              const oneMonthAgo = new Date(now);
+              oneMonthAgo.setMonth(now.getMonth() - 1);
+              return itemDate >= oneMonthAgo && itemDate <= now;
+            }
+            if (expensesFilterType === 'custom') {
+              if (expensesStartDate && expensesEndDate) {
+                const start = new Date(expensesStartDate);
+                start.setHours(0,0,0,0);
+                const end = new Date(expensesEndDate);
+                end.setHours(23,59,59,999);
+                return itemDate >= start && itemDate <= end;
+              } else if (expensesStartDate) {
+                const start = new Date(expensesStartDate);
+                start.setHours(0,0,0,0);
+                return itemDate >= start;
+              } else if (expensesEndDate) {
+                const end = new Date(expensesEndDate);
+                end.setHours(23,59,59,999);
+                return itemDate <= end;
+              }
+              return true;
+            }
+            return true;
+          };
 
-                    return (
-                      <div key={exp.id} style={{ display: 'flex', justify: 'space-between', padding: '10px', backgroundColor: 'hsl(var(--brand-black))', borderRadius: '8px', fontSize: '0.8rem' }}>
-                        <div>
-                          <strong>{exp.category} <span style={{ fontSize: '0.68rem', fontWeight: 400, color: '#A89684' }}>({billingTypeLabel})</span></strong>
-                          <span style={{ display: 'block', fontSize: '0.7rem', color: '#A89684' }}>{exp.description}{useInfo}</span>
-                          {linkedMachine && (
-                            <span style={{ display: 'inline-block', fontSize: '0.65rem', color: '#D4AF37', border: '1px solid rgba(212, 175, 55, 0.3)', padding: '2px 6px', borderRadius: '4px', marginTop: '4px' }}>
-                              Linked Machine: {linkedMachine.name}
-                            </span>
-                          )}
-                        </div>
-                        <strong style={{ color: '#ef4444' }}>- R {computedAmount.toFixed(2)}</strong>
-                      </div>
-                    );
-                  })}
+          const filteredExpensesList = expenses.filter(exp => isExpenseDateInRange(exp.date));
+
+          const getComputedExpenseAmount = (exp) => {
+            if (exp.frequency === 'per_use' && exp.machineId) {
+              const usageCount = appointments.filter(a => a.machineId === exp.machineId && a.status !== 'Cancelled').length;
+              return exp.amount * usageCount;
+            }
+            return exp.amount;
+          };
+
+          const totalExpensesSum = filteredExpensesList.reduce((acc, exp) => acc + getComputedExpenseAmount(exp), 0);
+
+          return (
+            <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '24px', flexWrap: 'wrap' }}>
+                <div>
+                  <h1 style={{ fontSize: '1.75rem', fontWeight: 800, margin: 0, fontFamily: 'Outfit' }}>Financial Operating Expenses</h1>
+                  <p style={{ color: '#BFA6D8', margin: '4px 0 0 0', fontSize: '0.85rem' }}>P&L analysis, rent logs, utility bills, and hardware amortization.</p>
+                </div>
+                
+                {/* Date range filter controls */}
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <select 
+                    className="brand-input" 
+                    value={expensesFilterType} 
+                    onChange={(e) => setExpensesFilterType(e.target.value)}
+                    style={{ width: '150px', height: '36px', fontSize: '0.8rem' }}
+                  >
+                    <option value="all">All Dates</option>
+                    <option value="today">Today</option>
+                    <option value="last_week">Last Week</option>
+                    <option value="last_month">Last Month</option>
+                    <option value="custom">Custom Range...</option>
+                  </select>
+
+                  {expensesFilterType === 'custom' && (
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <input 
+                        type="date" 
+                        className="brand-input" 
+                        value={expensesStartDate} 
+                        onChange={(e) => setExpensesStartDate(e.target.value)}
+                        style={{ height: '36px', fontSize: '0.8rem' }}
+                      />
+                      <span style={{ color: '#BFA6D8', fontSize: '0.8rem' }}>to</span>
+                      <input 
+                        type="date" 
+                        className="brand-input" 
+                        value={expensesEndDate} 
+                        onChange={(e) => setExpensesEndDate(e.target.value)}
+                        style={{ height: '36px', fontSize: '0.8rem' }}
+                      />
+                    </div>
+                  )}
+
+                  <button onClick={() => {
+                    setEditingExpense(null);
+                    setExpenseForm({ category: 'Rent', description: '', amount: 0, machineId: '', frequency: 'once_off' });
+                    setShowExpenseModal(true);
+                  }} className="btn-brand-gold">
+                    + Log Expense
+                  </button>
                 </div>
               </div>
 
-              {/* Area chart */}
-              <div className="card-premium" style={{ height: '320px' }}>
-                <h3 style={{ fontFamily: 'Outfit', fontSize: '1rem', marginBottom: '16px' }}>Operating Revenue vs Expenses</h3>
-                <ResponsiveContainer width="100%" height="80%">
-                  <AreaChart
-                    data={[
-                      { month: 'Jan', Sales: 8000, Expenses: 3200 },
-                      { month: 'Feb', Sales: 11000, Expenses: 4100 },
-                      { month: 'Mar', Sales: 14500, Expenses: 4300 },
-                      { month: 'Apr', Sales: 18000, Expenses: 5800 },
-                      { month: 'May', Sales: invoices.reduce((acc, i) => acc + i.total, 0), Expenses: expenses.reduce((acc, e) => {
-                        if (e.frequency === 'per_use' && e.machineId) {
-                          const usageCount = appointments.filter(a => a.machineId === e.machineId && a.status !== 'Cancelled').length;
-                          return acc + (e.amount * usageCount);
-                        }
-                        return acc + e.amount;
-                      }, 0) }
-                    ]}
-                  >
-                    <defs>
-                      <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#D4AF37" stopOpacity={0.25} />
-                        <stop offset="95%" stopColor="#D4AF37" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#222" />
-                    <XAxis dataKey="month" stroke="#A89684" />
-                    <YAxis stroke="#A89684" />
-                    <Tooltip contentStyle={{ backgroundColor: '#1A1A1A', borderColor: '#444' }} />
-                    <Area type="monotone" dataKey="Sales" stroke="#D4AF37" fillOpacity={1} fill="url(#colorSales)" strokeWidth={2} />
-                    <Area type="monotone" dataKey="Expenses" stroke="#ef4444" fill="none" strokeWidth={1.5} />
-                  </AreaChart>
-                </ResponsiveContainer>
+              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.8fr', gap: '24px' }}>
+                <div className="card-premium">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <h3 style={{ fontFamily: 'Outfit', fontSize: '1.1rem', color: 'white', margin: 0 }}>Expenses Tally</h3>
+                    <span style={{ fontSize: '0.8rem', color: '#ef4444', fontWeight: 700 }}>Total: R {totalExpensesSum.toFixed(2)}</span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '500px', overflowY: 'auto', paddingRight: '4px' }}>
+                    {filteredExpensesList.map(exp => {
+                      const linkedMachine = machines.find(m => m.id === exp.machineId);
+                      const computedAmount = getComputedExpenseAmount(exp);
+                      
+                      let useInfo = '';
+                      if (exp.frequency === 'per_use' && exp.machineId) {
+                        const usageCount = appointments.filter(a => a.machineId === exp.machineId && a.status !== 'Cancelled').length;
+                        useInfo = ` (R ${exp.amount.toFixed(2)} x ${usageCount} uses)`;
+                      }
+                      
+                      let billingTypeLabel = 'Once-off';
+                      if (exp.frequency === 'monthly') billingTypeLabel = 'Monthly';
+                      if (exp.frequency === 'per_use') billingTypeLabel = 'Per Session';
+
+                      return (
+                        <div key={exp.id} style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '10px', backgroundColor: 'hsl(var(--brand-black))', borderRadius: '8px', fontSize: '0.8rem', border: '1px solid rgba(107, 44, 145, 0.15)' }}>
+                          <div style={{ display: 'flex', justify: 'space-between', alignItems: 'center' }}>
+                            <div>
+                              <strong>{exp.category} <span style={{ fontSize: '0.68rem', fontWeight: 400, color: '#A89684' }}>({billingTypeLabel})</span></strong>
+                              <span style={{ display: 'block', fontSize: '0.7rem', color: '#A89684', marginTop: '2px' }}>{exp.description}{useInfo}</span>
+                              <span style={{ display: 'block', fontSize: '0.65rem', color: '#A89684', marginTop: '2px' }}>Date: {exp.date || new Date().toISOString().split('T')[0]}</span>
+                              {linkedMachine && (
+                                <span style={{ display: 'inline-block', fontSize: '0.65rem', color: '#D4AF37', border: '1px solid rgba(212, 175, 55, 0.3)', padding: '2px 6px', borderRadius: '4px', marginTop: '4px' }}>
+                                  Linked Machine: {linkedMachine.name}
+                                </span>
+                              )}
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
+                              <strong style={{ color: '#ef4444' }}>- R {computedAmount.toFixed(2)}</strong>
+                              <div style={{ display: 'flex', gap: '4px' }}>
+                                <button
+                                  onClick={() => {
+                                    setEditingExpense(exp);
+                                    setExpenseForm({
+                                      category: exp.category,
+                                      description: exp.description,
+                                      amount: exp.amount,
+                                      machineId: exp.machineId || '',
+                                      frequency: exp.frequency || 'once_off'
+                                    });
+                                    setShowExpenseModal(true);
+                                  }}
+                                  style={{ border: 'none', backgroundColor: 'rgba(255, 255, 255, 0.05)', color: 'white', padding: '2px 6px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.65rem' }}
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    if (confirm(`Are you sure you want to delete this expense record: "${exp.category} - ${exp.description}"? (It will be stored in the deletions archive)`)) {
+                                      deleteExpense(currentUserName(), exp.id);
+                                      syncDatabase();
+                                    }
+                                  }}
+                                  style={{ border: 'none', backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', padding: '2px 6px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.65rem' }}
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {filteredExpensesList.length === 0 && (
+                      <div style={{ padding: '24px', textAlign: 'center', color: '#A89684' }}>
+                        No operating expenses logged in this range.
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Area chart */}
+                <div className="card-premium" style={{ height: '320px' }}>
+                  <h3 style={{ fontFamily: 'Outfit', fontSize: '1rem', marginBottom: '16px' }}>Operating Revenue vs Expenses</h3>
+                  <ResponsiveContainer width="100%" height="80%">
+                    <AreaChart
+                      data={[
+                        { month: 'Jan', Sales: 8000, Expenses: 3200 },
+                        { month: 'Feb', Sales: 11000, Expenses: 4100 },
+                        { month: 'Mar', Sales: 14500, Expenses: 4300 },
+                        { month: 'Apr', Sales: 18000, Expenses: 5800 },
+                        { month: 'May', Sales: invoices.reduce((acc, i) => acc + i.total, 0), Expenses: totalExpensesSum }
+                      ]}
+                    >
+                      <defs>
+                        <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#D4AF37" stopOpacity={0.25} />
+                          <stop offset="95%" stopColor="#D4AF37" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#222" />
+                      <XAxis dataKey="month" stroke="#A89684" />
+                      <YAxis stroke="#A89684" />
+                      <Tooltip contentStyle={{ backgroundColor: '#1A1A1A', borderColor: '#444' }} />
+                      <Area type="monotone" dataKey="Sales" stroke="#D4AF37" fillOpacity={1} fill="url(#colorSales)" strokeWidth={2} />
+                      <Area type="monotone" dataKey="Expenses" stroke="#ef4444" fill="none" strokeWidth={1.5} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* WORKSPACE N: REFUNDS & PAYMENTS LOG */}
         {activeTab === 'payments' && (() => {
@@ -3413,67 +3619,7 @@ export default function BookingCRM() {
                 </table>
               </div>
 
-              {/* FULLY PAID / SETTLED INVOICES */}
-              <div className="card-premium" style={{ border: '1px solid rgba(52, 211, 153, 0.25)', overflowX: 'auto' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                  <h3 style={{ fontFamily: 'Outfit', fontSize: '1.1rem', color: '#34d399', margin: 0 }}>Fully Paid & Settled Invoices</h3>
-                  <span style={{ fontSize: '0.75rem', color: '#A89684' }}>{paidInvoicesList.length} settled accounts</span>
-                </div>
-                <table className="table-premium" style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr style={{ borderBottom: '2px solid rgba(52, 211, 153, 0.3)' }}>
-                      <th style={{ padding: '12px', color: '#34d399', fontSize: '0.85rem', fontWeight: 700, width: '20%' }}>Invoice ID</th>
-                      <th style={{ padding: '12px', color: '#34d399', fontSize: '0.85rem', fontWeight: 700, width: '30%' }}>Client Name</th>
-                      <th style={{ padding: '12px', color: '#34d399', fontSize: '0.85rem', fontWeight: 700, width: '15%' }}>Date Settled</th>
-                      <th style={{ padding: '12px', color: '#34d399', fontSize: '0.85rem', fontWeight: 700, width: '15%' }}>Total Settled</th>
-                      <th style={{ padding: '12px', color: '#34d399', fontSize: '0.85rem', fontWeight: 700, width: '20%', textAlign: 'right' }}>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {paidInvoicesList.map(inv => {
-                      const cli = clients.find(c => c.id === inv.clientId);
-                      return (
-                        <tr key={inv.id} style={{ borderBottom: '1px solid rgba(52, 211, 153, 0.15)' }}>
-                          <td style={{ padding: '12px' }}><strong>{inv.invoiceNumber}</strong></td>
-                          <td style={{ padding: '12px', color: '#BFA6D8', fontWeight: 500 }}>{cli?.name || 'Walk-in Guest'}</td>
-                          <td style={{ padding: '12px', color: '#A89684', fontSize: '0.78rem' }}>{inv.date}</td>
-                          <td style={{ padding: '12px' }}><strong style={{ color: '#34d399' }}>R {inv.total.toFixed(2)}</strong></td>
-                          <td style={{ padding: '12px', textAlign: 'right' }}>
-                            <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
-                              <button
-                                onClick={() => { setActiveViewInvoice(inv); setShowInvoiceModal(true); }}
-                                className="btn-brand-purple"
-                                style={{ padding: '2px 6px', fontSize: '0.65rem', height: '22px' }}
-                              >
-                                View
-                              </button>
-                              <button
-                                onClick={() => alert(`Paid invoice ${inv.invoiceNumber} emailed to ${cli?.email || 'client'}`)}
-                                style={{ border: 'none', backgroundColor: '#1e1b4b', color: '#BFA6D8', padding: '2px 6px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.65rem', height: '22px' }}
-                              >
-                                Email
-                              </button>
-                              <button
-                                onClick={() => alert(`Paid invoice ${inv.invoiceNumber} sent via WhatsApp to ${cli?.phone || 'client'}`)}
-                                style={{ border: 'none', backgroundColor: '#064e3b', color: '#34d399', padding: '2px 6px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.65rem', height: '22px' }}
-                              >
-                                WhatsApp
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                    {paidInvoicesList.length === 0 && (
-                      <tr>
-                        <td colSpan={5} style={{ padding: '24px', textAlign: 'center', color: '#A89684', fontSize: '0.85rem' }}>
-                          No fully paid invoices recorded in this period.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+
 
               {/* Payments ledger (journal audit) */}
               <div className="card-premium" style={{ border: '1px solid rgba(107, 44, 145, 0.25)', overflowX: 'auto' }}>
@@ -3766,7 +3912,7 @@ export default function BookingCRM() {
                           </button>
                         </div>
                         <div style={{ display: 'flex', justify: 'space-between', fontSize: '0.7rem', color: '#A89684', marginTop: '4px' }}>
-                          <span>Hours running: {mach.totalUsageHours}h</span>
+                          <span>Hours running: {mach.totalUsageHours}h | Times used: {appointments.filter(a => a.machineId === mach.id && a.status !== 'Cancelled').length}</span>
                           <button onClick={() => {
                             logMachineMaintenance(currentUserName(), mach.id, 'Reset usage hours after servicing');
                             syncDatabase();
@@ -3830,6 +3976,142 @@ export default function BookingCRM() {
                     ))}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {/* WORKSPACE R: ARCHIVED DELETIONS SYSTEM */}
+        {activeTab === 'archive' && currentUserRole === 'owner' && (
+          <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <h1 style={{ fontSize: '1.75rem', fontWeight: 800, margin: 0, fontFamily: 'Outfit', color: '#D4AF37' }}>Archived Deletions Vault</h1>
+            <p style={{ color: '#BFA6D8', margin: '4px 0 0 0', fontSize: '0.85rem' }}>View, restore, or permanently purge all deleted system entities securely.</p>
+
+            <div className="card-premium">
+              <div style={{ position: 'relative', marginBottom: '16px' }}>
+                <Search style={{ position: 'absolute', top: '10px', left: '10px', width: '16px', height: '16px', color: '#A89684' }} />
+                <input
+                  type="text"
+                  placeholder="Search deleted archives..."
+                  className="brand-input"
+                  style={{ paddingLeft: '34px' }}
+                  value={archiveSearch}
+                  onChange={(e) => setArchiveSearch(e.target.value)}
+                />
+              </div>
+
+              <div style={{ overflowX: 'auto' }}>
+                <table className="table-premium">
+                  <thead>
+                    <tr>
+                      <th>Type</th>
+                      <th>Item Name</th>
+                      <th>Key Metadata Details</th>
+                      <th>Date Deleted</th>
+                      <th>Deleted By</th>
+                      <th style={{ textAlign: 'right' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {archiveList.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} style={{ textTransform: 'none', color: '#BFA6D8', textAlign: 'center', padding: '40px 0' }}>
+                          <ShieldAlert style={{ width: '32px', height: '32px', color: '#D4AF37', margin: '0 auto 12px auto', opacity: 0.7 }} />
+                          <div style={{ fontWeight: 600 }}>The deletion vault is currently empty.</div>
+                          <div style={{ fontSize: '0.78rem', color: '#A89684', marginTop: '4px' }}>All future deleted shifts, services, stock ledger items, products, waitlists and expenses will appear here.</div>
+                        </td>
+                      </tr>
+                    ) : (
+                      archiveList
+                        .filter(item => {
+                          const query = archiveSearch.toLowerCase();
+                          return (
+                            item.itemType.toLowerCase().includes(query) ||
+                            item.name.toLowerCase().includes(query) ||
+                            (item.deletedBy && item.deletedBy.toLowerCase().includes(query))
+                          );
+                        })
+                        .map(item => {
+                          let metadataStr = '—';
+                          if (item.originalData) {
+                            if (item.itemType === 'Service') {
+                              metadataStr = `Price: R${item.originalData.price} | Duration: ${item.originalData.duration}m | Category: ${item.originalData.category}`;
+                            } else if (item.itemType === 'Product') {
+                              metadataStr = `Price: R${item.originalData.price} | Stock: ${item.originalData.stock} units | Category: ${item.originalData.category}`;
+                            } else if (item.itemType === 'Inventory') {
+                              metadataStr = `Qty: ${item.originalData.quantity} ${item.originalData.unit} | Cost: R${item.originalData.cost} | Supplier: ${item.originalData.supplier}`;
+                            } else if (item.itemType === 'Expense') {
+                              metadataStr = `Amount: R${item.originalData.amount} | Frequency: ${item.originalData.frequency} | Date: ${item.originalData.date}`;
+                            } else if (item.itemType === 'Shift') {
+                              metadataStr = `Type: ${item.originalData.type} | Date: ${item.originalData.date} | Times: ${item.originalData.startTime}-${item.originalData.endTime}`;
+                            } else if (item.itemType === 'Waitlist') {
+                              metadataStr = `Day Pref: ${item.originalData.dayPref} | Time Pref: ${item.originalData.timePref} | Notes: ${item.originalData.notes || 'None'}`;
+                            }
+                          }
+
+                          let badgeClass = 'badge-brand';
+                          if (item.itemType === 'Service') badgeClass += ' gold';
+                          else if (item.itemType === 'Product') badgeClass += ' purple';
+                          else if (item.itemType === 'Inventory') badgeClass += ' green';
+                          else if (item.itemType === 'Expense') badgeClass += ' red';
+                          else if (item.itemType === 'Shift') badgeClass += ' blue';
+                          else if (item.itemType === 'Waitlist') badgeClass += ' purple';
+
+                          return (
+                            <tr key={item.id} style={{ transition: 'all 0.2s' }}>
+                              <td>
+                                <span className={badgeClass} style={{ fontSize: '0.65rem', fontWeight: 700 }}>
+                                  {item.itemType}
+                                </span>
+                              </td>
+                              <td><strong style={{ color: 'white' }}>{item.name}</strong></td>
+                              <td style={{ fontSize: '0.78rem', color: '#BFA6D8' }}>{metadataStr}</td>
+                              <td style={{ fontSize: '0.78rem', color: '#A89684' }}>{item.deletedAt}</td>
+                              <td><strong style={{ color: '#D4AF37', fontSize: '0.8rem' }}>{item.deletedBy || 'System'}</strong></td>
+                              <td style={{ textAlign: 'right' }}>
+                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                                  <button
+                                    onClick={() => {
+                                      if (confirm(`Are you sure you want to restore the archived ${item.itemType} "${item.name}" back to live database tables?`)) {
+                                        const res = restoreItem(currentUserName(), item.id);
+                                        if (res.success) {
+                                          syncDatabase();
+                                        } else {
+                                          alert(`Failed to restore item: ${res.error}`);
+                                        }
+                                      }
+                                    }}
+                                    className="badge-brand green"
+                                    style={{ border: 'none', cursor: 'pointer', fontSize: '0.68rem', padding: '4px 10px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}
+                                  >
+                                    <RefreshCw style={{ width: '10px', height: '10px' }} /> Restore
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      if (confirm(`[WARNING] Are you sure you want to PERMANENTLY PURGE "${item.name}"?\nThis cannot be undone and will be permanently deleted from the database archive.`)) {
+                                        if (confirm(`Double Confirmation: Please confirm once more to permanently erase "${item.name}".`)) {
+                                          const ok = purgeItem(currentUserName(), item.id);
+                                          if (ok) {
+                                            syncDatabase();
+                                          } else {
+                                            alert('Failed to purge item from archive.');
+                                          }
+                                        }
+                                      }
+                                    }}
+                                    className="badge-brand red"
+                                    style={{ border: 'none', cursor: 'pointer', fontSize: '0.68rem', padding: '4px 10px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}
+                                  >
+                                    <Trash2 style={{ width: '10px', height: '10px' }} /> Purge
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}
@@ -4632,14 +4914,19 @@ export default function BookingCRM() {
       {showProductModal && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000 }}>
           <div className="card-premium animate-fade-in" style={{ width: '400px' }}>
-            <h3 style={{ fontFamily: 'Outfit', color: '#D4AF37', marginBottom: '16px' }}>Sync E-Commerce Product</h3>
-
+            <h3 style={{ fontFamily: 'Outfit', color: '#D4AF37', marginBottom: '16px' }}>{editingProduct ? 'Edit Atelier Shop Product' : 'Sync E-Commerce Product'}</h3>
+ 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Product Name:</label>
-                <input type="text" className="brand-input" onChange={(e) => setProductForm(prev => ({ ...prev, name: e.target.value }))} />
+                <input 
+                  type="text" 
+                  className="brand-input" 
+                  value={productForm.name} 
+                  onChange={(e) => setProductForm(prev => ({ ...prev, name: e.target.value }))} 
+                />
               </div>
-
+ 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Price (R):</label>
@@ -4650,7 +4937,7 @@ export default function BookingCRM() {
                   <input type="number" className="brand-input" value={productForm.stock === 0 ? '' : productForm.stock} onChange={(e) => setProductForm(prev => ({ ...prev, stock: Number(e.target.value) }))} />
                 </div>
               </div>
-
+ 
               <div>
                 <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Category:</label>
                 <select 
@@ -4671,7 +4958,7 @@ export default function BookingCRM() {
                   <option value="custom">+ Create Custom Category...</option>
                 </select>
               </div>
-
+ 
               {showCustomCategoryInput && (
                 <div>
                   <label style={{ display: 'block', fontSize: '0.8rem', color: '#D4AF37', marginBottom: '6px' }}>Custom Category Name:</label>
@@ -4687,25 +4974,47 @@ export default function BookingCRM() {
                   />
                 </div>
               )}
-
+ 
               <div>
                 <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Image URL:</label>
-                <input type="text" className="brand-input" defaultValue="https://images.unsplash.com/photo-1608248597279-f99d160bfcbc?w=300" onChange={(e) => setProductForm(prev => ({ ...prev, image: e.target.value }))} />
+                <input 
+                  type="text" 
+                  className="brand-input" 
+                  value={productForm.image} 
+                  onChange={(e) => setProductForm(prev => ({ ...prev, image: e.target.value }))} 
+                />
               </div>
-
+ 
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Description:</label>
+                <textarea 
+                  className="brand-input" 
+                  rows={2} 
+                  placeholder="Enter product retail description..."
+                  value={productForm.description || ''} 
+                  onChange={(e) => setProductForm(prev => ({ ...prev, description: e.target.value }))}
+                />
+              </div>
+ 
               <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
                 <button
+                  disabled={!productForm.name || !productForm.category}
                   onClick={() => {
-                    addProduct('Dashboard Admin', { ...productForm, image: productForm.image || 'https://images.unsplash.com/photo-1608248597279-f99d160bfcbc?w=300' });
+                    if (editingProduct) {
+                      updateProduct(currentUserName(), { id: editingProduct.id, ...productForm });
+                    } else {
+                      addProduct('Dashboard Admin', { ...productForm, image: productForm.image || 'https://images.unsplash.com/photo-1608248597279-f99d160bfcbc?w=300' });
+                    }
                     setShowProductModal(false);
+                    setEditingProduct(null);
                     syncDatabase();
                   }}
                   className="btn-brand-gold"
-                  style={{ width: '100%', justifyContent: 'center' }}
+                  style={{ width: '100%', justifyContent: 'center', opacity: (productForm.name && productForm.category) ? 1 : 0.4 }}
                 >
-                  Create & Sync
+                  {editingProduct ? 'Save Changes' : 'Create & Sync'}
                 </button>
-                <button onClick={() => setShowProductModal(false)} className="btn-brand-purple" style={{ width: '100%', justifyContent: 'center' }}>Cancel</button>
+                <button onClick={() => { setShowProductModal(false); setEditingProduct(null); }} className="btn-brand-purple" style={{ width: '100%', justifyContent: 'center' }}>Cancel</button>
               </div>
             </div>
           </div>
@@ -4753,7 +5062,7 @@ export default function BookingCRM() {
       {showExpenseModal && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000 }}>
           <div className="card-premium animate-fade-in" style={{ width: '400px' }}>
-            <h3 style={{ fontFamily: 'Outfit', color: '#D4AF37', marginBottom: '16px' }}>Log Operating Expense</h3>
+            <h3 style={{ fontFamily: 'Outfit', color: '#D4AF37', marginBottom: '16px' }}>{editingExpense ? 'Edit Operating Expense' : 'Log Operating Expense'}</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Category:</label>
@@ -4794,16 +5103,21 @@ export default function BookingCRM() {
               <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
                 <button
                   onClick={() => {
-                    addExpense(currentUserName(), expenseForm);
+                    if (editingExpense) {
+                      updateExpense(currentUserName(), { id: editingExpense.id, ...expenseForm, date: editingExpense.date });
+                    } else {
+                      addExpense(currentUserName(), expenseForm);
+                    }
                     setShowExpenseModal(false);
+                    setEditingExpense(null);
                     syncDatabase();
                   }}
                   className="btn-brand-gold"
                   style={{ width: '100%', justifyContent: 'center' }}
                 >
-                  Save Expense
+                  {editingExpense ? 'Save Changes' : 'Save Expense'}
                 </button>
-                <button onClick={() => setShowExpenseModal(false)} className="btn-brand-purple" style={{ width: '100%', justifyContent: 'center' }}>Cancel</button>
+                <button onClick={() => { setShowExpenseModal(false); setEditingExpense(null); }} className="btn-brand-purple" style={{ width: '100%', justifyContent: 'center' }}>Cancel</button>
               </div>
             </div>
           </div>
@@ -6068,7 +6382,7 @@ export default function BookingCRM() {
       {showInventoryModal && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000 }}>
           <div className="card-premium animate-fade-in" style={{ width: '400px' }}>
-            <h3 style={{ fontFamily: 'Outfit', color: '#D4AF37', marginBottom: '16px' }}>Register Consumable Stock</h3>
+            <h3 style={{ fontFamily: 'Outfit', color: '#D4AF37', marginBottom: '16px' }}>{editingInventoryItem ? 'Edit Consumable Item' : 'Register Consumable Stock'}</h3>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div>
@@ -6083,7 +6397,7 @@ export default function BookingCRM() {
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Starting Qty:</label>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>{editingInventoryItem ? 'Current Qty:' : 'Starting Qty:'}</label>
                   <input 
                     type="number" 
                     className="brand-input" 
@@ -6151,16 +6465,21 @@ export default function BookingCRM() {
                 <button
                   disabled={!inventoryForm.name}
                   onClick={() => {
-                    addInventoryItem('Dashboard Admin', inventoryForm);
+                    if (editingInventoryItem) {
+                      updateInventoryItem(currentUserName(), { id: editingInventoryItem.id, ...inventoryForm });
+                    } else {
+                      addInventoryItem('Dashboard Admin', inventoryForm);
+                    }
                     setShowInventoryModal(false);
+                    setEditingInventoryItem(null);
                     syncDatabase();
                   }}
                   className="btn-brand-gold"
                   style={{ width: '100%', justifyContent: 'center', opacity: inventoryForm.name ? 1 : 0.4 }}
                 >
-                  Create Consumable
+                  {editingInventoryItem ? 'Save Changes' : 'Create Consumable'}
                 </button>
-                <button onClick={() => setShowInventoryModal(false)} className="btn-brand-purple" style={{ width: '100%', justifyContent: 'center' }}>Cancel</button>
+                <button onClick={() => { setShowInventoryModal(false); setEditingInventoryItem(null); }} className="btn-brand-purple" style={{ width: '100%', justifyContent: 'center' }}>Cancel</button>
               </div>
             </div>
           </div>
