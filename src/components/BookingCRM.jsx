@@ -423,7 +423,7 @@ export default function BookingCRM() {
         { id: 'crm', label: 'CRM Client Folders', roles: ['owner', 'receptionist', 'therapist'] },
         { id: 'loyalty', label: 'VIP & Glow Points', roles: ['owner', 'receptionist'] },
         { id: 'gallery', label: 'Before/After Progress', roles: ['owner', 'receptionist', 'therapist'] },
-        { id: 'reviews', label: 'Google Business Reviews', roles: ['owner', 'receptionist'] }
+        { id: 'reviews', label: 'Google Business Reviews', roles: ['owner', 'receptionist', 'therapist'] }
       ]
     },
     billing: {
@@ -621,9 +621,8 @@ export default function BookingCRM() {
                   <button
                     key={folderKey}
                     onClick={() => {
-                      if (filteredItems.length > 0) {
-                        setActiveTab(filteredItems[0].id);
-                      }
+                      setIsSidebarMinimized(false);
+                      setExpandedFolders(prev => ({ ...prev, [folderKey]: true }));
                     }}
                     title={folder.label}
                     style={{
