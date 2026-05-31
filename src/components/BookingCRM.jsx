@@ -798,7 +798,7 @@ export default function BookingCRM() {
                                 )}
 
                                 {/* Capture Payment shortcut */}
-                                {currentUserRole !== 'therapist' && apt.paymentStatus === 'Unpaid' && (
+                                {currentUserRole !== 'therapist' && (apt.paymentStatus === 'Unpaid' || !apt.paymentStatus) && (
                                   <button
                                     onClick={() => {
                                       setActiveCapturePaymentApt(apt);
