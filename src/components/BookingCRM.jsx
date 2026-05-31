@@ -175,6 +175,27 @@ export default function BookingCRM() {
   // Active items for detail overlays
   const [activePaymentInvoice, setActivePaymentInvoice] = useState(null);
   const [activePrintInvoice, setActivePrintInvoice] = useState(null);
+
+  // Corporate Documents & Sharing states
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+  const [activeViewInvoice, setActiveViewInvoice] = useState(null);
+  
+  const [showQuoteViewModal, setShowQuoteViewModal] = useState(false);
+  const [activeViewQuote, setActiveViewQuote] = useState(null);
+  
+  const [showRefundLetterModal, setShowRefundLetterModal] = useState(false);
+  const [activeRefundInvoice, setActiveRefundInvoice] = useState(null);
+  
+  // Custom Search & Whitelists
+  const [invoiceSearchQuery, setInvoiceSearchQuery] = useState('');
+  const [quoteSearchQuery, setQuoteSearchQuery] = useState('');
+  const [manualQuoteClientSearch, setManualQuoteClientSearch] = useState('');
+
+  // Refunds & Payments date filter states
+  const [paymentsFilterType, setPaymentsFilterType] = useState('all'); // all, today, last_week, last_month, custom
+  const [paymentsStartDate, setPaymentsStartDate] = useState('');
+  const [paymentsEndDate, setPaymentsEndDate] = useState('');
+
   const [selectedClient, setSelectedClient] = useState(null);
 
   // Dynamic filter lists
@@ -196,7 +217,7 @@ export default function BookingCRM() {
     name: '', price: 250, stock: 10, category: 'Facial Products', description: '', image: ''
   });
   const [paymentForm, setPaymentForm] = useState({ amount: 0, method: 'Card' });
-  const [expenseForm, setExpenseForm] = useState({ category: 'Utilities', description: '', amount: 0 });
+  const [expenseForm, setExpenseForm] = useState({ category: 'Utilities', description: '', amount: 0, machineId: '' });
   const [waitlistForm, setWaitlistForm] = useState({
     clientId: '',
     serviceId: '',
@@ -1338,11 +1359,19 @@ export default function BookingCRM() {
                           Usage Hours: <strong>{mach.totalUsageHours} / {serviceLimit} hrs</strong>
                         </div>
 
-                        {currentUserRole === 'owner' && (
-                          <div style={{ fontSize: '0.72rem', color: '#34d399', marginBottom: '8px', borderTop: '1px dashed rgba(52,211,153,0.2)', paddingTop: '4px' }}>
-                            Yield Revenue: <strong>R {mach.revenueGenerated}</strong> | ROI: <strong>{((mach.revenueGenerated / mach.purchaseCost) * 100).toFixed(1)}%</strong>
-                          </div>
-                        )}
+                        {currentUserRole === 'owner' && (() => {
+                          const machineExpenses = expenses.filter(exp => exp.machineId === mach.id).reduce((acc, e) => acc + e.amount, 0);
+                          const netRevenue = mach.revenueGenerated - machineExpenses;
+                          const netRoi = mach.purchaseCost > 0 ? ((netRevenue / mach.purchaseCost) * 100).toFixed(1) : '0.0';
+                          return (
+                            <div style={{ fontSize: '0.72rem', color: '#34d399', marginBottom: '8px', borderTop: '1px dashed rgba(52,211,153,0.2)', paddingTop: '6px', display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                              <div>Gross Yield: <strong>R {mach.revenueGenerated.toFixed(2)}</strong></div>
+                              <div>Machine Expenses: <strong style={{ color: '#ef4444' }}>R {machineExpenses.toFixed(2)}</strong></div>
+                              <div>Net Profit: <strong style={{ color: '#34d399' }}>R {netRevenue.toFixed(2)}</strong></div>
+                              <div style={{ color: '#D4AF37' }}>Net ROI: <strong>{netRoi}%</strong> (Gross: {mach.purchaseCost > 0 ? ((mach.revenueGenerated / mach.purchaseCost) * 100).toFixed(1) : '0.0'}%)</div>
+                            </div>
+                          );
+                        })()}
 
                         {activeApts.length === 0 ? (
                           <span style={{ fontSize: '0.72rem', color: '#A89684' }}>No active bookings utilizing this unit now.</span>
@@ -1686,15 +1715,15 @@ export default function BookingCRM() {
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '12px' }}>
                         <div>
                           <label style={{ display: 'block', fontSize: '0.72rem', color: '#A89684', marginBottom: '4px' }}>Weight (kg):</label>
-                          <input type="number" className="brand-input" value={progressForm.weight} onChange={(e) => setProgressForm(prev => ({ ...prev, weight: Number(e.target.value) }))} />
+                          <input type="number" className="brand-input" value={progressForm.weight === 0 ? '' : progressForm.weight} onChange={(e) => setProgressForm(prev => ({ ...prev, weight: Number(e.target.value) }))} />
                         </div>
                         <div>
                           <label style={{ display: 'block', fontSize: '0.72rem', color: '#A89684', marginBottom: '4px' }}>Waist (cm):</label>
-                          <input type="number" className="brand-input" value={progressForm.waist} onChange={(e) => setProgressForm(prev => ({ ...prev, waist: Number(e.target.value) }))} />
+                          <input type="number" className="brand-input" value={progressForm.waist === 0 ? '' : progressForm.waist} onChange={(e) => setProgressForm(prev => ({ ...prev, waist: Number(e.target.value) }))} />
                         </div>
                         <div>
                           <label style={{ display: 'block', fontSize: '0.72rem', color: '#A89684', marginBottom: '4px' }}>Hips (cm):</label>
-                          <input type="number" className="brand-input" value={progressForm.hips} onChange={(e) => setProgressForm(prev => ({ ...prev, hips: Number(e.target.value) }))} />
+                          <input type="number" className="brand-input" value={progressForm.hips === 0 ? '' : progressForm.hips} onChange={(e) => setProgressForm(prev => ({ ...prev, hips: Number(e.target.value) }))} />
                         </div>
                       </div>
                       <button
@@ -2383,161 +2412,265 @@ export default function BookingCRM() {
         )}
 
         {/* WORKSPACE K: INVOICES LEDGER */}
-        {activeTab === 'billing' && (
-          <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            <h1 style={{ fontSize: '1.75rem', fontWeight: 800, margin: 0, fontFamily: 'Outfit' }}>Invoices & Payments Ledger</h1>
-            <p style={{ color: '#BFA6D8', margin: '4px 0 0 0', fontSize: '0.85rem' }}>Capture invoice payments, settle partial deposits, and print custom receipts.</p>
+        {activeTab === 'billing' && (() => {
+          const sortedInvoices = [...invoices].sort((a, b) => b.invoiceNumber.localeCompare(a.invoiceNumber));
+          const filteredInvoices = sortedInvoices.filter(inv => {
+            const cli = clients.find(c => c.id === inv.clientId);
+            const clientName = cli ? cli.name.toLowerCase() : 'walk-in guest';
+            const query = invoiceSearchQuery.toLowerCase();
+            return inv.invoiceNumber.toLowerCase().includes(query) || clientName.includes(query);
+          });
 
-            <div className="card-premium">
-              <table className="table-premium">
-                <thead>
-                  <tr>
-                    <th>Invoice ID</th>
-                    <th>Client Name</th>
-                    <th>Total Slip</th>
-                    <th>Status</th>
-                    <th>Payments / Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {invoices.map(inv => {
-                    const cli = clients.find(c => c.id === inv.clientId);
-                    return (
-                      <tr key={inv.id}>
-                        <td>
-                          <strong>{inv.invoiceNumber}</strong>
-                          <br /><span style={{ fontSize: '0.7rem', color: '#A89684' }}>{inv.date}</span>
-                        </td>
-                        <td>{cli ? cli.name : 'Walk-in Guest'}</td>
-                        <td><strong>R {inv.total.toFixed(2)}</strong></td>
-                        <td><span className={`badge-brand ${inv.status.toLowerCase()}`}>{inv.status}</span></td>
-                        <td>
-                          <div style={{ display: 'flex', gap: '6px' }}>
-                            {inv.status === 'Unpaid' && (
+          return (
+            <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '24px' }}>
+                <div>
+                  <h1 style={{ fontSize: '1.75rem', fontWeight: 800, margin: 0, fontFamily: 'Outfit' }}>Invoices & Payments Ledger</h1>
+                  <p style={{ color: '#BFA6D8', margin: '4px 0 0 0', fontSize: '0.85rem' }}>Search tax invoices, track settlement states, and view formal accounts dossiers.</p>
+                </div>
+                <div style={{ position: 'relative', width: '280px' }}>
+                  <Search style={{ position: 'absolute', top: '9px', left: '10px', width: '14px', height: '14px', color: '#A89684' }} />
+                  <input
+                    type="text"
+                    placeholder="Search invoice # or client..."
+                    className="brand-input"
+                    style={{ paddingLeft: '32px', fontSize: '0.8rem', height: '32px' }}
+                    value={invoiceSearchQuery}
+                    onChange={(e) => setInvoiceSearchQuery(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="card-premium" style={{ overflowX: 'auto', border: '1px solid rgba(107, 44, 145, 0.25)' }}>
+                <table className="table-premium" style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '2px solid rgba(107, 44, 145, 0.3)' }}>
+                      <th style={{ padding: '12px', color: '#D4AF37', fontSize: '0.85rem', fontWeight: 700, width: '20%' }}>Invoice Details</th>
+                      <th style={{ padding: '12px', color: '#D4AF37', fontSize: '0.85rem', fontWeight: 700, width: '22%' }}>Client Name</th>
+                      <th style={{ padding: '12px', color: '#D4AF37', fontSize: '0.85rem', fontWeight: 700, width: '15%' }}>Gross Total</th>
+                      <th style={{ padding: '12px', color: '#D4AF37', fontSize: '0.85rem', fontWeight: 700, width: '15%' }}>Settlement</th>
+                      <th style={{ padding: '12px', color: '#D4AF37', fontSize: '0.85rem', fontWeight: 700, textAlign: 'right', width: '28%' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredInvoices.map(inv => {
+                      const cli = clients.find(c => c.id === inv.clientId);
+                      return (
+                        <tr key={inv.id} style={{ borderBottom: '1px solid rgba(107, 44, 145, 0.15)', transition: 'all 0.2s ease' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.02)'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                          <td style={{ padding: '12px' }}>
+                            <strong style={{ color: 'white' }}>{inv.invoiceNumber}</strong>
+                            <div style={{ fontSize: '0.7rem', color: '#A89684', marginTop: '2px' }}>Issued: {inv.date}</div>
+                          </td>
+                          <td style={{ padding: '12px', color: '#BFA6D8', fontWeight: 500 }}>
+                            {cli ? cli.name : 'Walk-in Guest'}
+                          </td>
+                          <td style={{ padding: '12px', fontWeight: 700, color: 'white' }}>
+                            R {inv.total.toFixed(2)}
+                          </td>
+                          <td style={{ padding: '12px' }}>
+                            <span className={`badge-brand ${inv.status.toLowerCase()}`} style={{ fontSize: '0.62rem' }}>
+                              {inv.status}
+                            </span>
+                          </td>
+                          <td style={{ padding: '12px', textAlign: 'right' }}>
+                            <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', alignItems: 'center' }}>
+                              {inv.status === 'Unpaid' && (
+                                <button
+                                  onClick={() => {
+                                    setActivePaymentInvoice(inv);
+                                    setPaymentForm({ amount: inv.total, method: 'Card' });
+                                    setShowPaymentModal(true);
+                                  }}
+                                  className="btn-brand-gold"
+                                  style={{ padding: '4px 8px', fontSize: '0.7rem', height: '26px' }}
+                                >
+                                  Pay
+                                </button>
+                              )}
+
                               <button
                                 onClick={() => {
-                                  setActivePaymentInvoice(inv);
-                                  setPaymentForm({ amount: inv.total, method: 'Card' });
-                                  setShowPaymentModal(true);
+                                  setActiveViewInvoice(inv);
+                                  setShowInvoiceModal(true);
                                 }}
-                                style={{ border: 'none', backgroundColor: '#34d39933', color: '#34d399', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 700 }}
+                                className="btn-brand-purple"
+                                style={{ padding: '4px 8px', fontSize: '0.7rem', height: '26px' }}
                               >
-                                Pay
+                                View Invoice
                               </button>
-                            )}
-                            
-                            <button
-                              onClick={() => {
-                                setActivePrintInvoice(inv);
-                                setShowPrintModal(true);
-                              }}
-                              style={{ display: 'flex', alignItems: 'center', gap: '4px', border: 'none', backgroundColor: 'hsl(var(--brand-black))', color: 'white', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.72rem' }}
-                            >
-                              <Printer style={{ width: '12px', height: '12px' }} /> Print
-                            </button>
-
-                            <button
-                              onClick={() => {
-                                alert(`Email receipt successfully sent to client: ${cli ? cli.email : 'walk-in@sculptglow.co.za'}`);
-                              }}
-                              style={{ display: 'flex', alignItems: 'center', gap: '4px', border: 'none', backgroundColor: 'hsl(var(--brand-black))', color: '#BFA6D8', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.72rem' }}
-                            >
-                              <Mail style={{ width: '12px', height: '12px' }} /> Email
-                            </button>
-
-                            <button
-                              onClick={() => {
-                                alert(`WhatsApp receipt successfully sent to client phone: ${cli ? cli.phone : 'N/A'}`);
-                              }}
-                              style={{ display: 'flex', alignItems: 'center', gap: '4px', border: 'none', backgroundColor: 'hsl(var(--brand-black))', color: '#34d399', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.72rem' }}
-                            >
-                              <MessageSquare style={{ width: '12px', height: '12px' }} /> WhatsApp
-                            </button>
-
-                            {inv.status !== 'Refunded' && (
+                              
                               <button
                                 onClick={() => {
-                                  const reason = prompt('Please enter refund reason:');
-                                  if (reason) {
-                                    refundInvoice(currentUserName(), inv.id, reason);
-                                    syncDatabase();
-                                  }
+                                  setActivePrintInvoice(inv);
+                                  setShowPrintModal(true);
                                 }}
-                                style={{ border: 'none', backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.72rem' }}
+                                style={{ display: 'flex', alignItems: 'center', gap: '4px', border: 'none', backgroundColor: 'hsl(var(--brand-black))', color: 'white', padding: '4px 8px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.7rem', height: '26px' }}
                               >
-                                Refund
+                                <Printer style={{ width: '12px', height: '12px' }} /> Slip
                               </button>
-                            )}
-                          </div>
+
+                              {inv.status !== 'Refunded' && (
+                                <button
+                                  onClick={() => {
+                                    const reason = prompt('Please enter refund reason:');
+                                    if (reason) {
+                                      refundInvoice(currentUserName(), inv.id, reason);
+                                      syncDatabase();
+                                    }
+                                  }}
+                                  style={{ border: 'none', backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', padding: '4px 8px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.7rem', height: '26px' }}
+                                >
+                                  Refund
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {filteredInvoices.length === 0 && (
+                      <tr>
+                        <td colSpan={5} style={{ padding: '32px', textAlign: 'center', color: '#A89684' }}>
+                          No invoices found matching search query.
                         </td>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* WORKSPACE L: QUOTES GENERATOR */}
-        {activeTab === 'quotes' && (
-          <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            <div style={{ display: 'flex', justify: 'space-between', alignItems: 'center' }}>
-              <div>
-                <h1 style={{ fontSize: '1.75rem', fontWeight: 800, margin: 0, fontFamily: 'Outfit' }}>Quotes Creator</h1>
-                <p style={{ color: '#BFA6D8', margin: '4px 0 0 0', fontSize: '0.85rem' }}>Create luxury package quotations. Convert quote to invoice instantly with one click!</p>
-              </div>
-              <button onClick={() => setShowQuoteModal(true)} className="btn-brand-gold">
-                + Create Quote
-              </button>
-            </div>
+        {activeTab === 'quotes' && (() => {
+          const sortedQuotes = [...quotes].sort((a, b) => b.quoteNumber.localeCompare(a.quoteNumber));
+          const filteredQuotes = sortedQuotes.filter(qte => {
+            const cli = clients.find(c => c.id === qte.clientId);
+            const clientName = cli ? cli.name.toLowerCase() : 'walk-in';
+            const query = quoteSearchQuery.toLowerCase();
+            return qte.quoteNumber.toLowerCase().includes(query) || clientName.includes(query);
+          });
 
-            <div className="card-premium">
-              <h3 style={{ fontFamily: 'Outfit', fontSize: '1.1rem', marginBottom: '16px', color: 'white' }}>Quotations Ledger</h3>
-              <table className="table-premium">
-                <thead>
-                  <tr>
-                    <th>Quote ID</th>
-                    <th>Client</th>
-                    <th>Discount</th>
-                    <th>Total Cost</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {quotes.map(qte => {
-                    const cli = clients.find(c => c.id === qte.clientId);
-                    return (
-                      <tr key={qte.id}>
-                        <td><strong>{qte.quoteNumber}</strong><br /><span style={{ fontSize: '0.7rem', color: '#A89684' }}>{qte.date}</span></td>
-                        <td>{cli?.name || 'Walk-in'}</td>
-                        <td>{qte.discount}%</td>
-                        <td><strong>R {qte.total.toFixed(2)}</strong></td>
-                        <td><span className={`badge-brand ${qte.status === 'Converted' ? 'completed' : 'gold'}`}>{qte.status}</span></td>
-                        <td>
-                          {qte.status === 'Active' && (
-                            <button
-                              onClick={() => {
-                                convertQuoteToInvoice(currentUserName(), qte.id);
-                                syncDatabase();
-                                alert('Success! Quote converted to Unpaid Invoice in billing ledger.');
-                              }}
-                              className="btn-brand-purple"
-                              style={{ padding: '4px 8px', fontSize: '0.72rem' }}
-                            >
-                              Convert to Invoice
-                            </button>
-                          )}
+          return (
+            <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+              <div style={{ display: 'flex', justify: 'space-between', alignItems: 'center', gap: '24px' }}>
+                <div>
+                  <h1 style={{ fontSize: '1.75rem', fontWeight: 800, margin: 0, fontFamily: 'Outfit' }}>Quotes Creator</h1>
+                  <p style={{ color: '#BFA6D8', margin: '4px 0 0 0', fontSize: '0.85rem' }}>Create luxury package quotations. Convert quote to invoice instantly with one click!</p>
+                </div>
+                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                  <div style={{ position: 'relative', width: '220px' }}>
+                    <Search style={{ position: 'absolute', top: '9px', left: '10px', width: '14px', height: '14px', color: '#A89684' }} />
+                    <input
+                      type="text"
+                      placeholder="Search quote # or client..."
+                      className="brand-input"
+                      style={{ paddingLeft: '32px', fontSize: '0.8rem', height: '32px' }}
+                      value={quoteSearchQuery}
+                      onChange={(e) => setQuoteSearchQuery(e.target.value)}
+                    />
+                  </div>
+                  <button onClick={() => { setQuoteClient(''); setManualQuoteClientSearch(''); setQuoteItems([{ name: '', quantity: 1, price: 0 }]); setQuoteDiscount(0); setShowQuoteModal(true); }} className="btn-brand-gold">
+                    + Create Quote
+                  </button>
+                </div>
+              </div>
+
+              <div className="card-premium" style={{ overflowX: 'auto', border: '1px solid rgba(107, 44, 145, 0.25)' }}>
+                <h3 style={{ fontFamily: 'Outfit', fontSize: '1.1rem', marginBottom: '16px', color: 'white' }}>Quotations Ledger</h3>
+                <table className="table-premium" style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '2px solid rgba(107, 44, 145, 0.3)' }}>
+                      <th style={{ padding: '12px', color: '#D4AF37', fontSize: '0.85rem', fontWeight: 700 }}>Quote ID</th>
+                      <th style={{ padding: '12px', color: '#D4AF37', fontSize: '0.85rem', fontWeight: 700 }}>Client Name</th>
+                      <th style={{ padding: '12px', color: '#D4AF37', fontSize: '0.85rem', fontWeight: 700 }}>Discount</th>
+                      <th style={{ padding: '12px', color: '#D4AF37', fontSize: '0.85rem', fontWeight: 700 }}>Total Cost</th>
+                      <th style={{ padding: '12px', color: '#D4AF37', fontSize: '0.85rem', fontWeight: 700 }}>Status</th>
+                      <th style={{ padding: '12px', color: '#D4AF37', fontSize: '0.85rem', fontWeight: 700, textAlign: 'right' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredQuotes.map(qte => {
+                      const cli = clients.find(c => c.id === qte.clientId);
+                      return (
+                        <tr key={qte.id} style={{ borderBottom: '1px solid rgba(107, 44, 145, 0.15)', transition: 'all 0.2s ease' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.02)'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                          <td style={{ padding: '12px' }}>
+                            <strong style={{ color: 'white' }}>{qte.quoteNumber}</strong>
+                            <div style={{ fontSize: '0.7rem', color: '#A89684', marginTop: '2px' }}>Created: {qte.date}</div>
+                          </td>
+                          <td style={{ padding: '12px', color: '#BFA6D8', fontWeight: 500 }}>
+                            {cli?.name || 'Walk-in'}
+                          </td>
+                          <td style={{ padding: '12px', color: '#BFA6D8' }}>
+                            {qte.discount}%
+                          </td>
+                          <td style={{ padding: '12px', fontWeight: 700, color: 'white' }}>
+                            R {qte.total.toFixed(2)}
+                          </td>
+                          <td style={{ padding: '12px' }}>
+                            <span className={`badge-brand ${qte.status === 'Converted' ? 'completed' : 'gold'}`} style={{ fontSize: '0.62rem' }}>
+                              {qte.status}
+                            </span>
+                          </td>
+                          <td style={{ padding: '12px', textAlign: 'right' }}>
+                            <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', alignItems: 'center' }}>
+                              <button
+                                onClick={() => {
+                                  setActiveViewQuote(qte);
+                                  setShowQuoteViewModal(true);
+                                }}
+                                className="btn-brand-gold"
+                                style={{ padding: '4px 8px', fontSize: '0.7rem', height: '26px' }}
+                              >
+                                View Quote
+                              </button>
+
+                              <button
+                                onClick={() => alert(`Quotation ${qte.quoteNumber} successfully emailed to client!`)}
+                                style={{ display: 'flex', alignItems: 'center', gap: '4px', border: 'none', backgroundColor: 'hsl(var(--brand-black))', color: '#BFA6D8', padding: '4px 8px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.7rem', height: '26px' }}
+                              >
+                                <Mail style={{ width: '12px', height: '12px' }} /> Email
+                              </button>
+
+                              <button
+                                onClick={() => alert(`Quotation ${qte.quoteNumber} successfully sent to client WhatsApp!`)}
+                                style={{ display: 'flex', alignItems: 'center', gap: '4px', border: 'none', backgroundColor: 'hsl(var(--brand-black))', color: '#34d399', padding: '4px 8px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.7rem', height: '26px' }}
+                              >
+                                <MessageSquare style={{ width: '12px', height: '12px' }} /> WhatsApp
+                              </button>
+
+                              {qte.status === 'Active' && (
+                                <button
+                                  onClick={() => {
+                                    convertQuoteToInvoice(currentUserName(), qte.id);
+                                    syncDatabase();
+                                    alert('Success! Quote converted to Unpaid Invoice in billing ledger.');
+                                  }}
+                                  className="btn-brand-purple"
+                                  style={{ padding: '4px 8px', fontSize: '0.7rem', height: '26px' }}
+                                >
+                                  Convert
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {filteredQuotes.length === 0 && (
+                      <tr>
+                        <td colSpan={6} style={{ padding: '32px', textAlign: 'center', color: '#A89684' }}>
+                          No quotations found matching search query.
                         </td>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* WORKSPACE M: ANALYTICS & P&L CHARTS */}
         {activeTab === 'expenses' && currentUserRole === 'owner' && (
@@ -2601,64 +2734,276 @@ export default function BookingCRM() {
         )}
 
         {/* WORKSPACE N: REFUNDS & PAYMENTS LOG */}
-        {activeTab === 'payments' && (
-          <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            <h1 style={{ fontSize: '1.75rem', fontWeight: 800, margin: 0, fontFamily: 'Outfit' }}>Payment Transactions & Refunds Log</h1>
-            <p style={{ color: '#BFA6D8', margin: '4px 0 0 0', fontSize: '0.85rem' }}>Review card transactions, cash deposits, and logged refund justifications.</p>
+        {activeTab === 'payments' && (() => {
+          // Date helper
+          const isDateInRange = (dateStr) => {
+            if (!dateStr) return false;
+            const itemDate = new Date(dateStr);
+            itemDate.setHours(0,0,0,0);
+            
+            const now = new Date();
+            now.setHours(0,0,0,0);
 
-            <div className="card-premium">
-              <table className="table-premium">
-                <thead>
-                  <tr>
-                    <th>Invoice ID</th>
-                    <th>Payment Method</th>
-                    <th>Transaction Reference</th>
-                    <th>Date</th>
-                    <th>Amount Paid</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {invoices.flatMap(inv => (inv.payments || []).map((pay, i) => (
-                    <tr key={`${inv.id}-${i}`}>
-                      <td><strong>{inv.invoiceNumber}</strong></td>
-                      <td><span className="badge-brand purple" style={{ fontSize: '0.55rem' }}>{pay.method}</span></td>
-                      <td><code>{pay.txnId || 'TXN-0000'}</code></td>
-                      <td>{pay.date}</td>
-                      <td><strong style={{ color: '#34d399' }}>R {pay.amount.toFixed(2)}</strong></td>
+            if (paymentsFilterType === 'all') {
+              return true;
+            }
+            if (paymentsFilterType === 'today') {
+              const todayStr = now.toISOString().split('T')[0];
+              return dateStr === todayStr;
+            }
+            if (paymentsFilterType === 'last_week') {
+              const oneWeekAgo = new Date(now);
+              oneWeekAgo.setDate(now.getDate() - 7);
+              return itemDate >= oneWeekAgo && itemDate <= now;
+            }
+            if (paymentsFilterType === 'last_month') {
+              const oneMonthAgo = new Date(now);
+              oneMonthAgo.setMonth(now.getMonth() - 1);
+              return itemDate >= oneMonthAgo && itemDate <= now;
+            }
+            if (paymentsFilterType === 'custom') {
+              if (paymentsStartDate && paymentsEndDate) {
+                const start = new Date(paymentsStartDate);
+                start.setHours(0,0,0,0);
+                const end = new Date(paymentsEndDate);
+                end.setHours(23,59,59,999);
+                return itemDate >= start && itemDate <= end;
+              } else if (paymentsStartDate) {
+                const start = new Date(paymentsStartDate);
+                start.setHours(0,0,0,0);
+                return itemDate >= start;
+              } else if (paymentsEndDate) {
+                const end = new Date(paymentsEndDate);
+                end.setHours(23,59,59,999);
+                return itemDate <= end;
+              }
+              return true;
+            }
+            return true;
+          };
+
+          // Get and sort payments
+          const paymentsList = [];
+          invoices.forEach(inv => {
+            (inv.payments || []).forEach(pay => {
+              paymentsList.push({
+                invoiceId: inv.id,
+                invoiceNumber: inv.invoiceNumber,
+                clientId: inv.clientId,
+                method: pay.method,
+                txnId: pay.txnId || 'TXN-' + Math.random().toString(36).substr(2, 9).toUpperCase(),
+                date: pay.date || inv.date,
+                amount: pay.amount,
+                invoice: inv
+              });
+            });
+          });
+
+          const filteredPayments = paymentsList
+            .filter(pay => isDateInRange(pay.date))
+            .sort((a, b) => b.date.localeCompare(a.date));
+
+          // Outstanding invoices (Unpaid status)
+          const unpaidInvoices = invoices.filter(inv => inv.status === 'Unpaid' && isDateInRange(inv.date));
+
+          // Refunded invoices
+          const refundedInvoices = invoices
+            .filter(inv => inv.status === 'Refunded' && isDateInRange(inv.date))
+            .sort((a, b) => b.date.localeCompare(a.date));
+
+          // Totals
+          const totalPaid = filteredPayments.reduce((acc, pay) => acc + pay.amount, 0);
+          const totalOutstanding = unpaidInvoices.reduce((acc, inv) => acc + inv.total, 0);
+          const totalRefunded = refundedInvoices.reduce((acc, inv) => acc + inv.total, 0);
+
+          return (
+            <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '24px', flexWrap: 'wrap' }}>
+                <div>
+                  <h1 style={{ fontSize: '1.75rem', fontWeight: 800, margin: 0, fontFamily: 'Outfit' }}>Payment Transactions & Refunds Log</h1>
+                  <p style={{ color: '#BFA6D8', margin: '4px 0 0 0', fontSize: '0.85rem' }}>Review card transactions, cash deposits, and logged refund justifications.</p>
+                </div>
+
+                {/* Filters */}
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <select 
+                    className="brand-input" 
+                    value={paymentsFilterType} 
+                    onChange={(e) => setPaymentsFilterType(e.target.value)}
+                    style={{ width: '150px', height: '36px', fontSize: '0.8rem' }}
+                  >
+                    <option value="all">All Dates</option>
+                    <option value="today">Today</option>
+                    <option value="last_week">Last Week</option>
+                    <option value="last_month">Last Month</option>
+                    <option value="custom">Custom Range...</option>
+                  </select>
+
+                  {paymentsFilterType === 'custom' && (
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <input 
+                        type="date" 
+                        className="brand-input" 
+                        value={paymentsStartDate} 
+                        onChange={(e) => setPaymentsStartDate(e.target.value)}
+                        style={{ height: '36px', fontSize: '0.8rem' }}
+                      />
+                      <span style={{ color: '#BFA6D8', fontSize: '0.8rem' }}>to</span>
+                      <input 
+                        type="date" 
+                        className="brand-input" 
+                        value={paymentsEndDate} 
+                        onChange={(e) => setPaymentsEndDate(e.target.value)}
+                        style={{ height: '36px', fontSize: '0.8rem' }}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Dynamic Totals Panel */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px' }}>
+                <div className="card-premium" style={{ borderLeft: '4px solid #34d399', padding: '16px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <span style={{ fontSize: '0.72rem', color: '#BFA6D8', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Invoices Paid</span>
+                  <h2 style={{ fontSize: '1.75rem', fontWeight: 800, margin: 0, color: '#34d399', fontFamily: 'Outfit' }}>R {totalPaid.toFixed(2)}</h2>
+                  <span style={{ fontSize: '0.68rem', color: '#A89684' }}>Settled cash/card receipts in scope</span>
+                </div>
+                <div className="card-premium" style={{ borderLeft: '4px solid #D4AF37', padding: '16px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <span style={{ fontSize: '0.72rem', color: '#BFA6D8', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Outstanding Payments</span>
+                  <h2 style={{ fontSize: '1.75rem', fontWeight: 800, margin: 0, color: '#D4AF37', fontFamily: 'Outfit' }}>R {totalOutstanding.toFixed(2)}</h2>
+                  <span style={{ fontSize: '0.68rem', color: '#A89684' }}>Pending unpaid invoices in scope</span>
+                </div>
+                <div className="card-premium" style={{ borderLeft: '4px solid #ef4444', padding: '16px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <span style={{ fontSize: '0.72rem', color: '#BFA6D8', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Refunds Processed</span>
+                  <h2 style={{ fontSize: '1.75rem', fontWeight: 800, margin: 0, color: '#ef4444', fontFamily: 'Outfit' }}>R {totalRefunded.toFixed(2)}</h2>
+                  <span style={{ fontSize: '0.68rem', color: '#A89684' }}>Revenue reversals in scope</span>
+                </div>
+              </div>
+
+              {/* Payments ledger */}
+              <div className="card-premium" style={{ border: '1px solid rgba(107, 44, 145, 0.25)', overflowX: 'auto' }}>
+                <h3 style={{ fontFamily: 'Outfit', fontSize: '1.1rem', color: 'white', margin: '0 0 16px 0' }}>Settled Payments Ledger</h3>
+                <table className="table-premium" style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '2px solid rgba(107, 44, 145, 0.3)' }}>
+                      <th style={{ padding: '12px', color: '#D4AF37', fontSize: '0.85rem', fontWeight: 700, width: '18%' }}>Invoice ID</th>
+                      <th style={{ padding: '12px', color: '#D4AF37', fontSize: '0.85rem', fontWeight: 700, width: '22%' }}>Client Name</th>
+                      <th style={{ padding: '12px', color: '#D4AF37', fontSize: '0.85rem', fontWeight: 700, width: '12%' }}>Method</th>
+                      <th style={{ padding: '12px', color: '#D4AF37', fontSize: '0.85rem', fontWeight: 700, width: '16%' }}>Txn Reference</th>
+                      <th style={{ padding: '12px', color: '#D4AF37', fontSize: '0.85rem', fontWeight: 700, width: '12%' }}>Date</th>
+                      <th style={{ padding: '12px', color: '#D4AF37', fontSize: '0.85rem', fontWeight: 700, width: '10%' }}>Amount Paid</th>
+                      <th style={{ padding: '12px', color: '#D4AF37', fontSize: '0.85rem', fontWeight: 700, width: '10%', textAlign: 'right' }}>Actions</th>
                     </tr>
-                  )))}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="card-premium">
-              <h3 style={{ fontFamily: 'Outfit', fontSize: '1.1rem', marginBottom: '16px', color: '#ef4444' }}>Refund Logs</h3>
-              <table className="table-premium">
-                <thead>
-                  <tr>
-                    <th>Invoice Number</th>
-                    <th>Client Name</th>
-                    <th>Refund Reason</th>
-                    <th>Refund Value</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {invoices.filter(i => i.status === 'Refunded').map(inv => {
-                    const cli = clients.find(c => c.id === inv.clientId);
-                    return (
-                      <tr key={inv.id}>
-                        <td><strong>{inv.invoiceNumber}</strong></td>
-                        <td>{cli?.name || 'Walk-in'}</td>
-                        <td><span style={{ fontSize: '0.8rem', color: '#fca5a5' }}>{inv.refundReason || 'No reason recorded'}</span></td>
-                        <td><strong style={{ color: '#ef4444' }}>R {inv.total.toFixed(2)}</strong></td>
+                  </thead>
+                  <tbody>
+                    {filteredPayments.map((pay, idx) => {
+                      const cli = clients.find(c => c.id === pay.clientId);
+                      return (
+                        <tr key={`${pay.invoiceId}-${idx}`} style={{ borderBottom: '1px solid rgba(107, 44, 145, 0.15)' }}>
+                          <td style={{ padding: '12px' }}><strong>{pay.invoiceNumber}</strong></td>
+                          <td style={{ padding: '12px', color: '#BFA6D8', fontWeight: 500 }}>{cli?.name || 'Walk-in Guest'}</td>
+                          <td style={{ padding: '12px' }}><span className="badge-brand purple" style={{ fontSize: '0.58rem' }}>{pay.method}</span></td>
+                          <td style={{ padding: '12px' }}><code>{pay.txnId}</code></td>
+                          <td style={{ padding: '12px', color: '#A89684', fontSize: '0.78rem' }}>{pay.date}</td>
+                          <td style={{ padding: '12px' }}><strong style={{ color: '#34d399' }}>R {pay.amount.toFixed(2)}</strong></td>
+                          <td style={{ padding: '12px', textAlign: 'right' }}>
+                            <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                              <button 
+                                onClick={() => { setActiveViewInvoice(pay.invoice); setShowInvoiceModal(true); }}
+                                className="btn-brand-purple"
+                                style={{ padding: '2px 6px', fontSize: '0.65rem', height: '22px' }}
+                              >
+                                View
+                              </button>
+                              <button 
+                                onClick={() => alert(`Payment receipt for ${pay.invoiceNumber} emailed to ${cli?.email || 'client'}`)}
+                                style={{ border: 'none', backgroundColor: '#1e1b4b', color: '#BFA6D8', padding: '2px 6px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.65rem', height: '22px' }}
+                              >
+                                Email
+                              </button>
+                              <button 
+                                onClick={() => alert(`Payment receipt for ${pay.invoiceNumber} sent via WhatsApp to ${cli?.phone || 'client'}`)}
+                                style={{ border: 'none', backgroundColor: '#064e3b', color: '#34d399', padding: '2px 6px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.65rem', height: '22px' }}
+                              >
+                                WhatsApp
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {filteredPayments.length === 0 && (
+                      <tr>
+                        <td colSpan={7} style={{ padding: '24px', textAlign: 'center', color: '#A89684', fontSize: '0.85rem' }}>
+                          No settled payments recorded in this filter period.
+                        </td>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Refunds ledger */}
+              <div className="card-premium" style={{ border: '1px solid rgba(239, 68, 68, 0.25)', overflowX: 'auto' }}>
+                <h3 style={{ fontFamily: 'Outfit', fontSize: '1.1rem', color: '#ef4444', margin: '0 0 16px 0' }}>Refunded Invoices Registry</h3>
+                <table className="table-premium" style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '2px solid rgba(239, 68, 68, 0.3)' }}>
+                      <th style={{ padding: '12px', color: '#fca5a5', fontSize: '0.85rem', fontWeight: 700, width: '20%' }}>Invoice ID</th>
+                      <th style={{ padding: '12px', color: '#fca5a5', fontSize: '0.85rem', fontWeight: 700, width: '25%' }}>Client Name</th>
+                      <th style={{ padding: '12px', color: '#fca5a5', fontSize: '0.85rem', fontWeight: 700, width: '30%' }}>Refund Reason</th>
+                      <th style={{ padding: '12px', color: '#fca5a5', fontSize: '0.85rem', fontWeight: 700, width: '15%' }}>Amount Refunded</th>
+                      <th style={{ padding: '12px', color: '#fca5a5', fontSize: '0.85rem', fontWeight: 700, width: '10%', textAlign: 'right' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {refundedInvoices.map(inv => {
+                      const cli = clients.find(c => c.id === inv.clientId);
+                      return (
+                        <tr key={inv.id} style={{ borderBottom: '1px solid rgba(239, 68, 68, 0.15)' }}>
+                          <td style={{ padding: '12px' }}><strong>{inv.invoiceNumber}</strong><div style={{ fontSize: '0.7rem', color: '#A89684' }}>Refund Date: {inv.date}</div></td>
+                          <td style={{ padding: '12px', color: '#BFA6D8', fontWeight: 500 }}>{cli?.name || 'Walk-in Guest'}</td>
+                          <td style={{ padding: '12px', color: '#fca5a5', fontSize: '0.8rem', fontStyle: 'italic' }}>{inv.refundReason || 'Service adjustment'}</td>
+                          <td style={{ padding: '12px' }}><strong style={{ color: '#ef4444' }}>R {inv.total.toFixed(2)}</strong></td>
+                          <td style={{ padding: '12px', textAlign: 'right' }}>
+                            <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                              <button 
+                                onClick={() => { setActiveRefundInvoice(inv); setShowRefundLetterModal(true); }}
+                                className="btn-brand-gold"
+                                style={{ padding: '2px 6px', fontSize: '0.65rem', height: '22px' }}
+                              >
+                                Refund Letter
+                              </button>
+                              <button 
+                                onClick={() => alert(`Refund letter for ${inv.invoiceNumber} successfully emailed to ${cli?.email || 'client'}!`)}
+                                style={{ border: 'none', backgroundColor: '#1e1b4b', color: '#BFA6D8', padding: '2px 6px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.65rem', height: '22px' }}
+                              >
+                                Email
+                              </button>
+                              <button 
+                                onClick={() => alert(`Refund letter for ${inv.invoiceNumber} successfully sent via WhatsApp to ${cli?.phone || 'client'}!`)}
+                                style={{ border: 'none', backgroundColor: '#064e3b', color: '#34d399', padding: '2px 6px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.65rem', height: '22px' }}
+                              >
+                                WhatsApp
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {refundedInvoices.length === 0 && (
+                      <tr>
+                        <td colSpan={5} style={{ padding: '24px', textAlign: 'center', color: '#A89684', fontSize: '0.85rem' }}>
+                          No refunds issued in this filter period.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* WORKSPACE O: STAFF COMMISSION SPLITS */}
         {activeTab === 'commissions' && (
@@ -3042,7 +3387,7 @@ export default function BookingCRM() {
                 <input
                   type="number"
                   className="brand-input"
-                  value={aptPaymentForm.amountPaid}
+                  value={aptPaymentForm.amountPaid === 0 ? '' : aptPaymentForm.amountPaid}
                   onChange={(e) => {
                     const price = Number(e.target.value);
                     setAptPaymentForm(prev => ({
@@ -3062,7 +3407,7 @@ export default function BookingCRM() {
                       type="number"
                       className="brand-input"
                       style={{ borderColor: 'hsl(var(--brand-gold))' }}
-                      value={aptPaymentForm.amountProvided}
+                      value={aptPaymentForm.amountProvided === 0 ? '' : aptPaymentForm.amountProvided}
                       onChange={(e) => setAptPaymentForm(prev => ({ ...prev, amountProvided: Number(e.target.value) }))}
                     />
                   </div>
@@ -3571,6 +3916,9 @@ export default function BookingCRM() {
                     if (showBookingModal) {
                       setBookingForm(prev => ({ ...prev, clientId: created.id }));
                       setManualClientSearch(created.name);
+                    } else if (showQuoteModal) {
+                      setQuoteClient(created.id);
+                      setManualQuoteClientSearch(created.name);
                     }
                   }}
                   className="btn-brand-gold"
@@ -3700,11 +4048,11 @@ export default function BookingCRM() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Price (R):</label>
-                  <input type="number" className="brand-input" defaultValue={productForm.price} onChange={(e) => setProductForm(prev => ({ ...prev, price: Number(e.target.value) }))} />
+                  <input type="number" className="brand-input" value={productForm.price === 0 ? '' : productForm.price} onChange={(e) => setProductForm(prev => ({ ...prev, price: Number(e.target.value) }))} />
                 </div>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Stock:</label>
-                  <input type="number" className="brand-input" defaultValue={productForm.stock} onChange={(e) => setProductForm(prev => ({ ...prev, stock: Number(e.target.value) }))} />
+                  <input type="number" className="brand-input" value={productForm.stock === 0 ? '' : productForm.stock} onChange={(e) => setProductForm(prev => ({ ...prev, stock: Number(e.target.value) }))} />
                 </div>
               </div>
 
@@ -3756,7 +4104,7 @@ export default function BookingCRM() {
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Amount to Pay (R):</label>
-                <input type="number" className="brand-input" value={paymentForm.amount} onChange={(e) => setPaymentForm(prev => ({ ...prev, amount: Number(e.target.value) }))} />
+                <input type="number" className="brand-input" value={paymentForm.amount === 0 ? '' : paymentForm.amount} onChange={(e) => setPaymentForm(prev => ({ ...prev, amount: Number(e.target.value) }))} />
               </div>
               <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
                 <button
@@ -3799,7 +4147,16 @@ export default function BookingCRM() {
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Amount (R):</label>
-                <input type="number" className="brand-input" value={expenseForm.amount} onChange={(e) => setExpenseForm(prev => ({ ...prev, amount: Number(e.target.value) }))} />
+                <input type="number" className="brand-input" value={expenseForm.amount === 0 ? '' : expenseForm.amount} onChange={(e) => setExpenseForm(prev => ({ ...prev, amount: Number(e.target.value) }))} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Link to Machine (Optional):</label>
+                <select className="brand-input" value={expenseForm.machineId} onChange={(e) => setExpenseForm(prev => ({ ...prev, machineId: e.target.value }))}>
+                  <option value="">-- No Machine (General Expense) --</option>
+                  {machines.map(m => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  ))}
+                </select>
               </div>
 
               <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
@@ -4153,11 +4510,78 @@ export default function BookingCRM() {
             <h3 style={{ fontFamily: 'Outfit', color: '#D4AF37', marginBottom: '16px' }}>Generate Treatment Quote</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Select Client:</label>
-                <select className="brand-input" onChange={(e) => setQuoteClient(e.target.value)} value={quoteClient}>
-                  <option value="">-- Select Client --</option>
-                  {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Search Client Name:</label>
+                <input
+                  type="text"
+                  className="brand-input"
+                  placeholder="Type client name to search..."
+                  value={manualQuoteClientSearch}
+                  onChange={(e) => {
+                    setManualQuoteClientSearch(e.target.value);
+                    setQuoteClient('');
+                  }}
+                />
+
+                {manualQuoteClientSearch.length > 0 && !quoteClient && (
+                  <div style={{
+                    maxHeight: '120px', overflowY: 'auto', backgroundColor: 'hsl(var(--brand-black))',
+                    borderRadius: '8px', border: '1px solid rgba(107, 44, 145, 0.3)', marginTop: '4px', padding: '6px',
+                    position: 'absolute', zIndex: 20000, width: '440px', boxShadow: '0 4px 12px rgba(0,0,0,0.5)'
+                  }}>
+                    {clients
+                      .filter(c => c.name.toLowerCase().includes(manualQuoteClientSearch.toLowerCase()))
+                      .map(c => (
+                        <button
+                          key={c.id}
+                          onClick={() => {
+                            setQuoteClient(c.id);
+                            setManualQuoteClientSearch(c.name);
+                          }}
+                          type="button"
+                          style={{
+                            display: 'block', width: '100%', background: 'none', border: 'none',
+                            color: 'white', padding: '8px 10px', textAlign: 'left', cursor: 'pointer', fontSize: '0.8rem',
+                            borderBottom: '1px solid rgba(107, 44, 145, 0.1)', transition: 'background 0.2s'
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(107, 44, 145, 0.2)'}
+                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                        >
+                          {c.name} ({c.phone})
+                        </button>
+                      ))}
+                    {clients.filter(c => c.name.toLowerCase().includes(manualQuoteClientSearch.toLowerCase())).length === 0 && (
+                      <div style={{ padding: '8px' }}>
+                        <span style={{ fontSize: '0.75rem', color: '#ef4444', display: 'block', marginBottom: '6px' }}>No client found.</span>
+                        <button
+                          onClick={() => {
+                            setClientForm({
+                              name: manualQuoteClientSearch,
+                              email: '',
+                              phone: '',
+                              dob: '1995-01-01',
+                              gender: 'Female',
+                              allergies: '',
+                              medical: '',
+                              preferredStaff: 'Jessica Laser',
+                              notes: ''
+                            });
+                            setShowClientModal(true);
+                          }}
+                          type="button"
+                          className="btn-brand-gold"
+                          style={{ fontSize: '0.7rem', padding: '4px 8px' }}
+                        >
+                          + Add New Client Shortcut
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {quoteClient && (
+                  <div style={{ fontSize: '0.75rem', color: '#34d399', marginTop: '6px', fontWeight: 600 }}>
+                    ✓ Selected: {clients.find(c => c.id === quoteClient)?.name}
+                  </div>
+                )}
               </div>
 
               {/* Dynamic items selection */}
@@ -4193,7 +4617,7 @@ export default function BookingCRM() {
                       className="brand-input"
                       placeholder="Qty"
                       style={{ flex: 0.6 }}
-                      value={item.quantity}
+                      value={item.quantity === 0 ? '' : item.quantity}
                       onChange={(e) => {
                         const newItems = [...quoteItems];
                         newItems[idx].quantity = Number(e.target.value);
@@ -4215,7 +4639,7 @@ export default function BookingCRM() {
 
               <div>
                 <label style={{ display: 'block', fontSize: '0.8rem', color: '#A89684', marginBottom: '6px' }}>Apply Discount (%):</label>
-                <input type="number" className="brand-input" value={quoteDiscount} onChange={(e) => setQuoteDiscount(Number(e.target.value))} />
+                <input type="number" className="brand-input" value={quoteDiscount === 0 ? '' : quoteDiscount} onChange={(e) => setQuoteDiscount(Number(e.target.value))} />
               </div>
 
               <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
@@ -4393,6 +4817,389 @@ export default function BookingCRM() {
               >
                 Dismiss
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PROFESSIONAL A4 CORPORATE INVOICE MODAL */}
+      {showInvoiceModal && activeViewInvoice && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 12000, padding: '20px' }}>
+          <div style={{ backgroundColor: 'white', color: '#1a1a1a', width: '100%', maxWidth: '800px', maxHeight: '95vh', overflowY: 'auto', borderRadius: '12px', boxShadow: 'var(--shadow-premium)', display: 'flex', flexDirection: 'column' }}>
+            {/* Header Toolbar */}
+            <div style={{ backgroundColor: 'hsl(var(--brand-charcoal))', padding: '12px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTopLeftRadius: '12px', borderTopRightRadius: '12px' }}>
+              <span style={{ color: 'white', fontWeight: 600, fontSize: '0.9rem' }}>Corporate Invoice Viewer</span>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  onClick={() => alert(`Corporate A4 Invoice ${activeViewInvoice.invoiceNumber} successfully queued for printing!`)}
+                  className="btn-brand-gold"
+                  style={{ padding: '6px 12px', fontSize: '0.72rem' }}
+                >
+                  <Printer style={{ width: '12px', height: '12px' }} /> Print Invoice
+                </button>
+                <button
+                  onClick={() => alert(`Invoice ${activeViewInvoice.invoiceNumber} successfully emailed to client!`)}
+                  className="btn-brand-purple"
+                  style={{ padding: '6px 12px', fontSize: '0.72rem' }}
+                >
+                  <Mail style={{ width: '12px', height: '12px' }} /> Share Email
+                </button>
+                <button
+                  onClick={() => alert(`Invoice ${activeViewInvoice.invoiceNumber} successfully sent to client WhatsApp!`)}
+                  className="btn-brand-gold"
+                  style={{ padding: '6px 12px', fontSize: '0.72rem', backgroundColor: '#34d399', color: 'white' }}
+                >
+                  <MessageSquare style={{ width: '12px', height: '12px' }} /> WhatsApp
+                </button>
+                <button
+                  onClick={() => { setShowInvoiceModal(false); setActiveViewInvoice(null); }}
+                  style={{ border: 'none', background: 'none', color: '#ef4444', fontSize: '1.25rem', cursor: 'pointer', marginLeft: '12px' }}
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* A4 Sheet Canvas */}
+            <div style={{ padding: '40px', fontFamily: 'Inter, system-ui, sans-serif', backgroundColor: 'white', flex: 1 }}>
+              {/* Invoice Title & Logo */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #6B2C91', paddingBottom: '20px', marginBottom: '24px' }}>
+                <div>
+                  <h1 style={{ color: '#6B2C91', margin: 0, fontSize: '2rem', fontFamily: 'Outfit', fontWeight: 800 }}>SCULPT & GLOW</h1>
+                  <span style={{ color: '#D4AF37', fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Clinical Aesthetic Atelier</span>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <h2 style={{ color: '#1a1a1a', margin: 0, fontSize: '1.8rem', fontWeight: 700 }}>TAX INVOICE</h2>
+                  <span style={{ color: '#666', fontSize: '0.85rem' }}>Invoice No: <strong>{activeViewInvoice.invoiceNumber}</strong></span>
+                  <br /><span style={{ color: '#666', fontSize: '0.85rem' }}>Date: {activeViewInvoice.date}</span>
+                </div>
+              </div>
+
+              {/* Addresses section */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '40px', marginBottom: '32px', fontSize: '0.85rem', lineHeight: '1.5' }}>
+                <div>
+                  <strong style={{ color: '#6B2C91', textTransform: 'uppercase', fontSize: '0.78rem', display: 'block', marginBottom: '8px' }}>FROM:</strong>
+                  <strong>Sculpt & Glow Clinic Ltd</strong>
+                  <br />Suite 4, West End Medical Center
+                  <br />Atelier Row, Pretoria East
+                  <br />Tel: +27 (0) 12 555 0192
+                  <br />VAT Reg No: 4890201192
+                </div>
+                <div>
+                  <strong style={{ color: '#6B2C91', textTransform: 'uppercase', fontSize: '0.78rem', display: 'block', marginBottom: '8px' }}>BILL TO:</strong>
+                  <strong>{clients.find(c => c.id === activeViewInvoice.clientId)?.name || 'Walk-in Guest'}</strong>
+                  <br />Email: {clients.find(c => c.id === activeViewInvoice.clientId)?.email || 'N/A'}
+                  <br />Phone: {clients.find(c => c.id === activeViewInvoice.clientId)?.phone || 'N/A'}
+                  <br />Client ID: {activeViewInvoice.clientId || 'GUEST-01'}
+                </div>
+              </div>
+
+              {/* Table */}
+              <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '32px', fontSize: '0.85rem' }}>
+                <thead>
+                  <tr style={{ backgroundColor: '#f3f4f6', color: '#1a1a1a', textAlign: 'left', fontWeight: 700 }}>
+                    <th style={{ padding: '10px 12px', borderBottom: '2px solid #e5e7eb' }}>Description</th>
+                    <th style={{ padding: '10px 12px', borderBottom: '2px solid #e5e7eb', textAlign: 'center' }}>Qty</th>
+                    <th style={{ padding: '10px 12px', borderBottom: '2px solid #e5e7eb', textAlign: 'right' }}>Unit Price (Excl)</th>
+                    <th style={{ padding: '10px 12px', borderBottom: '2px solid #e5e7eb', textAlign: 'right' }}>VAT (15%)</th>
+                    <th style={{ padding: '10px 12px', borderBottom: '2px solid #e5e7eb', textAlign: 'right' }}>Total (Incl)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(activeViewInvoice.items || []).map((item, idx) => {
+                    const priceExcl = item.price / 1.15;
+                    const vatAmount = item.price - priceExcl;
+                    return (
+                      <tr key={idx} style={{ borderBottom: '1px solid #e5e7eb', color: '#4b5563' }}>
+                        <td style={{ padding: '10px 12px' }}><strong>{item.name}</strong></td>
+                        <td style={{ padding: '10px 12px', textAlign: 'center' }}>{item.quantity}</td>
+                        <td style={{ padding: '10px 12px', textAlign: 'right' }}>R {priceExcl.toFixed(2)}</td>
+                        <td style={{ padding: '10px 12px', textAlign: 'right' }}>R {vatAmount.toFixed(2)}</td>
+                        <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, color: '#1a1a1a' }}>R {(item.price * item.quantity).toFixed(2)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+
+              {/* Totals */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', fontSize: '0.85rem' }}>
+                <div style={{ width: '280px', lineHeight: '1.8' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#4b5563' }}>
+                    <span>Subtotal (Excl VAT):</span>
+                    <span>R {(activeViewInvoice.subtotal || (activeViewInvoice.total / 1.15)).toFixed(2)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#4b5563' }}>
+                    <span>VAT (15%):</span>
+                    <span>R {(activeViewInvoice.tax || (activeViewInvoice.total - (activeViewInvoice.total / 1.15))).toFixed(2)}</span>
+                  </div>
+                  {activeViewInvoice.discount > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#ef4444' }}>
+                      <span>Discount ({activeViewInvoice.discount}%):</span>
+                      <span>- R {((activeViewInvoice.total / (1 - activeViewInvoice.discount / 100)) * (activeViewInvoice.discount / 100)).toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid #6B2C91', paddingTop: '6px', marginTop: '6px', fontSize: '1.05rem', fontWeight: 700, color: '#1a1a1a' }}>
+                    <span>Grand Total:</span>
+                    <span>R {activeViewInvoice.total.toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Terms and banking details */}
+              <div style={{ marginTop: '48px', borderTop: '1px solid #e5e7eb', paddingTop: '16px', fontSize: '0.75rem', color: '#6b7280', lineHeight: '1.4' }}>
+                <strong>PAYMENT TERMS & BANKING INFORMATION</strong>
+                <br />Payment is due upon receipt of invoice. Please use the invoice number <strong>{activeViewInvoice.invoiceNumber}</strong> as reference.
+                <br />Bank: <strong>Elysium Private Bank</strong> | Account: <strong>1020491022</strong> | Branch Code: <strong>250655</strong>
+                <br /><em style={{ display: 'block', marginTop: '8px', textAlign: 'center' }}>Thank you for choosing Sculpt & Glow Clinical Atelier. We appreciate your valued business!</em>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PROFESSIONAL A4 CORPORATE QUOTATION MODAL */}
+      {showQuoteViewModal && activeViewQuote && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 12000, padding: '20px' }}>
+          <div style={{ backgroundColor: 'white', color: '#1a1a1a', width: '100%', maxWidth: '800px', maxHeight: '95vh', overflowY: 'auto', borderRadius: '12px', boxShadow: 'var(--shadow-premium)', display: 'flex', flexDirection: 'column' }}>
+            {/* Header Toolbar */}
+            <div style={{ backgroundColor: 'hsl(var(--brand-charcoal))', padding: '12px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTopLeftRadius: '12px', borderTopRightRadius: '12px' }}>
+              <span style={{ color: 'white', fontWeight: 600, fontSize: '0.9rem' }}>Corporate Quotation Viewer</span>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  onClick={() => alert(`Corporate A4 Quotation ${activeViewQuote.quoteNumber} successfully queued for printing!`)}
+                  className="btn-brand-gold"
+                  style={{ padding: '6px 12px', fontSize: '0.72rem' }}
+                >
+                  <Printer style={{ width: '12px', height: '12px' }} /> Print Quote
+                </button>
+                <button
+                  onClick={() => alert(`Quotation ${activeViewQuote.quoteNumber} successfully emailed to client!`)}
+                  className="btn-brand-purple"
+                  style={{ padding: '6px 12px', fontSize: '0.72rem' }}
+                >
+                  <Mail style={{ width: '12px', height: '12px' }} /> Share Email
+                </button>
+                <button
+                  onClick={() => alert(`Quotation ${activeViewQuote.quoteNumber} successfully sent to client WhatsApp!`)}
+                  className="btn-brand-gold"
+                  style={{ padding: '6px 12px', fontSize: '0.72rem', backgroundColor: '#34d399', color: 'white' }}
+                >
+                  <MessageSquare style={{ width: '12px', height: '12px' }} /> WhatsApp
+                </button>
+                <button
+                  onClick={() => { setShowQuoteViewModal(false); setActiveViewQuote(null); }}
+                  style={{ border: 'none', background: 'none', color: '#ef4444', fontSize: '1.25rem', cursor: 'pointer', marginLeft: '12px' }}
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* A4 Sheet Canvas */}
+            <div style={{ padding: '40px', fontFamily: 'Inter, system-ui, sans-serif', backgroundColor: 'white', flex: 1 }}>
+              {/* Quote Title & Logo */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #6B2C91', paddingBottom: '20px', marginBottom: '24px' }}>
+                <div>
+                  <h1 style={{ color: '#6B2C91', margin: 0, fontSize: '2rem', fontFamily: 'Outfit', fontWeight: 800 }}>SCULPT & GLOW</h1>
+                  <span style={{ color: '#D4AF37', fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Clinical Aesthetic Atelier</span>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <h2 style={{ color: '#1a1a1a', margin: 0, fontSize: '1.8rem', fontWeight: 700 }}>OFFICIAL QUOTATION</h2>
+                  <span style={{ color: '#666', fontSize: '0.85rem' }}>Quote Reference: <strong>{activeViewQuote.quoteNumber}</strong></span>
+                  <br /><span style={{ color: '#666', fontSize: '0.85rem' }}>Date: {activeViewQuote.date}</span>
+                  <br /><span style={{ color: '#ef4444', fontSize: '0.85rem', fontWeight: 600 }}>Expires: {activeViewQuote.expiryDate}</span>
+                </div>
+              </div>
+
+              {/* Addresses section */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '40px', marginBottom: '32px', fontSize: '0.85rem', lineHeight: '1.5' }}>
+                <div>
+                  <strong style={{ color: '#6B2C91', textTransform: 'uppercase', fontSize: '0.78rem', display: 'block', marginBottom: '8px' }}>FROM:</strong>
+                  <strong>Sculpt & Glow Clinic Ltd</strong>
+                  <br />Suite 4, West End Medical Center
+                  <br />Atelier Row, Pretoria East
+                  <br />Tel: +27 (0) 12 555 0192
+                  <br />Email: info@sculptglow.co.za
+                </div>
+                <div>
+                  <strong style={{ color: '#6B2C91', textTransform: 'uppercase', fontSize: '0.78rem', display: 'block', marginBottom: '8px' }}>PREPARED FOR:</strong>
+                  <strong>{clients.find(c => c.id === activeViewQuote.clientId)?.name || 'Walk-in Guest'}</strong>
+                  <br />Email: {clients.find(c => c.id === activeViewQuote.clientId)?.email || 'N/A'}
+                  <br />Phone: {clients.find(c => c.id === activeViewQuote.clientId)?.phone || 'N/A'}
+                  <br />Validity period: 14 Days
+                </div>
+              </div>
+
+              {/* Table */}
+              <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '32px', fontSize: '0.85rem' }}>
+                <thead>
+                  <tr style={{ backgroundColor: '#f3f4f6', color: '#1a1a1a', textAlign: 'left', fontWeight: 700 }}>
+                    <th style={{ padding: '10px 12px', borderBottom: '2px solid #e5e7eb' }}>Description</th>
+                    <th style={{ padding: '10px 12px', borderBottom: '2px solid #e5e7eb', textAlign: 'center' }}>Qty</th>
+                    <th style={{ padding: '10px 12px', borderBottom: '2px solid #e5e7eb', textAlign: 'right' }}>Unit Cost (Excl VAT)</th>
+                    <th style={{ padding: '10px 12px', borderBottom: '2px solid #e5e7eb', textAlign: 'right' }}>Total (Incl VAT)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(activeViewQuote.items || []).map((item, idx) => {
+                    const priceExcl = item.price / 1.15;
+                    return (
+                      <tr key={idx} style={{ borderBottom: '1px solid #e5e7eb', color: '#4b5563' }}>
+                        <td style={{ padding: '10px 12px' }}><strong>{item.name}</strong></td>
+                        <td style={{ padding: '10px 12px', textAlign: 'center' }}>{item.quantity}</td>
+                        <td style={{ padding: '10px 12px', textAlign: 'right' }}>R {priceExcl.toFixed(2)}</td>
+                        <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, color: '#1a1a1a' }}>R {(item.price * item.quantity).toFixed(2)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+
+              {/* Totals */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', fontSize: '0.85rem' }}>
+                <div style={{ width: '280px', lineHeight: '1.8' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#4b5563' }}>
+                    <span>Gross Estimation:</span>
+                    <span>R {(activeViewQuote.total / (1 - activeViewQuote.discount / 100)).toFixed(2)}</span>
+                  </div>
+                  {activeViewQuote.discount > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#ef4444' }}>
+                      <span>Discount ({activeViewQuote.discount}%):</span>
+                      <span>- R {((activeViewQuote.total / (1 - activeViewQuote.discount / 100)) * (activeViewQuote.discount / 100)).toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid #6B2C91', paddingTop: '6px', marginTop: '6px', fontSize: '1.05rem', fontWeight: 700, color: '#1a1a1a' }}>
+                    <span>Estimated Total (Incl VAT):</span>
+                    <span>R {activeViewQuote.total.toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Terms */}
+              <div style={{ marginTop: '48px', borderTop: '1px solid #e5e7eb', paddingTop: '16px', fontSize: '0.75rem', color: '#6b7280', lineHeight: '1.4' }}>
+                <strong>QUOTATION COMPLIANCE & ACCEPTANCE NOTES</strong>
+                <br />This quotation is valid until <strong>{activeViewQuote.expiryDate}</strong>. All treatments require booking slots in advance.
+                <br />To accept this quote and convert it to a confirmed clinic session, please contact the receptionist desk or log in to the Elysium Client App and approve quotation ref: <strong>{activeViewQuote.quoteNumber}</strong>.
+                <br /><em style={{ display: 'block', marginTop: '8px', textAlign: 'center' }}>We look forward to partnering in your aesthetic skincare journey!</em>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PROFESSIONAL CORPORATE REFUND LETTER MODAL */}
+      {showRefundLetterModal && activeRefundInvoice && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 12000, padding: '20px' }}>
+          <div style={{ backgroundColor: 'white', color: '#1a1a1a', width: '100%', maxWidth: '750px', maxHeight: '90vh', overflowY: 'auto', borderRadius: '12px', boxShadow: 'var(--shadow-premium)', display: 'flex', flexDirection: 'column' }}>
+            {/* Header Toolbar */}
+            <div style={{ backgroundColor: 'hsl(var(--brand-charcoal))', padding: '12px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTopLeftRadius: '12px', borderTopRightRadius: '12px' }}>
+              <span style={{ color: 'white', fontWeight: 600, fontSize: '0.9rem' }}>Formal Refund Notification Letter</span>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  onClick={() => alert(`Corporate Refund Confirmation Letter successfully queued for printing!`)}
+                  className="btn-brand-gold"
+                  style={{ padding: '6px 12px', fontSize: '0.72rem' }}
+                >
+                  <Printer style={{ width: '12px', height: '12px' }} /> Print Letter
+                </button>
+                <button
+                  onClick={() => alert(`Refund Letter successfully emailed to client!`)}
+                  className="btn-brand-purple"
+                  style={{ padding: '6px 12px', fontSize: '0.72rem' }}
+                >
+                  <Mail style={{ width: '12px', height: '12px' }} /> Share Email
+                </button>
+                <button
+                  onClick={() => alert(`Refund Letter successfully sent to client WhatsApp!`)}
+                  className="btn-brand-gold"
+                  style={{ padding: '6px 12px', fontSize: '0.72rem', backgroundColor: '#34d399', color: 'white' }}
+                >
+                  <MessageSquare style={{ width: '12px', height: '12px' }} /> WhatsApp
+                </button>
+                <button
+                  onClick={() => { setShowRefundLetterModal(false); setActiveRefundInvoice(null); }}
+                  style={{ border: 'none', background: 'none', color: '#ef4444', fontSize: '1.25rem', cursor: 'pointer', marginLeft: '12px' }}
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* A4 Sheet Canvas */}
+            <div style={{ padding: '40px 50px', fontFamily: 'Inter, system-ui, sans-serif', backgroundColor: 'white', flex: 1, lineHeight: '1.6', fontSize: '0.88rem', color: '#2d3748' }}>
+              {/* Header Letterhead */}
+              <div style={{ borderBottom: '2px solid #6B2C91', paddingBottom: '16px', marginBottom: '32px' }}>
+                <h1 style={{ color: '#6B2C91', margin: 0, fontSize: '1.75rem', fontFamily: 'Outfit', fontWeight: 800 }}>SCULPT & GLOW CLINIC</h1>
+                <span style={{ color: '#6b7280', fontSize: '0.75rem' }}>Atelier Suite 4, West End Medical Center, Pretoria East</span>
+              </div>
+
+              {/* Date & Address */}
+              <div style={{ marginBottom: '24px' }}>
+                <div>Date: {new Date().toISOString().split('T')[0]}</div>
+                <div style={{ marginTop: '16px' }}>
+                  <strong>To Valued Client:</strong>
+                  <br />{clients.find(c => c.id === activeRefundInvoice.clientId)?.name || 'Walk-in Guest'}
+                  <br />Email: {clients.find(c => c.id === activeRefundInvoice.clientId)?.email || 'N/A'}
+                  <br />Phone: {clients.find(c => c.id === activeRefundInvoice.clientId)?.phone || 'N/A'}
+                </div>
+              </div>
+
+              {/* Subject */}
+              <h3 style={{ color: '#1a1a1a', fontSize: '1rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '6px', marginBottom: '20px' }}>
+                SUBJECT: REFUND TRANSACTION SETTLEMENT CONFIRMATION - {activeRefundInvoice.invoiceNumber}
+              </h3>
+
+              {/* Body */}
+              <p>Dear {clients.find(c => c.id === activeRefundInvoice.clientId)?.name || 'Valued Guest'},</p>
+              
+              <p>
+                This letter serves as formal confirmation that the refund transaction for invoice reference <strong>{activeRefundInvoice.invoiceNumber}</strong> has been successfully processed and finalized on our accounts ledger.
+              </p>
+
+              <p>
+                The total refundable amount of <strong>R {activeRefundInvoice.total.toFixed(2)}</strong> has been credited back to your original payment method. Below is the summary details of the transaction:
+              </p>
+
+              {/* Details table */}
+              <table style={{ width: '100%', borderCollapse: 'collapse', margin: '20px 0', fontSize: '0.85rem', backgroundColor: '#f7fafc', border: '1px solid #e2e8f0' }}>
+                <tbody>
+                  <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+                    <td style={{ padding: '8px 12px', fontWeight: 700, width: '200px' }}>Tax Invoice Number:</td>
+                    <td style={{ padding: '8px 12px' }}>{activeRefundInvoice.invoiceNumber}</td>
+                  </tr>
+                  <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+                    <td style={{ padding: '8px 12px', fontWeight: 700 }}>Originally Settled Date:</td>
+                    <td style={{ padding: '8px 12px' }}>{activeRefundInvoice.date}</td>
+                  </tr>
+                  <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+                    <td style={{ padding: '8px 12px', fontWeight: 700 }}>Refund Settlement Date:</td>
+                    <td style={{ padding: '8px 12px' }}>{new Date().toISOString().split('T')[0]}</td>
+                  </tr>
+                  <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+                    <td style={{ padding: '8px 12px', fontWeight: 700 }}>Refund Reason recorded:</td>
+                    <td style={{ padding: '8px 12px', color: '#ef4444', fontStyle: 'italic' }}>{activeRefundInvoice.refundReason || 'Service cancellation adjustment'}</td>
+                  </tr>
+                  <tr>
+                    <td style={{ padding: '8px 12px', fontWeight: 700 }}>Total Refunded Amount:</td>
+                    <td style={{ padding: '8px 12px', fontWeight: 700, color: '#34d399' }}>R {activeRefundInvoice.total.toFixed(2)}</td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <p>
+                Please note that depending on your banking institution, the refund credit might take between 2 to 5 business days to reflect in your bank statement.
+              </p>
+
+              <p>
+                We sincerely apologize for any inconvenience caused. If you have any questions or require further ledger clarification, please do not hesitate to contact our accounts division at accounts@sculptglow.co.za.
+              </p>
+
+              <div style={{ marginTop: '40px', lineHeight: '1.4' }}>
+                <span>Sincerely,</span>
+                <br /><strong style={{ display: 'block', marginTop: '24px', color: '#6B2C91' }}>Sculpt & Glow Financial Desk</strong>
+                <span style={{ fontSize: '0.75rem', color: '#718096' }}>Authorized Accounts Office</span>
+              </div>
             </div>
           </div>
         </div>
