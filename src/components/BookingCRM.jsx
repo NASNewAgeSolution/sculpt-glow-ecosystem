@@ -5306,6 +5306,34 @@ export default function BookingCRM() {
                   />
                 </div>
 
+                <div style={{ borderTop: '1px solid rgba(107, 44, 145, 0.25)', paddingTop: '16px', marginTop: '8px' }}>
+                  <h4 style={{ fontFamily: 'Outfit', color: '#D4AF37', margin: '0 0 12px 0', fontSize: '0.9rem' }}>App Cancellation Refund Policy</h4>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.78rem', color: '#A89684', marginBottom: '6px' }}>Strict Limit (Days):</label>
+                      <input type="number" className="brand-input" id="cfgCancelDaysMin" defaultValue={settings.cancelPolicyDaysMin || 8} />
+                      <span style={{ fontSize: '0.68rem', color: '#BFA6D8' }}>Canceling within this many days triggers the strict forfeit percentage.</span>
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.78rem', color: '#A89684', marginBottom: '6px' }}>Strict Forfeit Percentage (%):</label>
+                      <input type="number" className="brand-input" id="cfgCancelForfeitMin" defaultValue={settings.cancelPolicyForfeitMin || 100} />
+                      <span style={{ fontSize: '0.68rem', color: '#BFA6D8' }}>Percentage of booking fee forfeited for cancellations under strict days.</span>
+                    </div>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginTop: '12px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.78rem', color: '#A89684', marginBottom: '6px' }}>Moderate Limit (Days):</label>
+                      <input type="number" className="brand-input" id="cfgCancelDaysMax" defaultValue={settings.cancelPolicyDaysMax || 14} />
+                      <span style={{ fontSize: '0.68rem', color: '#BFA6D8' }}>Canceling within this many days triggers the moderate forfeit percentage.</span>
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.78rem', color: '#A89684', marginBottom: '6px' }}>Moderate Forfeit Percentage (%):</label>
+                      <input type="number" className="brand-input" id="cfgCancelForfeitMax" defaultValue={settings.cancelPolicyForfeitMax || 50} />
+                      <span style={{ fontSize: '0.68rem', color: '#BFA6D8' }}>Percentage of booking fee forfeited for cancellations under moderate days.</span>
+                    </div>
+                  </div>
+                </div>
+
                 <button
                   onClick={() => {
                     const sName = document.getElementById('cfgSalonName').value;
@@ -5313,6 +5341,10 @@ export default function BookingCRM() {
                     const phone = document.getElementById('cfgPhone').value;
                     const leadTime = document.getElementById('cfgReminderLeadTime').value;
                     const noShowTpl = document.getElementById('cfgNoShowTemplate').value;
+                    const cDaysMin = document.getElementById('cfgCancelDaysMin').value;
+                    const cForfeitMin = document.getElementById('cfgCancelForfeitMin').value;
+                    const cDaysMax = document.getElementById('cfgCancelDaysMax').value;
+                    const cForfeitMax = document.getElementById('cfgCancelForfeitMax').value;
 
                     const newSettings = {
                       ...settings,
@@ -5320,7 +5352,11 @@ export default function BookingCRM() {
                       vatRate: Number(vat),
                       phone,
                       reminderLeadTime: leadTime,
-                      noShowTemplate: noShowTpl
+                      noShowTemplate: noShowTpl,
+                      cancelPolicyDaysMin: Number(cDaysMin),
+                      cancelPolicyForfeitMin: Number(cForfeitMin),
+                      cancelPolicyDaysMax: Number(cDaysMax),
+                      cancelPolicyForfeitMax: Number(cForfeitMax)
                     };
                     updateSettings(currentUserName(), newSettings);
                     syncDatabase();

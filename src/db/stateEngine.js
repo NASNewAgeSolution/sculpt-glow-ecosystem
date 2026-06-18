@@ -1862,3 +1862,285 @@ export const removeStaffDeduction = (username, staffId, deductionId) => {
   logAction(username, 'Remove Payroll Deduction', `Removed payroll deduction for ${user.name}`);
   return true;
 };
+
+// ==========================================
+// PHASE 7: MOBILE CLIENT APP DB HELPERS
+// ==========================================
+
+const cleanPhoneNumber = (phone) => {
+  if (!phone) return '';
+  return phone.replace(/\D/g, ''); // strip all non-digits
+};
+
+export const registerClientApp = (username, name, email, phone, password) => {
+  const clients = getTable('clients') || [];
+  const cleanedRegPhone = cleanPhoneNumber(phone);
+  
+  if (!cleanedRegPhone) {
+    return { success: false, error: 'Please enter a valid cellphone number.' };
+  }
+  
+  // Check if phone already registered in CRM database
+  const idx = clients.findIndex(c => cleanPhoneNumber(c.phone) === cleanedRegPhone);
+  if (idx !== -1) {
+    const matchedClient = clients[idx];
+    if (matchedClient.password) {
+      return { success: false, error: 'This cellphone number is already registered. Please log in.' };
+    } else {
+      // Link existing CRM client profile with newly created app password
+      clients[idx] = { 
+        ...matchedClient, 
+        password,
+        name: name || matchedClient.name,
+        email: email || matchedClient.email
+      };
+      saveTable('clients', clients);
+      logAction(username, 'App Register Link', `Linked existing client ${matchedClient.name} with new app credentials.`);
+      return { success: true, linked: true, client: clients[idx] };
+    }
+  }
+  
+  // Register a brand new client profile
+  const newClient = {
+    id: `cli-${Date.now()}`,
+    name,
+    email,
+    phone,
+    dob: '',
+    gender: '',
+    allergies: '',
+    medical: '',
+    preferredStaff: 'Jessica Laser',
+    loyaltyPoints: 0,
+    vipTier: 'Bronze',
+    notes: 'Registered self via Mobile App.',
+    password,
+    profilePhoto: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150', // Default generic avatar
+    weightLogs: []
+  };
+  
+  clients.push(newClient);
+  saveTable('clients', clients);
+  logAction(username, 'App Register New', `Created new client profile for ${name} via app.`);
+  return { success: true, linked: false, client: newClient };
+};
+
+export const loginClientApp = (phone, password) => {
+  const clients = getTable('clients') || [];
+  const cleanedLoginPhone = cleanPhoneNumber(phone);
+  
+  const client = clients.find(c => cleanPhoneNumber(c.phone) === cleanedLoginPhone && c.password === password);
+  if (!client) {
+    return { success: false, error: 'Invalid cellphone number or password.' };
+  }
+  return { success: true, client };
+};
+
+export const rescheduleAppointmentFromApp = (username, appointmentId, newDate, newTime) => {
+  const appointments = getTable('appointments') || [];
+  const idx = appointments.findIndex(a => a.id === appointmentId);
+  if (idx === -1) return { success: false, error: 'Appointment not found.' };
+  
+  const apt = appointments[idx];
+  const conflictCheck = checkScheduleConflict({
+    ...apt,
+    date: newDate,
+    time: newTime
+  });
+  
+  if (conflictCheck.conflict) {
+    return { success: false, error: conflictCheck.reason };
+  }
+  
+  appointments[idx] = {
+    ...apt,
+    date: newDate,
+    time: newTime,
+    status: 'Pending' // Rescheduling places it back in Pending status for admin approval
+  };
+  saveTable('appointments', appointments);
+  logAction(username, 'App Reschedule Booking', `Rescheduled booking ID ${appointmentId} to ${newDate} at ${newTime}`);
+  return { success: true, appointment: appointments[idx] };
+};
+
+export const cancelAppointmentFromApp = (username, appointmentId, reason) => {
+  const appointments = getTable('appointments') || [];
+  const idx = appointments.findIndex(a => a.id === appointmentId);
+  if (idx === -1) return { success: false, error: 'Appointment not found.' };
+  
+  const apt = appointments[idx];
+  appointments[idx] = {
+    ...apt,
+    status: 'Cancelled',
+    notes: `${apt.notes || ''} [Cancelled via App. Reason: ${reason}]`.trim()
+  };
+  saveTable('appointments', appointments);
+  
+  // Also mark linked invoices as Cancelled or update billing
+  const invoices = getTable('invoices') || [];
+  const invIdx = invoices.findIndex(inv => inv.appointmentId === appointmentId);
+  if (invIdx !== -1 && invoices[invIdx].status === 'Unpaid') {
+    invoices[invIdx].status = 'Cancelled';
+    saveTable('invoices', invoices);
+  }
+  
+  logAction(username, 'App Cancel Booking', `Cancelled booking ID ${appointmentId}. Reason: ${reason}`);
+  return { success: true };
+};
+
+export const purchaseProductsFromApp = (username, clientId, itemsList, totalAmount, paymentMethod) => {
+  const products = getTable('products') || [];
+  
+  // Verify and decrement stock
+  for (const cartItem of itemsList) {
+    const pIdx = products.findIndex(p => p.id === cartItem.id);
+    if (pIdx !== -1) {
+      if (products[pIdx].stock < cartItem.quantity) {
+        return { success: false, error: `Product "${cartItem.name}" stock is insufficient.` };
+      }
+      products[pIdx].stock = Math.max(0, products[pIdx].stock - cartItem.quantity);
+    }
+  }
+  saveTable('products', products);
+  
+  // Record Invoice
+  const invoices = getTable('invoices') || [];
+  const newInvoice = {
+    id: `inv-${Date.now()}`,
+    invoiceNumber: `INV-2026-${String(invoices.length + 5001).padStart(4, '0')}`,
+    clientId,
+    date: new Date().toISOString().split('T')[0],
+    dueDate: new Date().toISOString().split('T')[0],
+    items: itemsList.map(item => ({
+      name: `${item.name} [Product]`,
+      quantity: item.quantity,
+      price: item.price,
+      taxRate: 15
+    })),
+    subtotal: Number((totalAmount / 1.15).toFixed(2)),
+    tax: Number((totalAmount - (totalAmount / 1.15)).toFixed(2)),
+    discount: 0,
+    total: totalAmount,
+    payments: [{
+      date: new Date().toISOString().split('T')[0],
+      amount: totalAmount,
+      method: paymentMethod,
+      txnId: `TXN-APP-${Date.now().toString().slice(-5)}`
+    }],
+    status: 'Paid',
+    refundReason: ''
+  };
+  invoices.push(newInvoice);
+  saveTable('invoices', invoices);
+  
+  // Increment Glow Points
+  const clients = getTable('clients') || [];
+  const cIdx = clients.findIndex(c => c.id === clientId);
+  if (cIdx !== -1) {
+    const earnedPoints = Math.floor(totalAmount / 100);
+    clients[cIdx].loyaltyPoints += earnedPoints;
+    
+    // Auto Update VIP Tiers
+    if (clients[cIdx].loyaltyPoints > 100) clients[cIdx].vipTier = 'Platinum';
+    else if (clients[cIdx].loyaltyPoints > 50) clients[cIdx].vipTier = 'Gold';
+    else clients[cIdx].vipTier = 'Silver';
+    
+    saveTable('clients', clients);
+  }
+  
+  logAction(username, 'App Purchase Products', `Client purchased retail products totaling R${totalAmount} via ${paymentMethod}.`);
+  return { success: true };
+};
+
+export const bookAppointmentFromApp = (username, clientId, bookingData) => {
+  const service = getTable('services').find(s => s.id === bookingData.serviceId);
+  if (!service) return { success: false, error: 'Service not found.' };
+  
+  const conflictCheck = checkScheduleConflict({
+    clientId,
+    serviceId: bookingData.serviceId,
+    staffId: bookingData.staffId || 'usr-3', // Default Jessica
+    room: bookingData.room,
+    machineId: bookingData.machineId || null,
+    date: bookingData.date,
+    time: bookingData.time,
+    duration: service.duration
+  });
+  
+  if (conflictCheck.conflict) {
+    return { success: false, error: conflictCheck.reason };
+  }
+  
+  // Add Appointment
+  const appointments = getTable('appointments') || [];
+  const newApt = {
+    id: `apt-${Date.now()}`,
+    clientId,
+    serviceId: bookingData.serviceId,
+    staffId: bookingData.staffId || 'usr-3',
+    room: bookingData.room,
+    machineId: bookingData.machineId || null,
+    date: bookingData.date,
+    time: bookingData.time,
+    duration: service.duration,
+    status: 'Pending', // Bookings made on the client app are Pending until review
+    notes: 'Booked via Mobile Client App.'
+  };
+  appointments.push(newApt);
+  saveTable('appointments', appointments);
+  
+  // Add Invoice
+  const invoices = getTable('invoices') || [];
+  const newInvoice = {
+    id: `inv-${Date.now()}`,
+    invoiceNumber: `INV-2026-${String(invoices.length + 5001).padStart(4, '0')}`,
+    appointmentId: newApt.id,
+    clientId,
+    date: bookingData.date,
+    dueDate: bookingData.date,
+    items: [{
+      name: `${service.name} [Service]`,
+      quantity: 1,
+      price: service.price,
+      taxRate: 15
+    }],
+    subtotal: Number((service.price / 1.15).toFixed(2)),
+    tax: Number((service.price - (service.price / 1.15)).toFixed(2)),
+    discount: 0,
+    total: service.price,
+    payments: [],
+    status: 'Unpaid',
+    refundReason: ''
+  };
+  invoices.push(newInvoice);
+  saveTable('invoices', invoices);
+  
+  // Add Alert notification to Owner
+  // Import addNotification inside stateEngine (it is already defined in stateEngine.js)
+  const clientObj = getTable('clients').find(c => c.id === clientId);
+  const clientName = clientObj ? clientObj.name : 'A client';
+  addNotification('owner', 'booking_request', 'New App Booking Request', `${clientName} requested an appointment for ${service.name} on ${bookingData.date} at ${bookingData.time}.`, newApt.id);
+  
+  logAction(username, 'App Create Booking', `Client booked ${service.name} on ${bookingData.date} at ${bookingData.time}. Pending admin review.`);
+  return { success: true, appointment: newApt };
+};
+
+export const updateClientProfileFromApp = (username, clientId, profileData) => {
+  const clients = getTable('clients') || [];
+  const idx = clients.findIndex(c => c.id === clientId);
+  if (idx === -1) return null;
+  
+  const client = clients[idx];
+  clients[idx] = {
+    ...client,
+    name: profileData.name || client.name,
+    email: profileData.email || client.email,
+    phone: profileData.phone || client.phone,
+    password: profileData.password || client.password,
+    deliveryAddress: profileData.deliveryAddress || client.deliveryAddress || '',
+    profilePhoto: profileData.profilePhoto || client.profilePhoto
+  };
+  saveTable('clients', clients);
+  logAction(username, 'App Update Profile', `Updated client profile parameters for ${client.name}.`);
+  return clients[idx];
+};

@@ -21,6 +21,7 @@ export const initialClients = [
     loyaltyPoints: 34, // 34 points = R3,400 spent
     vipTier: 'Silver',
     notes: 'Prefers lukewarm towels. Doing the Postpartum body rest program.',
+    password: '1234',
     profilePhoto: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150',
     weightLogs: [
       { date: '2026-05-01', weight: 68.5, waist: 78, hips: 98, photo: '/cover.jpg' },
@@ -40,6 +41,7 @@ export const initialClients = [
     loyaltyPoints: 62, // 62 points = R6,200 spent (Eligible for Body Roll session)
     vipTier: 'Gold',
     notes: 'A regular member. Loves Cryo Fat Freezing and Korean Corrective Facials.',
+    password: '1234',
     profilePhoto: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
     weightLogs: [
       { date: '2026-05-10', weight: 62.0, waist: 70, hips: 90, photo: '/cover.jpg' }
@@ -416,7 +418,11 @@ export const initialSettings = {
     weekendEnd: '14:00'
   },
   smsTemplate: 'Hi {client}, ready to get sculpted? Reminder for your {service} at Sculpt & Glow Pretoria East on {date} at {time}.',
-  emailTemplate: 'Dear {client},\n\nWe look forward to hosting you for your scheduled wellness treatment {service} on {date} at {time}.\n\nRemember to wear comfortable activewear for infrared roll/cardio sessions.\n\nWarm regards,\nSculpt & Glow'
+  emailTemplate: 'Dear {client},\n\nWe look forward to hosting you for your scheduled wellness treatment {service} on {date} at {time}.\n\nRemember to wear comfortable activewear for infrared roll/cardio sessions.\n\nWarm regards,\nSculpt & Glow',
+  cancelPolicyDaysMin: 8,
+  cancelPolicyForfeitMin: 100,
+  cancelPolicyDaysMax: 14,
+  cancelPolicyForfeitMax: 50
 };
 
 export const initialQuotes = [
