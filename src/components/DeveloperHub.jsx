@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ShieldAlert, ArrowRight, Layers, Smartphone, DollarSign, Database, CheckCircle, Clock } from 'lucide-react';
-import { logAction, getTable, developerBypassResetClientEmail } from '../db/stateEngine';
+import { logAction, getTable, developerBypassResetClientEmail, resetUserPassword } from '../db/stateEngine';
 
 export default function DeveloperHub() {
   const [rentStatus, setRentStatus] = useState('Paid');
@@ -10,14 +10,20 @@ export default function DeveloperHub() {
   const [selectedClientId, setSelectedClientId] = useState('');
   const [newClientEmail, setNewClientEmail] = useState('');
 
+  // Staff resetting states
+  const [usersList, setUsersList] = useState([]);
+  const [selectedUserId, setSelectedUserId] = useState('');
+  const [newStaffPin, setNewStaffPin] = useState('');
+
   // Sync parameters
   useEffect(() => {
     // Load remote lock state
     const locked = localStorage.getItem('saas_lock') === 'true';
     setRentStatus(locked ? 'Suspended' : 'Paid');
 
-    // Load active logs, stats, and clients
+    // Load active logs, stats, clients, and staff users
     setClientsList(getTable('clients') || []);
+    setUsersList(getTable('users') || []);
     setLogs(getTable('auditLogs').slice(0, 5));
     setStats({
       bookings: getTable('appointments').length,
@@ -27,6 +33,7 @@ export default function DeveloperHub() {
 
     const handleSync = () => {
       setClientsList(getTable('clients') || []);
+      setUsersList(getTable('users') || []);
       setLogs(getTable('auditLogs').slice(0, 5));
       setStats({
         bookings: getTable('appointments').length,
@@ -272,6 +279,74 @@ export default function DeveloperHub() {
                 style={{ fontSize: '0.72rem', padding: '8px', cursor: 'pointer', justifyContent: 'center' }}
               >
                 Override Email Bypass
+              </button>
+            </div>
+          </div>
+
+          {/* Staff Password Reset Panel */}
+          <div className="card-premium" style={{ border: '1px solid hsl(var(--brand-purple) / 0.4)', marginTop: '24px' }}>
+            <h3 style={{ fontFamily: 'Outfit', color: 'hsl(var(--brand-lilac))', fontSize: '1rem', margin: '0 0 12px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Layers style={{ width: '18px', height: '18px', color: 'hsl(var(--brand-lilac))' }} /> Staff CRM Access Override
+            </h3>
+            <p style={{ fontSize: '0.75rem', color: 'hsl(var(--brand-taupe))', lineHeight: '1.4', marginBottom: '16px' }}>
+              Reset passwords (PINs) for CRM receptionist and therapist staff to maintain secure access control.
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.7rem', color: 'hsl(var(--brand-taupe))', marginBottom: '4px' }}>Select Staff User:</label>
+                <select
+                  className="brand-input"
+                  style={{ fontSize: '0.75rem', padding: '6px' }}
+                  value={selectedUserId}
+                  onChange={(e) => {
+                    setSelectedUserId(e.target.value);
+                    const match = usersList.find(u => u.id === e.target.value);
+                    setNewStaffPin(match ? match.pin : '');
+                  }}
+                >
+                  <option value="">-- Choose Staff Member --</option>
+                  {usersList.map(u => (
+                    <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
+                  ))}
+                </select>
+              </div>
+
+              {selectedUserId && (
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.7rem', color: 'hsl(var(--brand-taupe))', marginBottom: '4px' }}>New CRM Password / PIN:</label>
+                  <input
+                    type="text"
+                    className="brand-input"
+                    style={{ fontSize: '0.75rem', padding: '6px' }}
+                    value={newStaffPin}
+                    onChange={(e) => setNewStaffPin(e.target.value)}
+                    placeholder="Enter new PIN/password"
+                  />
+                </div>
+              )}
+
+              <button
+                onClick={() => {
+                  if (!selectedUserId || !newStaffPin) {
+                    return alert('Please select a staff user and enter the new password/PIN.');
+                  }
+                  const res = resetUserPassword('SaaS Admin Override', selectedUserId, newStaffPin);
+                  if (res) {
+                    alert('Staff Password Reset Successful! credentials updated.');
+                    const updatedList = getTable('users') || [];
+                    setUsersList(updatedList);
+                    setSelectedUserId('');
+                    setNewStaffPin('');
+                  } else {
+                    alert('Reset failed. Staff user not found.');
+                  }
+                }}
+                disabled={!selectedUserId || !newStaffPin}
+                className="btn-brand-purple"
+                style={{ fontSize: '0.72rem', padding: '8px', cursor: 'pointer', justifyContent: 'center', color: 'white' }}
+              >
+                Reset Staff Password
               </button>
             </div>
           </div>

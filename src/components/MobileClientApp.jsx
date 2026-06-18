@@ -32,6 +32,12 @@ export default function MobileClientApp() {
   const [authName, setAuthName] = useState('');
   const [authEmail, setAuthEmail] = useState('');
   
+  // Forgot Password States
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotStep, setForgotStep] = useState(1); // 1 = enter email, 2 = enter new password
+  const [forgotNewPassword, setForgotNewPassword] = useState('');
+  const [resetClientId, setResetClientId] = useState('');
+  
   // Database tables
   const [clients, setClients] = useState([]);
   const [appointments, setAppointments] = useState([]);
@@ -206,6 +212,50 @@ export default function MobileClientApp() {
       }
     } else {
       alert(`Registration Error: ${res.error}`);
+    }
+  };
+
+  const handleForgotPasswordRequest = (e) => {
+    e.preventDefault();
+    if (!forgotEmail.trim()) {
+      return alert('Please enter your email address.');
+    }
+    const match = clients.find(c => c.email?.toLowerCase().trim() === forgotEmail.toLowerCase().trim());
+    if (!match) {
+      return alert(`Error: No registered client account found with email "${forgotEmail}".`);
+    }
+    
+    // Simulate sending email reset
+    alert(`Reset Link Dispatched!\n\nA secure password reset request has been sent to ${forgotEmail}.\n\nFor simulation convenience, you can now enter your new password below.`);
+    setResetClientId(match.id);
+    setForgotStep(2);
+  };
+
+  const handleForgotPasswordReset = (e) => {
+    e.preventDefault();
+    if (!forgotNewPassword || forgotNewPassword.length < 4) {
+      return alert('Password must be at least 4 characters long.');
+    }
+    
+    // Update client password in the database
+    const match = clients.find(c => c.id === resetClientId);
+    if (match) {
+      const updatedProfile = { ...match, password: forgotNewPassword };
+      const res = updateClientProfileFromApp('Client Self App', resetClientId, updatedProfile);
+      if (res) {
+        alert('Success! Your password has been reset successfully. Please login with your cellphone number and new password.');
+        logAction('Client Self App', 'Password Reset via Email', `Client ${match.name} reset password via email verification`);
+        
+        // Reset states
+        setAuthMode('login');
+        setForgotStep(1);
+        setForgotEmail('');
+        setForgotNewPassword('');
+        setResetClientId('');
+        syncApp();
+      } else {
+        alert('Error resetting password.');
+      }
     }
   };
 
@@ -666,10 +716,10 @@ export default function MobileClientApp() {
               <div style={{ textAlign: 'center', marginBottom: '8px' }}>
                 <Shield style={{ width: '40px', height: '40px', color: '#D4AF37', margin: '0 auto 10px auto' }} />
                 <h3 style={{ margin: 0, fontSize: '1.1rem', fontFamily: 'Outfit', color: 'white' }}>
-                  {authMode === 'login' ? 'Access Client Portal' : 'Register Member account'}
+                  {authMode === 'login' ? 'Access Client Portal' : authMode === 'register' ? 'Register Member account' : 'Reset Portal Password'}
                 </h3>
                 <p style={{ fontSize: '0.68rem', color: '#BFA6D8', marginTop: '4px' }}>
-                  {authMode === 'login' ? 'Enter credentials to manage bookings & rewards.' : 'Cell numbers link profiles automatically.'}
+                  {authMode === 'login' ? 'Enter credentials to manage bookings & rewards.' : authMode === 'register' ? 'Cell numbers link profiles automatically.' : 'Verify your registered email address to set a new password.'}
                 </p>
               </div>
 
@@ -697,6 +747,20 @@ export default function MobileClientApp() {
                       style={{ fontSize: '0.75rem', padding: '8px' }}
                     />
                   </div>
+
+                  <div style={{ textAlign: 'right', marginTop: '-4px' }}>
+                    <span 
+                      onClick={() => {
+                        setAuthMode('forgot');
+                        setForgotStep(1);
+                        setForgotEmail('');
+                        setForgotNewPassword('');
+                      }} 
+                      style={{ color: '#BFA6D8', cursor: 'pointer', fontSize: '0.62rem', textDecoration: 'underline' }}
+                    >
+                      Forgot password?
+                    </span>
+                  </div>
                   
                   <button type="submit" className="btn-brand-gold" style={{ justifyContent: 'center', fontSize: '0.75rem', padding: '8px', marginTop: '6px' }}>
                     Verify & Login <ArrowRight style={{ width: '12px', height: '12px' }} />
@@ -712,7 +776,7 @@ export default function MobileClientApp() {
                     </span>
                   </div>
                 </form>
-              ) : (
+              ) : authMode === 'register' ? (
                 <form onSubmit={handleAppRegister} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.68rem', color: '#A89684', marginBottom: '4px' }}>Full Name:</label>
@@ -773,6 +837,62 @@ export default function MobileClientApp() {
                     </span>
                   </div>
                 </form>
+              ) : (
+                /* FORGOT PASSWORD FORM */
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }} className="animate-fade-in">
+                  {forgotStep === 1 ? (
+                    <form onSubmit={handleForgotPasswordRequest} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.68rem', color: '#A89684', marginBottom: '4px' }}>Registered Email Address:</label>
+                        <input 
+                          type="email" 
+                          className="brand-input" 
+                          placeholder="e.g. alice@gmail.com"
+                          value={forgotEmail}
+                          onChange={(e) => setForgotEmail(e.target.value)}
+                          style={{ fontSize: '0.75rem', padding: '8px' }}
+                          required
+                        />
+                      </div>
+                      
+                      <button type="submit" className="btn-brand-gold" style={{ justifyContent: 'center', fontSize: '0.75rem', padding: '8px', marginTop: '6px' }}>
+                        Send Reset Link <ArrowRight style={{ width: '12px', height: '12px' }} />
+                      </button>
+                    </form>
+                  ) : (
+                    <form onSubmit={handleForgotPasswordReset} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      <div style={{ backgroundColor: 'rgba(212,175,55,0.05)', border: '1px solid rgba(212,175,55,0.2)', padding: '8px', borderRadius: '6px', fontSize: '0.65rem', color: '#BFA6D8', lineHeight: '1.4' }}>
+                        Verification link sent to <strong>{forgotEmail}</strong>. Please set your new secure account password below:
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.68rem', color: '#A89684', marginBottom: '4px' }}>New Password:</label>
+                        <input 
+                          type="password" 
+                          className="brand-input" 
+                          placeholder="Min 4 characters"
+                          value={forgotNewPassword}
+                          onChange={(e) => setForgotNewPassword(e.target.value)}
+                          style={{ fontSize: '0.75rem', padding: '8px' }}
+                          required
+                        />
+                      </div>
+                      
+                      <button type="submit" className="btn-brand-gold" style={{ justifyContent: 'center', fontSize: '0.75rem', padding: '8px', marginTop: '6px' }}>
+                        Update Password <CheckCircle style={{ width: '12px', height: '12px' }} />
+                      </button>
+                    </form>
+                  )}
+
+                  <div style={{ textAlign: 'center', marginTop: '10px', fontSize: '0.68rem', color: '#BFA6D8' }}>
+                    Remember password?{' '}
+                    <span 
+                      onClick={() => setAuthMode('login')} 
+                      style={{ color: '#D4AF37', cursor: 'pointer', fontWeight: 'bold', textDecoration: 'underline' }}
+                    >
+                      Login here
+                    </span>
+                  </div>
+                </div>
               )}
 
             </div>
