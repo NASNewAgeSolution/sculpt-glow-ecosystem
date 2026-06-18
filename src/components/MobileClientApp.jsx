@@ -86,6 +86,10 @@ export default function MobileClientApp() {
   // Fairy Dust Particles Click State
   const [sparkles, setSparkles] = useState([]);
 
+  // Settings dropdown & Profile modal states
+  const [showSettingsMenu, setShowSettingsMenu] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+
   const syncApp = () => {
     const clientsTable = getTable('clients') || [];
     setClients(clientsTable);
@@ -557,17 +561,101 @@ export default function MobileClientApp() {
             </div>
             
             {isLoggedIn && (
-              <button
-                onClick={() => {
-                  setIsLoggedIn(false);
-                  setAppCurrentClient('');
-                  setCart({});
-                  alert('Logged out of mobile app successfully.');
-                }}
-                style={{ backgroundColor: 'transparent', color: '#ef4444', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.65rem' }}
-              >
-                <LogOut style={{ width: '12px', height: '12px' }} /> Log Out
-              </button>
+              <div style={{ position: 'relative' }}>
+                <button
+                  onClick={() => setShowSettingsMenu(!showSettingsMenu)}
+                  style={{
+                    backgroundColor: 'transparent',
+                    color: showSettingsMenu ? '#D4AF37' : '#BFA6D8',
+                    border: 'none',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justify: 'center',
+                    padding: '4px',
+                    borderRadius: '50%',
+                    transition: 'all 0.2s ease',
+                    outline: 'none'
+                  }}
+                  title="Settings"
+                >
+                  <Settings style={{ width: '16px', height: '16px' }} />
+                </button>
+                
+                {/* Dropdown Menu */}
+                {showSettingsMenu && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '28px',
+                    right: '0',
+                    backgroundColor: '#1E1E1E',
+                    border: '1px solid rgba(212, 175, 55, 0.3)',
+                    borderRadius: '8px',
+                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.5)',
+                    padding: '4px',
+                    minWidth: '120px',
+                    zIndex: 100,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '2px'
+                  }}>
+                    <button
+                      onClick={() => {
+                        setShowSettingsMenu(false);
+                        setShowProfileModal(true);
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        backgroundColor: 'transparent',
+                        color: 'white',
+                        border: 'none',
+                        textAlign: 'left',
+                        padding: '6px 8px',
+                        fontSize: '0.65rem',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        width: '100%',
+                        transition: 'background-color 0.2s',
+                        fontFamily: 'Outfit'
+                      }}
+                    >
+                      <User style={{ width: '11px', height: '11px', color: '#D4AF37' }} /> View Profile
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowSettingsMenu(false);
+                        setIsLoggedIn(false);
+                        setAppCurrentClient('');
+                        setCart({});
+                        alert('Logged out of mobile app successfully.');
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        backgroundColor: 'transparent',
+                        color: '#ef4444',
+                        border: 'none',
+                        textAlign: 'left',
+                        padding: '6px 8px',
+                        fontSize: '0.65rem',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        width: '100%',
+                        transition: 'background-color 0.2s',
+                        borderTop: '1px solid rgba(255, 255, 255, 0.05)',
+                        marginTop: '2px',
+                        paddingTop: '6px',
+                        fontFamily: 'Outfit'
+                      }}
+                    >
+                      <LogOut style={{ width: '11px', height: '11px' }} /> Log Out
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
           </div>
 
@@ -751,48 +839,7 @@ export default function MobileClientApp() {
                       </div>
                     </div>
 
-                    {/* CLIENT PROFILE DETAILS EDIT FORM */}
-                    <div className="card-premium" style={{ border: '1px solid rgba(255,255,255,0.05)' }}>
-                      <strong style={{ fontSize: '0.78rem', display: 'block', color: 'white', marginBottom: '10px' }}>Personal Profile Settings</strong>
-                      <form onSubmit={handleProfileUpdate} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        
-                        {/* Photo upload */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
-                          <label style={{
-                            display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.65rem',
-                            backgroundColor: 'rgba(255,255,255,0.05)', padding: '5px 8px', borderRadius: '6px', cursor: 'pointer', color: '#BFA6D8'
-                          }}>
-                            <Camera style={{ width: '12px', height: '12px', color: '#D4AF37' }} /> Change Photo
-                            <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleAvatarFileChange} />
-                          </label>
-                        </div>
 
-                        <div>
-                          <label style={{ display: 'block', fontSize: '0.62rem', color: '#A89684', marginBottom: '2px' }}>Full Name:</label>
-                          <input type="text" className="brand-input" style={{ fontSize: '0.7rem', padding: '6px' }} value={profileForm.name} onChange={(e) => setProfileForm(prev => ({ ...prev, name: e.target.value }))} />
-                        </div>
-                        <div>
-                          <label style={{ display: 'block', fontSize: '0.62rem', color: '#A89684', marginBottom: '2px' }}>Email:</label>
-                          <input type="email" className="brand-input" style={{ fontSize: '0.7rem', padding: '6px' }} value={profileForm.email} onChange={(e) => setProfileForm(prev => ({ ...prev, email: e.target.value }))} />
-                        </div>
-                        <div>
-                          <label style={{ display: 'block', fontSize: '0.62rem', color: '#A89684', marginBottom: '2px' }}>Cellphone Number:</label>
-                          <input type="text" className="brand-input" style={{ fontSize: '0.7rem', padding: '6px' }} value={profileForm.phone} onChange={(e) => setProfileForm(prev => ({ ...prev, phone: e.target.value }))} />
-                        </div>
-                        <div>
-                          <label style={{ display: 'block', fontSize: '0.62rem', color: '#A89684', marginBottom: '2px' }}>App Password:</label>
-                          <input type="text" className="brand-input" style={{ fontSize: '0.7rem', padding: '6px' }} value={profileForm.password} onChange={(e) => setProfileForm(prev => ({ ...prev, password: e.target.value }))} />
-                        </div>
-                        <div>
-                          <label style={{ display: 'block', fontSize: '0.62rem', color: '#A89684', marginBottom: '2px' }}>Delivery Address:</label>
-                          <textarea className="brand-input" rows={2} style={{ fontSize: '0.7rem', padding: '6px' }} value={profileForm.deliveryAddress} onChange={(e) => setProfileForm(prev => ({ ...prev, deliveryAddress: e.target.value }))} placeholder="Enter shipping address..." />
-                        </div>
-
-                        <button type="submit" className="btn-brand-gold" style={{ fontSize: '0.7rem', padding: '6px', justifyContent: 'center', marginTop: '4px' }}>
-                          Save Profile Info
-                        </button>
-                      </form>
-                    </div>
 
                   </div>
                 )}
@@ -1386,6 +1433,71 @@ export default function MobileClientApp() {
           </div>
         );
       })()}
+
+      {/* PERSONAL PROFILE SETTINGS MODAL */}
+      {showProfileModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100000 }}>
+          <div className="card-premium animate-fade-in" style={{ width: '320px', padding: '16px', maxHeight: '90%', overflowY: 'auto' }}>
+            <h3 style={{ fontFamily: 'Outfit', color: '#D4AF37', margin: '0 0 12px 0', fontSize: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>Personal Profile Settings</span>
+              <button 
+                onClick={() => setShowProfileModal(false)}
+                style={{ background: 'none', border: 'none', color: '#A89684', cursor: 'pointer', fontSize: '1.2rem', padding: 0 }}
+              >
+                &times;
+              </button>
+            </h3>
+            
+            <form onSubmit={(e) => {
+              handleProfileUpdate(e);
+              setShowProfileModal(false);
+            }} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              
+              {/* Photo upload */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px', justifyContent: 'center' }}>
+                <div style={{ position: 'relative' }}>
+                  <img src={activeClientProfile?.profilePhoto || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150'} style={{ width: '60px', height: '60px', borderRadius: '50%', objectFit: 'cover', border: '2px solid #D4AF37' }} alt="Profile" />
+                  <label style={{
+                    position: 'absolute', bottom: '-2px', right: '-2px',
+                    display: 'flex', alignItems: 'center', justify: 'center',
+                    backgroundColor: '#1A1A1A', border: '1px solid #D4AF37', borderRadius: '50%',
+                    width: '20px', height: '20px', cursor: 'pointer', color: '#BFA6D8'
+                  }}>
+                    <Camera style={{ width: '10px', height: '10px', color: '#D4AF37' }} />
+                    <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleAvatarFileChange} />
+                  </label>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.62rem', color: '#A89684', marginBottom: '2px' }}>Full Name:</label>
+                <input type="text" className="brand-input" style={{ fontSize: '0.7rem', padding: '6px' }} value={profileForm.name} onChange={(e) => setProfileForm(prev => ({ ...prev, name: e.target.value }))} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.62rem', color: '#A89684', marginBottom: '2px' }}>Email:</label>
+                <input type="email" className="brand-input" style={{ fontSize: '0.7rem', padding: '6px' }} value={profileForm.email} onChange={(e) => setProfileForm(prev => ({ ...prev, email: e.target.value }))} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.62rem', color: '#A89684', marginBottom: '2px' }}>Cellphone Number:</label>
+                <input type="text" className="brand-input" style={{ fontSize: '0.7rem', padding: '6px' }} value={profileForm.phone} onChange={(e) => setProfileForm(prev => ({ ...prev, phone: e.target.value }))} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.62rem', color: '#A89684', marginBottom: '2px' }}>App Password:</label>
+                <input type="text" className="brand-input" style={{ fontSize: '0.7rem', padding: '6px' }} value={profileForm.password} onChange={(e) => setProfileForm(prev => ({ ...prev, password: e.target.value }))} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.62rem', color: '#A89684', marginBottom: '2px' }}>Delivery Address:</label>
+                <textarea className="brand-input" rows={2} style={{ fontSize: '0.7rem', padding: '6px' }} value={profileForm.deliveryAddress} onChange={(e) => setProfileForm(prev => ({ ...prev, deliveryAddress: e.target.value }))} placeholder="Enter shipping address..." />
+              </div>
+
+              <div style={{ display: 'flex', gap: '6px', marginTop: '10px' }}>
+                <button type="button" onClick={() => setShowProfileModal(false)} className="btn-brand-purple" style={{ flex: 1, fontSize: '0.7rem', padding: '6px', justifyContent: 'center' }}>Cancel</button>
+                <button type="submit" className="btn-brand-gold" style={{ flex: 1, fontSize: '0.7rem', padding: '6px', justifyContent: 'center' }}>Save Changes</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
     </div>
   );
