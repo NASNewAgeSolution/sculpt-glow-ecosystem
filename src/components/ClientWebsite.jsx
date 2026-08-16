@@ -110,6 +110,22 @@ export default function ClientWebsite({ defaultTab = 'home' }) {
   const [showGlowInfoModal, setShowGlowInfoModal] = useState(false);
   const [showProfileEditModal, setShowProfileEditModal] = useState(false);
 
+  // Viewport Responsive Listeners
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  useEffect(() => {
+    setIsMobileMenuOpen(false);
+  }, [activeTab]);
+
+  const isMobileView = windowWidth < 1024;
+
   // Fairy Dust Star Particle & Glitter checkout states
   const [glitters, setGlitters] = useState([]);
   const websiteRef = useRef(null);
@@ -885,7 +901,80 @@ export default function ClientWebsite({ defaultTab = 'home' }) {
           </div>
         </div>
 
-        <nav style={{ display: 'flex', gap: '20px', fontSize: '0.68rem', letterSpacing: '2.5px', textTransform: 'uppercase', fontWeight: 600 }}>
+        {!isMobileView && (
+          <nav style={{ display: 'flex', gap: '20px', fontSize: '0.68rem', letterSpacing: '2.5px', textTransform: 'uppercase', fontWeight: 600 }}>
+            {[
+              { id: 'home', label: 'Home' },
+              { id: 'services', label: 'Treatments' },
+              { id: 'results', label: 'Results Showcase' },
+              { id: 'products', label: 'Boutique' },
+              { id: 'about', label: 'Philosophy' },
+              { id: 'contact', label: 'Contact Us' },
+              { id: 'portal', label: 'Member Portal' }
+            ].map(menuItem => (
+              <button
+                key={menuItem.id}
+                onClick={() => setActiveTab(menuItem.id)}
+                className="nav-link-btn"
+                style={{
+                  color: activeTab === menuItem.id ? '#D4AF37' : '#F5EFE6',
+                  fontWeight: 700,
+                  textShadow: '2px 2px 8px rgba(0,0,0,0.85)',
+                  fontSize: 'inherit', letterSpacing: 'inherit'
+                }}
+              >
+                {menuItem.label}
+              </button>
+            ))}
+          </nav>
+        )}
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <button
+            onClick={() => setActiveTab('cart')}
+            style={{ 
+              background: 'none', border: 'none', cursor: 'pointer', color: '#D4AF37', 
+              position: 'relative', filter: 'drop-shadow(2px 2px 4px rgba(0,0,0,0.8))',
+              display: 'flex', alignItems: 'center', justifyContent: 'center'
+            }}
+          >
+            <ShoppingCart style={{ width: '22px', height: '22px' }} />
+            {cart.length > 0 && (
+              <span style={{ 
+                position: 'absolute', top: '-6px', right: '-6px', backgroundColor: '#6B2C91', 
+                color: 'white', fontSize: '0.6rem', width: '15px', height: '15px', 
+                borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', 
+                fontWeight: 700, border: '1px solid #D4AF37'
+              }}>
+                {cart.length}
+              </span>
+            )}
+          </button>
+
+          {isMobileView && (
+            <button
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer', color: '#D4AF37',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px'
+              }}
+            >
+              {isMobileMenuOpen ? <X style={{ width: '24px', height: '24px' }} /> : <Menu style={{ width: '24px', height: '24px' }} />}
+            </button>
+          )}
+        </div>
+      </header>
+
+      {/* MOBILE MENU DROPDOWN DRAWER */}
+      {isMobileView && isMobileMenuOpen && (
+        <div style={{
+          position: 'fixed', top: '94px', left: 0, width: '100%',
+          backgroundColor: 'rgba(13, 13, 13, 0.98)', backdropFilter: 'blur(20px)',
+          borderBottom: '1px solid rgba(107, 44, 145, 0.25)',
+          zIndex: 999, display: 'flex', flexDirection: 'column',
+          padding: '20px 6%', gap: '16px', boxSizing: 'border-box',
+          animation: 'fadeIn 0.3s ease-out'
+        }}>
           {[
             { id: 'home', label: 'Home' },
             { id: 'services', label: 'Treatments' },
@@ -897,40 +986,23 @@ export default function ClientWebsite({ defaultTab = 'home' }) {
           ].map(menuItem => (
             <button
               key={menuItem.id}
-              onClick={() => setActiveTab(menuItem.id)}
-              className="nav-link-btn"
+              onClick={() => {
+                setActiveTab(menuItem.id);
+                setIsMobileMenuOpen(false);
+              }}
               style={{
+                background: 'none', border: 'none', textAlign: 'left',
                 color: activeTab === menuItem.id ? '#D4AF37' : '#F5EFE6',
-                fontWeight: 700,
-                textShadow: '2px 2px 8px rgba(0,0,0,0.85)',
-                fontSize: 'inherit', letterSpacing: 'inherit'
+                fontSize: '0.85rem', letterSpacing: '2px', textTransform: 'uppercase',
+                fontWeight: 700, padding: '10px 0', cursor: 'pointer',
+                borderBottom: '1px solid rgba(255,255,255,0.02)'
               }}
             >
               {menuItem.label}
             </button>
           ))}
-        </nav>
-
-        <button
-          onClick={() => setActiveTab('cart')}
-          style={{ 
-            background: 'none', border: 'none', cursor: 'pointer', color: '#D4AF37', 
-            position: 'relative', filter: 'drop-shadow(2px 2px 4px rgba(0,0,0,0.8))'
-          }}
-        >
-          <ShoppingCart style={{ width: '22px', height: '22px' }} />
-          {cart.length > 0 && (
-            <span style={{ 
-              position: 'absolute', top: '-6px', right: '-6px', backgroundColor: '#6B2C91', 
-              color: 'white', fontSize: '0.6rem', width: '15px', height: '15px', 
-              borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', 
-              fontWeight: 700, border: '1px solid #D4AF37'
-            }}>
-              {cart.length}
-            </span>
-          )}
-        </button>
-      </header>
+        </div>
+      )}
 
       {/* CORE ROUTING SECTION */}
       <main style={{ boxSizing: 'border-box', minHeight: '85vh', paddingTop: '100px' }}>
@@ -1059,14 +1131,14 @@ export default function ClientWebsite({ defaultTab = 'home' }) {
 
         {/* SUBTAB: SERVICES MENU */}
         {activeTab === 'services' && (
-          <div style={{ padding: '160px 8% 80px 8%', display: 'flex', flexDirection: 'column', gap: '48px' }}>
+          <div style={{ padding: isMobileView ? '100px 16px 40px 16px' : '160px 8% 80px 8%', display: 'flex', flexDirection: 'column', gap: '48px' }}>
             <div style={{ textAlign: 'center' }}>
               <span style={{ fontSize: '0.72rem', letterSpacing: '3px', textTransform: 'uppercase', color: '#D4AF37', fontWeight: 600 }}>bespoke offerings</span>
               <h2 className="font-luxury-serif" style={{ fontSize: '2.5rem', color: 'white', margin: '8px 0 0 0' }}>Ecosystem Clinical Menu</h2>
               <div style={{ width: '60px', height: '1px', backgroundColor: '#D4AF37', margin: '18px auto 0 auto' }}></div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '30px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobileView ? '1fr' : 'repeat(auto-fit, minmax(360px, 1fr))', gap: '30px' }}>
               {services.map(srv => (
                 <div 
                   key={srv.id} 
@@ -1110,7 +1182,7 @@ export default function ClientWebsite({ defaultTab = 'home' }) {
 
         {/* SUBTAB: PRODUCTS PHARMACY */}
         {activeTab === 'products' && (
-          <div style={{ padding: '160px 8% 80px 8%', display: 'flex', flexDirection: 'column', gap: '48px' }}>
+          <div style={{ padding: isMobileView ? '100px 16px 40px 16px' : '160px 8% 80px 8%', display: 'flex', flexDirection: 'column', gap: '48px' }}>
             <div style={{ textAlign: 'center' }}>
               <span style={{ fontSize: '0.72rem', letterSpacing: '3px', textTransform: 'uppercase', color: '#D4AF37', fontWeight: 600 }}>atelier shop</span>
               <h2 className="font-luxury-serif" style={{ fontSize: '2.5rem', color: 'white', margin: '8px 0 0 0' }}>Boutique Collections</h2>
@@ -1157,7 +1229,7 @@ export default function ClientWebsite({ defaultTab = 'home' }) {
 
         {/* SUBTAB: Philosophy */}
         {activeTab === 'about' && (
-          <div style={{ padding: '160px 8% 80px 8%', display: 'flex', flexDirection: 'column', gap: '32px', maxWidth: '800px', margin: '0 auto' }}>
+          <div style={{ padding: isMobileView ? '100px 16px 40px 16px' : '160px 8% 80px 8%', display: 'flex', flexDirection: 'column', gap: '32px', maxWidth: '800px', margin: '0 auto' }}>
             <span style={{ fontSize: '0.72rem', letterSpacing: '3px', textTransform: 'uppercase', color: '#D4AF37', fontWeight: 600 }}>studio history</span>
             <h2 className="font-luxury-serif" style={{ fontSize: '2.5rem', color: 'white', margin: 0 }}>Ecosystem & Philosophy</h2>
             
@@ -1177,7 +1249,7 @@ export default function ClientWebsite({ defaultTab = 'home' }) {
 
         {/* SUBTAB: Results Showcase */}
         {activeTab === 'results' && (
-          <div style={{ padding: '160px 8% 80px 8%', display: 'flex', flexDirection: 'column', gap: '40px', maxWidth: '1100px', margin: '0 auto' }}>
+          <div style={{ padding: isMobileView ? '100px 16px 40px 16px' : '160px 8% 80px 8%', display: 'flex', flexDirection: 'column', gap: '40px', maxWidth: '1100px', margin: '0 auto' }}>
             <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <span style={{ fontSize: '0.72rem', letterSpacing: '3px', textTransform: 'uppercase', color: '#D4AF37', fontWeight: 600 }}>verified scientific outcomes</span>
               <h2 className="font-luxury-serif" style={{ fontSize: '2.8rem', color: 'white', margin: 0, textShadow: '0 0 15px rgba(212,175,55,0.2)' }}>Before & After Transformations</h2>
@@ -1210,7 +1282,7 @@ export default function ClientWebsite({ defaultTab = 'home' }) {
             </div>
 
             {/* Results Grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '30px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobileView ? '1fr' : 'repeat(auto-fit, minmax(320px, 1fr))', gap: '30px' }}>
               {[
                 {
                   id: 'res-1',
@@ -1345,7 +1417,7 @@ export default function ClientWebsite({ defaultTab = 'home' }) {
 
         {/* SUBTAB: CONTACT DETAILS (CONCIERGE) */}
         {activeTab === 'contact' && (
-          <div style={{ padding: '160px 8% 80px 8%', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '50px' }}>
+          <div style={{ padding: isMobileView ? '100px 16px 40px 16px' : '160px 8% 80px 8%', display: 'grid', gridTemplateColumns: isMobileView ? '1fr' : 'repeat(auto-fit, minmax(320px, 1fr))', gap: isMobileView ? '30px' : '50px' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
               <div>
                 <span style={{ fontSize: '0.72rem', letterSpacing: '3px', textTransform: 'uppercase', color: '#D4AF37', fontWeight: 600 }}>concierge bureau</span>
@@ -1437,7 +1509,7 @@ export default function ClientWebsite({ defaultTab = 'home' }) {
         {/* SUBTAB: INTEGRATED CLIENT MEMBER PORTAL */}
         {activeTab === 'portal' && (
           <div style={{ 
-            padding: '140px 6% 80px 6%', 
+            padding: isMobileView ? '100px 16px 40px 16px' : '140px 6% 80px 6%', 
             background: 'linear-gradient(to bottom, #0E0712 0%, #0A0A0A 100%)',
             minHeight: '80vh',
             boxSizing: 'border-box'
@@ -1725,7 +1797,7 @@ export default function ClientWebsite({ defaultTab = 'home' }) {
                     </div>
 
                     {/* THREE COLUMNS GRID LAYOUT */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '30px', alignItems: 'start' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: isMobileView ? '1fr' : 'repeat(auto-fit, minmax(340px, 1fr))', gap: '30px', alignItems: 'start' }}>
                       
                       {/* COLUMN A: LOYALTY POINTS & VOUCHERS */}
                       <div className="luxury-card" style={{ padding: '30px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -1815,7 +1887,7 @@ export default function ClientWebsite({ defaultTab = 'home' }) {
                         <form onSubmit={handleAppSubmitMeasurements} style={{ display: 'flex', flexDirection: 'column', gap: '12px', backgroundColor: 'rgba(255, 255, 255, 0.02)', padding: '14px', borderRadius: '10px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
                           <strong style={{ fontSize: '0.78rem', color: 'white', textTransform: 'uppercase' }}>Log Today's Measurement</strong>
                           
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: isMobileView ? '1fr' : '1fr 1fr 1fr', gap: '8px' }}>
                             <div>
                               <label style={{ display: 'block', fontSize: '0.62rem', color: '#A89684', marginBottom: '4px' }}>Weight (kg):</label>
                               <input 
@@ -2006,7 +2078,7 @@ export default function ClientWebsite({ defaultTab = 'home' }) {
 
         {/* SUBTAB: SHOPPING BAG CART */}
         {activeTab === 'cart' && (
-          <div style={{ padding: '160px 8% 80px 8%', display: 'flex', flexDirection: 'column', gap: '32px', maxWidth: '850px', margin: '0 auto' }}>
+          <div style={{ padding: isMobileView ? '100px 16px 40px 16px' : '160px 8% 80px 8%', display: 'flex', flexDirection: 'column', gap: '32px', maxWidth: '850px', margin: '0 auto' }}>
             <div style={{ textAlign: 'center' }}>
               <span style={{ fontSize: '0.72rem', letterSpacing: '3px', textTransform: 'uppercase', color: '#D4AF37', fontWeight: 600 }}>secured checkout</span>
               <h2 className="font-luxury-serif" style={{ fontSize: '2.2rem', color: 'white', margin: '6px 0 0 0' }}>Shopping Bag</h2>
