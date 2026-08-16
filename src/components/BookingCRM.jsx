@@ -8621,33 +8621,33 @@ export default function BookingCRM() {
             </div>
 
             {/* A4 Sheet Canvas */}
-            <div style={{ padding: '40px', fontFamily: 'Inter, system-ui, sans-serif', backgroundColor: 'white', flex: 1 }}>
+            <div style={{ padding: '50px 60px', fontFamily: 'Inter, system-ui, sans-serif', backgroundColor: 'white', flex: 1, border: '1px solid #e2e8f0', margin: '15px', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
               {/* Invoice Title & Logo */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #6B2C91', paddingBottom: '20px', marginBottom: '24px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '3px solid #6B2C91', paddingBottom: '20px', marginBottom: '28px' }}>
                 <div>
-                  <h1 style={{ color: '#6B2C91', margin: 0, fontSize: '2rem', fontFamily: 'Outfit', fontWeight: 800 }}>SCULPT & GLOW</h1>
-                  <span style={{ color: '#D4AF37', fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Clinical Aesthetic Atelier</span>
+                  <h1 style={{ color: '#6B2C91', margin: 0, fontSize: '2.2rem', fontFamily: 'Outfit', fontWeight: 800, letterSpacing: '1px' }}>SCULPT & GLOW</h1>
+                  <span style={{ color: '#D4AF37', fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', display: 'block', marginTop: '2px' }}>Clinical Aesthetic Atelier</span>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  <h2 style={{ color: '#1a1a1a', margin: 0, fontSize: '1.8rem', fontWeight: 700 }}>TAX INVOICE</h2>
-                  <span style={{ color: '#666', fontSize: '0.85rem' }}>Invoice No: <strong>{activeViewInvoice.invoiceNumber}</strong></span>
-                  <br /><span style={{ color: '#666', fontSize: '0.85rem' }}>Date: {activeViewInvoice.date}</span>
+                  <h2 style={{ color: '#1a1a1a', margin: 0, fontSize: '1.8rem', fontWeight: 800, letterSpacing: '0.5px' }}>TAX INVOICE</h2>
+                  <span style={{ color: '#4a5568', fontSize: '0.85rem', display: 'block', marginTop: '4px' }}>Invoice No: <strong>{activeViewInvoice.invoiceNumber}</strong></span>
+                  <span style={{ color: '#4a5568', fontSize: '0.85rem', display: 'block' }}>Date: {activeViewInvoice.date}</span>
                 </div>
               </div>
 
               {/* Addresses section */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '40px', marginBottom: '32px', fontSize: '0.85rem', lineHeight: '1.5' }}>
-                <div>
-                  <strong style={{ color: '#6B2C91', textTransform: 'uppercase', fontSize: '0.78rem', display: 'block', marginBottom: '8px' }}>FROM:</strong>
-                  <strong>Sculpt & Glow Clinic Ltd</strong>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '40px', marginBottom: '36px', fontSize: '0.85rem', lineHeight: '1.6' }}>
+                <div style={{ backgroundColor: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #edf2f7' }}>
+                  <strong style={{ color: '#6B2C91', textTransform: 'uppercase', fontSize: '0.75rem', display: 'block', marginBottom: '6px', letterSpacing: '0.5px' }}>FROM:</strong>
+                  <span style={{ fontWeight: 700, color: '#2d3748' }}>Sculpt & Glow Clinic Ltd</span>
                   <br />Suite 4, West End Medical Center
                   <br />Atelier Row, Pretoria East
                   <br />Tel: +27 (0) 12 555 0192
                   <br />VAT Reg No: 4890201192
                 </div>
-                <div>
-                  <strong style={{ color: '#6B2C91', textTransform: 'uppercase', fontSize: '0.78rem', display: 'block', marginBottom: '8px' }}>BILL TO:</strong>
-                  <strong>{clients.find(c => c.id === activeViewInvoice.clientId)?.name || 'Walk-in Guest'}</strong>
+                <div style={{ backgroundColor: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #edf2f7' }}>
+                  <strong style={{ color: '#6B2C91', textTransform: 'uppercase', fontSize: '0.75rem', display: 'block', marginBottom: '6px', letterSpacing: '0.5px' }}>BILL TO:</strong>
+                  <span style={{ fontWeight: 700, color: '#2d3748' }}>{clients.find(c => c.id === activeViewInvoice.clientId)?.name || 'Walk-in Guest'}</span>
                   <br />Email: {clients.find(c => c.id === activeViewInvoice.clientId)?.email || 'N/A'}
                   <br />Phone: {clients.find(c => c.id === activeViewInvoice.clientId)?.phone || 'N/A'}
                   <br />Client ID: {activeViewInvoice.clientId || 'GUEST-01'}
@@ -8655,14 +8655,14 @@ export default function BookingCRM() {
               </div>
 
               {/* Table */}
-              <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '32px', fontSize: '0.85rem' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '36px', fontSize: '0.85rem' }}>
                 <thead>
-                  <tr style={{ backgroundColor: '#f3f4f6', color: '#1a1a1a', textAlign: 'left', fontWeight: 700 }}>
-                    <th style={{ padding: '10px 12px', borderBottom: '2px solid #e5e7eb' }}>Description</th>
-                    <th style={{ padding: '10px 12px', borderBottom: '2px solid #e5e7eb', textAlign: 'center' }}>Qty</th>
-                    <th style={{ padding: '10px 12px', borderBottom: '2px solid #e5e7eb', textAlign: 'right' }}>Unit Price (Excl)</th>
-                    <th style={{ padding: '10px 12px', borderBottom: '2px solid #e5e7eb', textAlign: 'right' }}>VAT (15%)</th>
-                    <th style={{ padding: '10px 12px', borderBottom: '2px solid #e5e7eb', textAlign: 'right' }}>Total (Incl)</th>
+                  <tr style={{ backgroundColor: '#6B2C91', color: 'white', textAlign: 'left', fontWeight: 700 }}>
+                    <th style={{ padding: '12px 16px', borderBottom: '2px solid #5a227b', borderTopLeftRadius: '6px', borderBottomLeftRadius: '6px' }}>Description</th>
+                    <th style={{ padding: '12px 16px', borderBottom: '2px solid #5a227b', textAlign: 'center' }}>Qty</th>
+                    <th style={{ padding: '12px 16px', borderBottom: '2px solid #5a227b', textAlign: 'right' }}>Unit Price (Excl)</th>
+                    <th style={{ padding: '12px 16px', borderBottom: '2px solid #5a227b', textAlign: 'right' }}>VAT (15%)</th>
+                    <th style={{ padding: '12px 16px', borderBottom: '2px solid #5a227b', textAlign: 'right', borderTopRightRadius: '6px', borderBottomRightRadius: '6px' }}>Total (Incl)</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -8670,12 +8670,12 @@ export default function BookingCRM() {
                     const priceExcl = item.price / 1.15;
                     const vatAmount = item.price - priceExcl;
                     return (
-                      <tr key={idx} style={{ borderBottom: '1px solid #e5e7eb', color: '#4b5563' }}>
-                        <td style={{ padding: '10px 12px' }}><strong>{item.name}</strong></td>
-                        <td style={{ padding: '10px 12px', textAlign: 'center' }}>{item.quantity}</td>
-                        <td style={{ padding: '10px 12px', textAlign: 'right' }}>R {priceExcl.toFixed(2)}</td>
-                        <td style={{ padding: '10px 12px', textAlign: 'right' }}>R {vatAmount.toFixed(2)}</td>
-                        <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, color: '#1a1a1a' }}>R {(item.price * item.quantity).toFixed(2)}</td>
+                      <tr key={idx} style={{ borderBottom: '1px solid #edf2f7', color: '#2d3748' }}>
+                        <td style={{ padding: '12px 16px', fontWeight: 600 }}>{item.name}</td>
+                        <td style={{ padding: '12px 16px', textAlign: 'center' }}>{item.quantity}</td>
+                        <td style={{ padding: '12px 16px', textAlign: 'right' }}>R {priceExcl.toFixed(2)}</td>
+                        <td style={{ padding: '12px 16px', textAlign: 'right', color: '#718096' }}>R {vatAmount.toFixed(2)}</td>
+                        <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 700, color: '#1a1a1a' }}>R {(item.price * item.quantity).toFixed(2)}</td>
                       </tr>
                     );
                   })}
@@ -8684,22 +8684,22 @@ export default function BookingCRM() {
 
               {/* Totals */}
               <div style={{ display: 'flex', justifyContent: 'flex-end', fontSize: '0.85rem' }}>
-                <div style={{ width: '280px', lineHeight: '1.8' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#4b5563' }}>
+                <div style={{ width: '320px', lineHeight: '2', backgroundColor: '#f8fafc', padding: '20px', borderRadius: '8px', border: '1px solid #edf2f7' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#4a5568' }}>
                     <span>Subtotal (Excl VAT):</span>
-                    <span>R {(activeViewInvoice.subtotal || (activeViewInvoice.total / 1.15)).toFixed(2)}</span>
+                    <span style={{ fontWeight: 600 }}>R {(activeViewInvoice.subtotal || (activeViewInvoice.total / 1.15)).toFixed(2)}</span>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#4b5563' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#4a5568' }}>
                     <span>VAT (15%):</span>
-                    <span>R {(activeViewInvoice.tax || (activeViewInvoice.total - (activeViewInvoice.total / 1.15))).toFixed(2)}</span>
+                    <span style={{ fontWeight: 600 }}>R {(activeViewInvoice.tax || (activeViewInvoice.total - (activeViewInvoice.total / 1.15))).toFixed(2)}</span>
                   </div>
                   {activeViewInvoice.discount > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#ef4444' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#e53e3e' }}>
                       <span>Discount ({activeViewInvoice.discount}%):</span>
-                      <span>- R {((activeViewInvoice.total / (1 - activeViewInvoice.discount / 100)) * (activeViewInvoice.discount / 100)).toFixed(2)}</span>
+                      <span style={{ fontWeight: 600 }}>- R {((activeViewInvoice.total / (1 - activeViewInvoice.discount / 100)) * (activeViewInvoice.discount / 100)).toFixed(2)}</span>
                     </div>
                   )}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid #6B2C91', paddingTop: '6px', marginTop: '6px', fontSize: '1.05rem', fontWeight: 700, color: '#1a1a1a' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid #6B2C91', paddingTop: '8px', marginTop: '8px', fontSize: '1.1rem', fontWeight: 800, color: '#6B2C91' }}>
                     <span>Grand Total:</span>
                     <span>R {activeViewInvoice.total.toFixed(2)}</span>
                   </div>
@@ -8707,11 +8707,11 @@ export default function BookingCRM() {
               </div>
 
               {/* Terms and banking details */}
-              <div style={{ marginTop: '48px', borderTop: '1px solid #e5e7eb', paddingTop: '16px', fontSize: '0.75rem', color: '#6b7280', lineHeight: '1.4' }}>
-                <strong>PAYMENT TERMS & BANKING INFORMATION</strong>
-                <br />Payment is due upon receipt of invoice. Please use the invoice number <strong>{activeViewInvoice.invoiceNumber}</strong> as reference.
+              <div style={{ marginTop: '48px', borderTop: '1px solid #edf2f7', paddingTop: '20px', fontSize: '0.78rem', color: '#718096', lineHeight: '1.5' }}>
+                <strong style={{ color: '#2d3748', display: 'block', marginBottom: '4px' }}>PAYMENT TERMS & BANKING INFORMATION</strong>
+                Payment is due upon receipt of invoice. Please use the invoice number <strong style={{ color: '#6B2C91' }}>{activeViewInvoice.invoiceNumber}</strong> as your deposit reference.
                 <br />Bank: <strong>Elysium Private Bank</strong> | Account: <strong>1020491022</strong> | Branch Code: <strong>250655</strong>
-                <br /><em style={{ display: 'block', marginTop: '8px', textAlign: 'center' }}>Thank you for choosing Sculpt & Glow Clinical Atelier. We appreciate your valued business!</em>
+                <br /><em style={{ display: 'block', marginTop: '12px', textAlign: 'center', color: '#a0aec0', fontSize: '0.72rem' }}>Thank you for choosing Sculpt & Glow Clinical Atelier. We appreciate your valued business!</em>
               </div>
             </div>
           </div>
@@ -8851,81 +8851,81 @@ export default function BookingCRM() {
             </div>
 
             {/* A4 Sheet Canvas */}
-            <div className="printable-area" style={{ padding: '40px', fontFamily: 'Inter, system-ui, sans-serif', backgroundColor: 'white', flex: 1 }}>
+            <div className="printable-area" style={{ padding: '50px 60px', fontFamily: 'Inter, system-ui, sans-serif', backgroundColor: 'white', flex: 1, border: '1px solid #e2e8f0', margin: '15px', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
               {/* Payslip Header & Logo */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '3px solid #6B2C91', paddingBottom: '20px', marginBottom: '24px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '3px solid #6B2C91', paddingBottom: '20px', marginBottom: '28px' }}>
                 <div>
-                  <h1 style={{ color: '#6B2C91', margin: 0, fontSize: '2rem', fontFamily: 'Outfit', fontWeight: 800 }}>SCULPT & GLOW</h1>
-                  <span style={{ color: '#D4AF37', fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Clinical Aesthetic Atelier</span>
+                  <h1 style={{ color: '#6B2C91', margin: 0, fontSize: '2.2rem', fontFamily: 'Outfit', fontWeight: 800, letterSpacing: '1px' }}>SCULPT & GLOW</h1>
+                  <span style={{ color: '#D4AF37', fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', display: 'block', marginTop: '2px' }}>Clinical Aesthetic Atelier</span>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  <h2 style={{ color: '#1a1a1a', margin: 0, fontSize: '1.8rem', fontWeight: 700 }}>PAY SLIP</h2>
-                  <span style={{ color: '#666', fontSize: '0.85rem' }}>Billing Cycle: <strong>{activeViewPayslip.month}</strong></span>
-                  <br /><span style={{ color: '#666', fontSize: '0.85rem' }}>Payslip ID: <strong>{activeViewPayslip.id}</strong></span>
+                  <h2 style={{ color: '#1a1a1a', margin: 0, fontSize: '1.8rem', fontWeight: 800, letterSpacing: '0.5px' }}>PAY SLIP</h2>
+                  <span style={{ color: '#4a5568', fontSize: '0.85rem', display: 'block', marginTop: '4px' }}>Billing Cycle: <strong>{activeViewPayslip.month}</strong></span>
+                  <span style={{ color: '#4a5568', fontSize: '0.85rem', display: 'block' }}>Payslip ID: <strong>{activeViewPayslip.id}</strong></span>
                 </div>
               </div>
 
               {/* Company & Employee Details */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '40px', marginBottom: '32px', fontSize: '0.85rem', lineHeight: '1.5' }}>
-                <div>
-                  <strong style={{ color: '#6B2C91', textTransform: 'uppercase', fontSize: '0.78rem', display: 'block', marginBottom: '8px', borderBottom: '1px solid #e5e7eb', paddingBottom: '4px' }}>EMPLOYER:</strong>
-                  <strong>Sculpt & Glow Clinic Ltd</strong>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '40px', marginBottom: '36px', fontSize: '0.85rem', lineHeight: '1.6' }}>
+                <div style={{ backgroundColor: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #edf2f7' }}>
+                  <strong style={{ color: '#6B2C91', textTransform: 'uppercase', fontSize: '0.75rem', display: 'block', marginBottom: '6px', letterSpacing: '0.5px' }}>EMPLOYER:</strong>
+                  <span style={{ fontWeight: 700, color: '#2d3748' }}>Sculpt & Glow Clinic Ltd</span>
                   <br />Suite 4, West End Medical Center
                   <br />Atelier Row, Pretoria East
                   <br />Tel: +27 (0) 12 555 0192
                   <br />VAT Reg No: 4890201192
                 </div>
-                <div>
-                  <strong style={{ color: '#6B2C91', textTransform: 'uppercase', fontSize: '0.78rem', display: 'block', marginBottom: '8px', borderBottom: '1px solid #e5e7eb', paddingBottom: '4px' }}>EMPLOYEE:</strong>
-                  <strong>{activeViewPayslipStaff.name}</strong>
-                  <br />Designation / Role: <span style={{ textTransform: 'capitalize' }}>{activeViewPayslipStaff.role}</span>
+                <div style={{ backgroundColor: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #edf2f7' }}>
+                  <strong style={{ color: '#6B2C91', textTransform: 'uppercase', fontSize: '0.75rem', display: 'block', marginBottom: '6px', letterSpacing: '0.5px' }}>EMPLOYEE:</strong>
+                  <span style={{ fontWeight: 700, color: '#2d3748' }}>{activeViewPayslipStaff.name}</span>
+                  <br />Designation: <span style={{ textTransform: 'capitalize' }}>{activeViewPayslipStaff.role}</span>
                   <br />Email: {activeViewPayslipStaff.email}
                   <br />Staff ID: {activeViewPayslipStaff.id}
-                  <br />Generation Date: {activeViewPayslip.generatedAt}
+                  <br />Date Generated: {activeViewPayslip.generatedAt}
                 </div>
               </div>
 
               {/* Earnings & Deductions Table */}
-              <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '32px', fontSize: '0.85rem' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '36px', fontSize: '0.85rem' }}>
                 <thead>
-                  <tr style={{ backgroundColor: '#f3f4f6', color: '#1a1a1a', textAlign: 'left', fontWeight: 700 }}>
-                    <th style={{ padding: '10px 12px', borderBottom: '2px solid #e5e7eb' }}>Description</th>
-                    <th style={{ padding: '10px 12px', borderBottom: '2px solid #e5e7eb', textAlign: 'right' }}>Type</th>
-                    <th style={{ padding: '10px 12px', borderBottom: '2px solid #e5e7eb', textAlign: 'right' }}>Amount</th>
+                  <tr style={{ backgroundColor: '#6B2C91', color: 'white', textAlign: 'left', fontWeight: 700 }}>
+                    <th style={{ padding: '12px 16px', borderBottom: '2px solid #5a227b', borderTopLeftRadius: '6px', borderBottomLeftRadius: '6px' }}>Description</th>
+                    <th style={{ padding: '12px 16px', borderBottom: '2px solid #5a227b', textAlign: 'right' }}>Type</th>
+                    <th style={{ padding: '12px 16px', borderBottom: '2px solid #5a227b', textAlign: 'right', borderTopRightRadius: '6px', borderBottomRightRadius: '6px' }}>Amount</th>
                   </tr>
                 </thead>
                 <tbody>
                   {/* Earnings */}
-                  <tr style={{ borderBottom: '1px solid #e5e7eb', color: '#1a1a1a' }}>
-                    <td style={{ padding: '10px 12px' }}><strong>Basic Monthly Salary</strong></td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right', color: '#34d399' }}>Basic Pay</td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600 }}>R {activeViewPayslip.baseSalary.toFixed(2)}</td>
+                  <tr style={{ borderBottom: '1px solid #edf2f7', color: '#2d3748' }}>
+                    <td style={{ padding: '12px 16px' }}><strong>Basic Monthly Salary</strong></td>
+                    <td style={{ padding: '12px 16px', textAlign: 'right', color: '#4a5568' }}>Basic Pay</td>
+                    <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 700 }}>R {activeViewPayslip.baseSalary.toFixed(2)}</td>
                   </tr>
-                  <tr style={{ borderBottom: '1px solid #e5e7eb', color: '#1a1a1a' }}>
-                    <td style={{ padding: '10px 12px' }}><strong>Treatment & Sales Commissions</strong></td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right', color: '#34d399' }}>Variable Pay</td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600 }}>R {activeViewPayslip.commissionEarned.toFixed(2)}</td>
+                  <tr style={{ borderBottom: '1px solid #edf2f7', color: '#2d3748' }}>
+                    <td style={{ padding: '12px 16px' }}><strong>Treatment & Sales Commissions</strong></td>
+                    <td style={{ padding: '12px 16px', textAlign: 'right', color: '#4a5568' }}>Variable Pay</td>
+                    <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 700, color: '#38a169' }}>+ R {activeViewPayslip.commissionEarned.toFixed(2)}</td>
                   </tr>
                   {(activeViewPayslip.claimsApproved > 0 || activeViewPayslip.bonusApproved > 0) && (
-                    <tr style={{ borderBottom: '1px solid #e5e7eb', color: '#1a1a1a' }}>
-                      <td style={{ padding: '10px 12px' }}><strong>Reimbursements & Performance Bonuses</strong></td>
-                      <td style={{ padding: '10px 12px', textAlign: 'right', color: '#34d399' }}>Adjustments</td>
-                      <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600 }}>R {(activeViewPayslip.claimsApproved + activeViewPayslip.bonusApproved).toFixed(2)}</td>
+                    <tr style={{ borderBottom: '1px solid #edf2f7', color: '#2d3748' }}>
+                      <td style={{ padding: '12px 16px' }}><strong>Reimbursements & Performance Bonuses</strong></td>
+                      <td style={{ padding: '12px 16px', textAlign: 'right', color: '#4a5568' }}>Adjustments</td>
+                      <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 700, color: '#38a169' }}>+ R {(activeViewPayslip.claimsApproved + activeViewPayslip.bonusApproved).toFixed(2)}</td>
                     </tr>
                   )}
                   {/* Deductions */}
                   {activeViewPayslip.loanDeduction > 0 && (
-                    <tr style={{ borderBottom: '1px solid #e5e7eb', color: '#1a1a1a' }}>
-                      <td style={{ padding: '10px 12px' }}><strong>Active Emergency Cash Loan Deduction</strong></td>
-                      <td style={{ padding: '10px 12px', textAlign: 'right', color: '#ef4444' }}>Deduction</td>
-                      <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, color: '#ef4444' }}>- R {activeViewPayslip.loanDeduction.toFixed(2)}</td>
+                    <tr style={{ borderBottom: '1px solid #edf2f7', color: '#2d3748' }}>
+                      <td style={{ padding: '12px 16px' }}><strong>Active Emergency Cash Loan Deduction</strong></td>
+                      <td style={{ padding: '12px 16px', textAlign: 'right', color: '#e53e3e' }}>Deduction</td>
+                      <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 700, color: '#e53e3e' }}>- R {activeViewPayslip.loanDeduction.toFixed(2)}</td>
                     </tr>
                   )}
                   {activeViewPayslip.customDeductions && activeViewPayslip.customDeductions.map(d => (
-                    <tr key={d.id} style={{ borderBottom: '1px solid #e5e7eb', color: '#1a1a1a' }}>
-                      <td style={{ padding: '10px 12px' }}><strong>Payroll Deduction: {d.name}</strong></td>
-                      <td style={{ padding: '10px 12px', textAlign: 'right', color: '#ef4444' }}>Deduction</td>
-                      <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, color: '#ef4444' }}>- R {d.amount.toFixed(2)}</td>
+                    <tr key={d.id} style={{ borderBottom: '1px solid #edf2f7', color: '#2d3748' }}>
+                      <td style={{ padding: '12px 16px' }}><strong>Payroll Deduction: {d.name}</strong></td>
+                      <td style={{ padding: '12px 16px', textAlign: 'right', color: '#e53e3e' }}>Deduction</td>
+                      <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 700, color: '#e53e3e' }}>- R {d.amount.toFixed(2)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -8933,24 +8933,24 @@ export default function BookingCRM() {
 
               {/* Total Payout Section */}
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
-                <div style={{ width: '100%', maxWidth: '350px', fontSize: '0.85rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#4b5563', marginBottom: '8px' }}>
+                <div style={{ width: '320px', fontSize: '0.85rem', backgroundColor: '#f8fafc', padding: '20px', borderRadius: '8px', border: '1px solid #edf2f7', lineHeight: '2' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#4a5568' }}>
                     <span>Gross Earnings:</span>
-                    <span>R {(activeViewPayslip.baseSalary + activeViewPayslip.commissionEarned + activeViewPayslip.claimsApproved + activeViewPayslip.bonusApproved).toFixed(2)}</span>
+                    <span style={{ fontWeight: 600 }}>R {(activeViewPayslip.baseSalary + activeViewPayslip.commissionEarned + activeViewPayslip.claimsApproved + activeViewPayslip.bonusApproved).toFixed(2)}</span>
                   </div>
                   {(() => {
                     const dedTotal = activeViewPayslip.loanDeduction + (activeViewPayslip.customDeductionsTotal || 0);
                     if (dedTotal > 0) {
                       return (
-                        <div style={{ display: 'flex', justifyContent: 'space-between', color: '#4b5563', marginBottom: '8px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', color: '#4a5568' }}>
                           <span>Total Deductions:</span>
-                          <span style={{ color: '#ef4444' }}>- R {dedTotal.toFixed(2)}</span>
+                          <span style={{ color: '#e53e3e', fontWeight: 600 }}>- R {dedTotal.toFixed(2)}</span>
                         </div>
                       );
                     }
                     return null;
                   })()}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '3px double #6B2C91', paddingTop: '10px', marginTop: '10px', fontSize: '1.2rem', fontWeight: 800, color: '#6B2C91' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid #6B2C91', paddingTop: '8px', marginTop: '8px', fontSize: '1.15rem', fontWeight: 800, color: '#6B2C91' }}>
                     <span>NET SALARY PAID:</span>
                     <span>R {activeViewPayslip.finalSalary.toFixed(2)}</span>
                   </div>
@@ -8958,10 +8958,10 @@ export default function BookingCRM() {
               </div>
 
               {/* Payment Particulars / Banking details */}
-              <div style={{ marginTop: '48px', borderTop: '1px solid #e5e7eb', paddingTop: '16px', fontSize: '0.78rem', color: '#6b7280', lineHeight: '1.5' }}>
-                <strong>BANK DISBURSEMENT DETAILS</strong>
-                <br />This payout has been securely processed and transferred electronically to:
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginTop: '8px', backgroundColor: '#f9fafb', padding: '12px', borderRadius: '6px', color: '#1a1a1a', border: '1px solid #e5e7eb' }}>
+              <div style={{ marginTop: '48px', borderTop: '1px solid #edf2f7', paddingTop: '20px', fontSize: '0.78rem', color: '#718096', lineHeight: '1.5' }}>
+                <strong style={{ color: '#2d3748', display: 'block', marginBottom: '6px' }}>BANK DISBURSEMENT DETAILS</strong>
+                This payout has been securely processed and transferred electronically to the following staff account:
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginTop: '10px', backgroundColor: '#f8fafc', padding: '16px', borderRadius: '8px', color: '#2d3748', border: '1px solid #edf2f7' }}>
                   <div>
                     <span>Account Holder: <strong>{activeViewPayslipStaff.name}</strong></span>
                     <br /><span>Bank Name: <strong>{activeViewPayslipStaff.bankName || 'FNB Pretoria'}</strong></span>
@@ -8971,7 +8971,7 @@ export default function BookingCRM() {
                     <br /><span>Branch Code: <strong>{activeViewPayslipStaff.branchCode || '250655'}</strong></span>
                   </div>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '24px', fontStyle: 'italic', fontSize: '0.72rem', color: '#9ca3af' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '28px', fontStyle: 'italic', fontSize: '0.72rem', color: '#a0aec0' }}>
                   <span>E-signature Security Token: ESG-PAY-{activeViewPayslip.id.split('-')[1] || 'SECURE'}</span>
                   <span>Sculpt & Glow Operations Ledger © 2026</span>
                 </div>
@@ -9020,59 +9020,59 @@ export default function BookingCRM() {
             </div>
 
             {/* A4 Sheet Canvas */}
-            <div style={{ padding: '40px', fontFamily: 'Inter, system-ui, sans-serif', backgroundColor: 'white', flex: 1 }}>
+            <div style={{ padding: '50px 60px', fontFamily: 'Inter, system-ui, sans-serif', backgroundColor: 'white', flex: 1, border: '1px solid #e2e8f0', margin: '15px', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
               {/* Quote Title & Logo */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #6B2C91', paddingBottom: '20px', marginBottom: '24px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '3px solid #6B2C91', paddingBottom: '20px', marginBottom: '28px' }}>
                 <div>
-                  <h1 style={{ color: '#6B2C91', margin: 0, fontSize: '2rem', fontFamily: 'Outfit', fontWeight: 800 }}>SCULPT & GLOW</h1>
-                  <span style={{ color: '#D4AF37', fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Clinical Aesthetic Atelier</span>
+                  <h1 style={{ color: '#6B2C91', margin: 0, fontSize: '2.2rem', fontFamily: 'Outfit', fontWeight: 800, letterSpacing: '1px' }}>SCULPT & GLOW</h1>
+                  <span style={{ color: '#D4AF37', fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', display: 'block', marginTop: '2px' }}>Clinical Aesthetic Atelier</span>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  <h2 style={{ color: '#1a1a1a', margin: 0, fontSize: '1.8rem', fontWeight: 700 }}>OFFICIAL QUOTATION</h2>
-                  <span style={{ color: '#666', fontSize: '0.85rem' }}>Quote Reference: <strong>{activeViewQuote.quoteNumber}</strong></span>
-                  <br /><span style={{ color: '#666', fontSize: '0.85rem' }}>Date: {activeViewQuote.date}</span>
-                  <br /><span style={{ color: '#ef4444', fontSize: '0.85rem', fontWeight: 600 }}>Expires: {activeViewQuote.expiryDate}</span>
+                  <h2 style={{ color: '#1a1a1a', margin: 0, fontSize: '1.8rem', fontWeight: 800, letterSpacing: '0.5px' }}>OFFICIAL QUOTATION</h2>
+                  <span style={{ color: '#4a5568', fontSize: '0.85rem', display: 'block', marginTop: '4px' }}>Quote Reference: <strong>{activeViewQuote.quoteNumber}</strong></span>
+                  <span style={{ color: '#4a5568', fontSize: '0.85rem', display: 'block' }}>Date: {activeViewQuote.date}</span>
+                  <span style={{ color: '#e53e3e', fontSize: '0.85rem', fontWeight: 600, display: 'block' }}>Expires: {activeViewQuote.expiryDate}</span>
                 </div>
               </div>
 
               {/* Addresses section */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '40px', marginBottom: '32px', fontSize: '0.85rem', lineHeight: '1.5' }}>
-                <div>
-                  <strong style={{ color: '#6B2C91', textTransform: 'uppercase', fontSize: '0.78rem', display: 'block', marginBottom: '8px' }}>FROM:</strong>
-                  <strong>Sculpt & Glow Clinic Ltd</strong>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '40px', marginBottom: '36px', fontSize: '0.85rem', lineHeight: '1.6' }}>
+                <div style={{ backgroundColor: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #edf2f7' }}>
+                  <strong style={{ color: '#6B2C91', textTransform: 'uppercase', fontSize: '0.75rem', display: 'block', marginBottom: '6px', letterSpacing: '0.5px' }}>FROM:</strong>
+                  <span style={{ fontWeight: 700, color: '#2d3748' }}>Sculpt & Glow Clinic Ltd</span>
                   <br />Suite 4, West End Medical Center
                   <br />Atelier Row, Pretoria East
                   <br />Tel: +27 (0) 12 555 0192
                   <br />Email: info@sculptglow.co.za
                 </div>
-                <div>
-                  <strong style={{ color: '#6B2C91', textTransform: 'uppercase', fontSize: '0.78rem', display: 'block', marginBottom: '8px' }}>PREPARED FOR:</strong>
-                  <strong>{clients.find(c => c.id === activeViewQuote.clientId)?.name || 'Walk-in Guest'}</strong>
+                <div style={{ backgroundColor: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #edf2f7' }}>
+                  <strong style={{ color: '#6B2C91', textTransform: 'uppercase', fontSize: '0.75rem', display: 'block', marginBottom: '6px', letterSpacing: '0.5px' }}>PREPARED FOR:</strong>
+                  <span style={{ fontWeight: 700, color: '#2d3748' }}>{clients.find(c => c.id === activeViewQuote.clientId)?.name || 'Walk-in Guest'}</span>
                   <br />Email: {clients.find(c => c.id === activeViewQuote.clientId)?.email || 'N/A'}
                   <br />Phone: {clients.find(c => c.id === activeViewQuote.clientId)?.phone || 'N/A'}
-                  <br />Validity period: 14 Days
+                  <br />Validity Period: 14 Days
                 </div>
               </div>
 
               {/* Table */}
-              <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '32px', fontSize: '0.85rem' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '36px', fontSize: '0.85rem' }}>
                 <thead>
-                  <tr style={{ backgroundColor: '#f3f4f6', color: '#1a1a1a', textAlign: 'left', fontWeight: 700 }}>
-                    <th style={{ padding: '10px 12px', borderBottom: '2px solid #e5e7eb' }}>Description</th>
-                    <th style={{ padding: '10px 12px', borderBottom: '2px solid #e5e7eb', textAlign: 'center' }}>Qty</th>
-                    <th style={{ padding: '10px 12px', borderBottom: '2px solid #e5e7eb', textAlign: 'right' }}>Unit Cost (Excl VAT)</th>
-                    <th style={{ padding: '10px 12px', borderBottom: '2px solid #e5e7eb', textAlign: 'right' }}>Total (Incl VAT)</th>
+                  <tr style={{ backgroundColor: '#6B2C91', color: 'white', textAlign: 'left', fontWeight: 700 }}>
+                    <th style={{ padding: '12px 16px', borderBottom: '2px solid #5a227b', borderTopLeftRadius: '6px', borderBottomLeftRadius: '6px' }}>Description</th>
+                    <th style={{ padding: '12px 16px', borderBottom: '2px solid #5a227b', textAlign: 'center' }}>Qty</th>
+                    <th style={{ padding: '12px 16px', borderBottom: '2px solid #5a227b', textAlign: 'right' }}>Unit Cost (Excl VAT)</th>
+                    <th style={{ padding: '12px 16px', borderBottom: '2px solid #5a227b', textAlign: 'right', borderTopRightRadius: '6px', borderBottomRightRadius: '6px' }}>Total (Incl VAT)</th>
                   </tr>
                 </thead>
                 <tbody>
                   {(activeViewQuote.items || []).map((item, idx) => {
                     const priceExcl = item.price / 1.15;
                     return (
-                      <tr key={idx} style={{ borderBottom: '1px solid #e5e7eb', color: '#4b5563' }}>
-                        <td style={{ padding: '10px 12px' }}><strong>{item.name}</strong></td>
-                        <td style={{ padding: '10px 12px', textAlign: 'center' }}>{item.quantity}</td>
-                        <td style={{ padding: '10px 12px', textAlign: 'right' }}>R {priceExcl.toFixed(2)}</td>
-                        <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, color: '#1a1a1a' }}>R {(item.price * item.quantity).toFixed(2)}</td>
+                      <tr key={idx} style={{ borderBottom: '1px solid #edf2f7', color: '#2d3748' }}>
+                        <td style={{ padding: '12px 16px', fontWeight: 600 }}>{item.name}</td>
+                        <td style={{ padding: '12px 16px', textAlign: 'center' }}>{item.quantity}</td>
+                        <td style={{ padding: '12px 16px', textAlign: 'right' }}>R {priceExcl.toFixed(2)}</td>
+                        <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 700, color: '#1a1a1a' }}>R {(item.price * item.quantity).toFixed(2)}</td>
                       </tr>
                     );
                   })}
@@ -9081,18 +9081,18 @@ export default function BookingCRM() {
 
               {/* Totals */}
               <div style={{ display: 'flex', justifyContent: 'flex-end', fontSize: '0.85rem' }}>
-                <div style={{ width: '280px', lineHeight: '1.8' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#4b5563' }}>
+                <div style={{ width: '320px', lineHeight: '2', backgroundColor: '#f8fafc', padding: '20px', borderRadius: '8px', border: '1px solid #edf2f7' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#4a5568' }}>
                     <span>Gross Estimation:</span>
-                    <span>R {(activeViewQuote.total / (1 - activeViewQuote.discount / 100)).toFixed(2)}</span>
+                    <span style={{ fontWeight: 600 }}>R {(activeViewQuote.total / (1 - (activeViewQuote.discount || 0) / 100)).toFixed(2)}</span>
                   </div>
                   {activeViewQuote.discount > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#ef4444' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#e53e3e' }}>
                       <span>Discount ({activeViewQuote.discount}%):</span>
-                      <span>- R {((activeViewQuote.total / (1 - activeViewQuote.discount / 100)) * (activeViewQuote.discount / 100)).toFixed(2)}</span>
+                      <span style={{ fontWeight: 600 }}>- R {((activeViewQuote.total / (1 - activeViewQuote.discount / 100)) * (activeViewQuote.discount / 100)).toFixed(2)}</span>
                     </div>
                   )}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid #6B2C91', paddingTop: '6px', marginTop: '6px', fontSize: '1.05rem', fontWeight: 700, color: '#1a1a1a' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid #6B2C91', paddingTop: '8px', marginTop: '8px', fontSize: '1.1rem', fontWeight: 800, color: '#6B2C91' }}>
                     <span>Estimated Total (Incl VAT):</span>
                     <span>R {activeViewQuote.total.toFixed(2)}</span>
                   </div>
@@ -9100,11 +9100,11 @@ export default function BookingCRM() {
               </div>
 
               {/* Terms */}
-              <div style={{ marginTop: '48px', borderTop: '1px solid #e5e7eb', paddingTop: '16px', fontSize: '0.75rem', color: '#6b7280', lineHeight: '1.4' }}>
-                <strong>QUOTATION COMPLIANCE & ACCEPTANCE NOTES</strong>
-                <br />This quotation is valid until <strong>{activeViewQuote.expiryDate}</strong>. All treatments require booking slots in advance.
-                <br />To accept this quote and convert it to a confirmed clinic session, please contact the receptionist desk or log in to the Elysium Client App and approve quotation ref: <strong>{activeViewQuote.quoteNumber}</strong>.
-                <br /><em style={{ display: 'block', marginTop: '8px', textAlign: 'center' }}>We look forward to partnering in your aesthetic skincare journey!</em>
+              <div style={{ marginTop: '48px', borderTop: '1px solid #edf2f7', paddingTop: '20px', fontSize: '0.78rem', color: '#718096', lineHeight: '1.5' }}>
+                <strong style={{ color: '#2d3748', display: 'block', marginBottom: '4px' }}>QUOTATION COMPLIANCE & ACCEPTANCE NOTES</strong>
+                This quotation is valid until <strong>{activeViewQuote.expiryDate}</strong>. All treatments require booking slots in advance.
+                <br />To accept this quote and convert it to a confirmed clinic session, please contact the receptionist desk or log in to the Member Portal on the website and approve quotation reference: <strong style={{ color: '#6B2C91' }}>{activeViewQuote.quoteNumber}</strong>.
+                <br /><em style={{ display: 'block', marginTop: '12px', textAlign: 'center', color: '#a0aec0', fontSize: '0.72rem' }}>We look forward to partnering in your aesthetic skincare journey!</em>
               </div>
             </div>
           </div>
@@ -9150,26 +9150,35 @@ export default function BookingCRM() {
             </div>
 
             {/* A4 Sheet Canvas */}
-            <div style={{ padding: '40px 50px', fontFamily: 'Inter, system-ui, sans-serif', backgroundColor: 'white', flex: 1, lineHeight: '1.6', fontSize: '0.88rem', color: '#2d3748' }}>
+            <div style={{ padding: '50px 60px', fontFamily: 'Inter, system-ui, sans-serif', backgroundColor: 'white', flex: 1, border: '1px solid #e2e8f0', margin: '15px', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)', lineHeight: '1.6', fontSize: '0.88rem', color: '#2d3748' }}>
               {/* Header Letterhead */}
-              <div style={{ borderBottom: '2px solid #6B2C91', paddingBottom: '16px', marginBottom: '32px' }}>
-                <h1 style={{ color: '#6B2C91', margin: 0, fontSize: '1.75rem', fontFamily: 'Outfit', fontWeight: 800 }}>SCULPT & GLOW CLINIC</h1>
-                <span style={{ color: '#6b7280', fontSize: '0.75rem' }}>Atelier Suite 4, West End Medical Center, Pretoria East</span>
+              <div style={{ borderBottom: '3px solid #6B2C91', paddingBottom: '16px', marginBottom: '28px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+                <div>
+                  <h1 style={{ color: '#6B2C91', margin: 0, fontSize: '2rem', fontFamily: 'Outfit', fontWeight: 800, letterSpacing: '1px' }}>SCULPT & GLOW</h1>
+                  <span style={{ color: '#D4AF37', fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', display: 'block', marginTop: '2px' }}>Clinical Aesthetic Atelier</span>
+                </div>
+                <div style={{ textAlign: 'right', fontSize: '0.75rem', color: '#718096' }}>
+                  <span>Suite 4, West End Medical Center</span>
+                  <br /><span>Pretoria East, ZA</span>
+                </div>
               </div>
 
               {/* Date & Address */}
-              <div style={{ marginBottom: '24px' }}>
-                <div>Date: {new Date().toISOString().split('T')[0]}</div>
-                <div style={{ marginTop: '16px' }}>
-                  <strong>To Valued Client:</strong>
-                  <br />{clients.find(c => c.id === activeRefundInvoice.clientId)?.name || 'Walk-in Guest'}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '28px', fontSize: '0.85rem' }}>
+                <div>
+                  <span style={{ color: '#718096' }}>Dispatched Date:</span>
+                  <br /><strong style={{ color: '#2d3748' }}>{new Date().toISOString().split('T')[0]}</strong>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <strong style={{ color: '#6B2C91', textTransform: 'uppercase', fontSize: '0.75rem', display: 'block', marginBottom: '4px' }}>ADDRESSEE:</strong>
+                  <strong style={{ color: '#2d3748' }}>{clients.find(c => c.id === activeRefundInvoice.clientId)?.name || 'Walk-in Guest'}</strong>
                   <br />Email: {clients.find(c => c.id === activeRefundInvoice.clientId)?.email || 'N/A'}
                   <br />Phone: {clients.find(c => c.id === activeRefundInvoice.clientId)?.phone || 'N/A'}
                 </div>
               </div>
 
               {/* Subject */}
-              <h3 style={{ color: '#1a1a1a', fontSize: '1rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '6px', marginBottom: '20px' }}>
+              <h3 style={{ color: '#1a1a1a', fontSize: '0.92rem', fontWeight: 800, borderBottom: '1px solid #edf2f7', paddingBottom: '8px', marginBottom: '20px', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
                 SUBJECT: REFUND TRANSACTION SETTLEMENT CONFIRMATION - {activeRefundInvoice.invoiceNumber}
               </h3>
 
@@ -9177,51 +9186,51 @@ export default function BookingCRM() {
               <p>Dear {clients.find(c => c.id === activeRefundInvoice.clientId)?.name || 'Valued Guest'},</p>
               
               <p>
-                This letter serves as formal confirmation that the refund transaction for invoice reference <strong>{activeRefundInvoice.invoiceNumber}</strong> has been successfully processed and finalized on our accounts ledger.
+                This letter serves as formal confirmation that the refund transaction for invoice reference <strong style={{ color: '#6B2C91' }}>{activeRefundInvoice.invoiceNumber}</strong> has been successfully processed and finalized on our clinic accounts ledger.
               </p>
 
               <p>
-                The total refundable amount of <strong>R {activeRefundInvoice.total.toFixed(2)}</strong> has been credited back to your original payment method. Below is the summary details of the transaction:
+                The total refundable amount of <strong style={{ color: '#38a169' }}>R {activeRefundInvoice.total.toFixed(2)}</strong> has been credited back to your original payment method. Below are the summary details of this transaction:
               </p>
 
               {/* Details table */}
-              <table style={{ width: '100%', borderCollapse: 'collapse', margin: '20px 0', fontSize: '0.85rem', backgroundColor: '#f7fafc', border: '1px solid #e2e8f0' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', margin: '24px 0', fontSize: '0.82rem', backgroundColor: '#f8fafc', border: '1px solid #edf2f7', borderRadius: '8px' }}>
                 <tbody>
-                  <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-                    <td style={{ padding: '8px 12px', fontWeight: 700, width: '200px' }}>Tax Invoice Number:</td>
-                    <td style={{ padding: '8px 12px' }}>{activeRefundInvoice.invoiceNumber}</td>
+                  <tr style={{ borderBottom: '1px solid #edf2f7' }}>
+                    <td style={{ padding: '10px 14px', fontWeight: 700, width: '220px', color: '#4a5568' }}>Original Invoice Reference:</td>
+                    <td style={{ padding: '10px 14px', color: '#1a1a1a', fontWeight: 600 }}>{activeRefundInvoice.invoiceNumber}</td>
                   </tr>
-                  <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-                    <td style={{ padding: '8px 12px', fontWeight: 700 }}>Originally Settled Date:</td>
-                    <td style={{ padding: '8px 12px' }}>{activeRefundInvoice.date}</td>
+                  <tr style={{ borderBottom: '1px solid #edf2f7' }}>
+                    <td style={{ padding: '10px 14px', fontWeight: 700, color: '#4a5568' }}>Originally Settled Date:</td>
+                    <td style={{ padding: '10px 14px', color: '#1a1a1a' }}>{activeRefundInvoice.date}</td>
                   </tr>
-                  <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-                    <td style={{ padding: '8px 12px', fontWeight: 700 }}>Refund Settlement Date:</td>
-                    <td style={{ padding: '8px 12px' }}>{new Date().toISOString().split('T')[0]}</td>
+                  <tr style={{ borderBottom: '1px solid #edf2f7' }}>
+                    <td style={{ padding: '10px 14px', fontWeight: 700, color: '#4a5568' }}>Refund Disbursement Date:</td>
+                    <td style={{ padding: '10px 14px', color: '#1a1a1a' }}>{new Date().toISOString().split('T')[0]}</td>
                   </tr>
-                  <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-                    <td style={{ padding: '8px 12px', fontWeight: 700 }}>Refund Reason recorded:</td>
-                    <td style={{ padding: '8px 12px', color: '#ef4444', fontStyle: 'italic' }}>{activeRefundInvoice.refundReason || 'Service cancellation adjustment'}</td>
+                  <tr style={{ borderBottom: '1px solid #edf2f7' }}>
+                    <td style={{ padding: '10px 14px', fontWeight: 700, color: '#4a5568' }}>Refund Reason Recorded:</td>
+                    <td style={{ padding: '10px 14px', color: '#e53e3e', fontStyle: 'italic', fontWeight: 600 }}>{activeRefundInvoice.refundReason || 'Service cancellation adjustment'}</td>
                   </tr>
                   <tr>
-                    <td style={{ padding: '8px 12px', fontWeight: 700 }}>Total Refunded Amount:</td>
-                    <td style={{ padding: '8px 12px', fontWeight: 700, color: '#34d399' }}>R {activeRefundInvoice.total.toFixed(2)}</td>
+                    <td style={{ padding: '10px 14px', fontWeight: 700, color: '#4a5568' }}>Total Refunded Amount (ZAR):</td>
+                    <td style={{ padding: '10px 14px', fontWeight: 800, color: '#38a169', fontSize: '1rem' }}>R {activeRefundInvoice.total.toFixed(2)}</td>
                   </tr>
                 </tbody>
               </table>
 
               <p>
-                Please note that depending on your banking institution, the refund credit might take between 2 to 5 business days to reflect in your bank statement.
+                Please note that depending on your card issuer or banking institution, the refund credit might take between 2 to 5 business days to reflect in your bank statement.
               </p>
 
               <p>
-                We sincerely apologize for any inconvenience caused. If you have any questions or require further ledger clarification, please do not hesitate to contact our accounts division at accounts@sculptglow.co.za.
+                We sincerely apologize for any inconvenience this adjustment may have caused. If you have any questions or require further accounts ledger details, please do not hesitate to contact our accounts division at accounts@sculptglow.co.za.
               </p>
 
-              <div style={{ marginTop: '40px', lineHeight: '1.4' }}>
+              <div style={{ marginTop: '40px', lineHeight: '1.5' }}>
                 <span>Sincerely,</span>
-                <br /><strong style={{ display: 'block', marginTop: '24px', color: '#6B2C91' }}>Sculpt & Glow Financial Desk</strong>
-                <span style={{ fontSize: '0.75rem', color: '#718096' }}>Authorized Accounts Office</span>
+                <br /><strong style={{ display: 'block', marginTop: '16px', color: '#6B2C91', fontSize: '0.9rem' }}>Sculpt & Glow Financial Desk</strong>
+                <span style={{ fontSize: '0.72rem', color: '#718096' }}>Authorized Accounts Office</span>
               </div>
             </div>
           </div>

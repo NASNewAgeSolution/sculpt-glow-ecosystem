@@ -2,9 +2,24 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   ShoppingCart, Phone, MapPin, Search, CheckCircle, 
   AlertTriangle, Download, ArrowRight, MessageSquare, 
-  Sparkles, Menu, X, Star, CreditCard, Shield 
+  Sparkles, Menu, X, Star, CreditCard, Shield,
+  Award, Calendar, Scale, Info, Plus, Minus, Trash2, Camera, Lock, User, RefreshCw, Settings, LogOut
 } from 'lucide-react';
-import { getTable, addAppointment, addInvoice, addPaymentToInvoice, logAction } from '../db/stateEngine';
+import { 
+  getTable, 
+  addAppointment, 
+  addInvoice, 
+  addPaymentToInvoice, 
+  logAction,
+  redeemGlowPoints,
+  addClientWeightLog,
+  registerClientApp,
+  loginClientApp,
+  rescheduleAppointmentFromApp,
+  cancelAppointmentFromApp,
+  updateClientProfileFromApp,
+  checkScheduleConflict
+} from '../db/stateEngine';
 
 const getServiceImage = (srvName) => {
   const name = srvName.toLowerCase();
@@ -29,8 +44,12 @@ const getServiceImage = (srvName) => {
   return 'https://images.unsplash.com/photo-1600334129128-685c5582fd35?w=600';
 };
 
-export default function ClientWebsite() {
-  const [activeTab, setActiveTab] = useState('home');
+export default function ClientWebsite({ defaultTab = 'home' }) {
+  const [activeTab, setActiveTab] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tabParam = params.get('tab');
+    return tabParam || defaultTab;
+  });
   const [services, setServices] = useState([]);
   const [products, setProducts] = useState([]);
   const [settings, setSettings] = useState({});
@@ -49,15 +68,75 @@ export default function ClientWebsite() {
   const [showWebsiteBookingModal, setShowWebsiteBookingModal] = useState(false);
   const [resultsFilter, setResultsFilter] = useState('all'); // all, treadmill, cryo, peptides
 
+  // Member Portal - Authentication States
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [appCurrentClient, setAppCurrentClient] = useState(''); // Logged in client ID
+  const [authMode, setAuthMode] = useState('login'); // login, register, forgot
+  
+  // Auth Form States
+  const [authPhone, setAuthPhone] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authName, setAuthName] = useState('');
+  const [authEmail, setAuthEmail] = useState('');
+
+  // Forgot Password States
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotStep, setForgotStep] = useState(1); // 1 = enter email, 2 = enter new password
+  const [forgotNewPassword, setForgotNewPassword] = useState('');
+  const [resetClientId, setResetClientId] = useState('');
+
+  // Roster & Appointments Table States
+  const [clients, setClients] = useState([]);
+  const [appointments, setAppointments] = useState([]);
+  const [users, setUsers] = useState([]);
+  
+  // Rescheduling & Cancellation States
+  const [reschedulingAptId, setReschedulingAptId] = useState(null);
+  const [rescheduleForm, setRescheduleForm] = useState({ 
+    date: new Date(Date.now() + 86400000).toISOString().split('T')[0], // default tomorrow
+    time: '09:00' 
+  });
+  const [cancelingApt, setCancelingApt] = useState(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelPolicyChecked, setCancelPolicyChecked] = useState(false);
+
+  // Scale Log Progress States
+  const [measurementForm, setMeasurementForm] = useState({ weight: '', waist: '', hips: '' });
+
+  // Profile Form States
+  const [profileForm, setProfileForm] = useState({ name: '', email: '', phone: '', password: '', deliveryAddress: '' });
+
+  // Overlay Modals
+  const [showGlowInfoModal, setShowGlowInfoModal] = useState(false);
+  const [showProfileEditModal, setShowProfileEditModal] = useState(false);
+
   // Fairy Dust Star Particle & Glitter checkout states
   const [glitters, setGlitters] = useState([]);
   const websiteRef = useRef(null);
   const canvasRef = useRef(null);
 
   const syncStorefront = () => {
-    setServices(getTable('services'));
-    setProducts(getTable('products'));
-    setSettings(getTable('settings'));
+    const clientsTable = getTable('clients') || [];
+    setClients(clientsTable);
+    setAppointments(getTable('appointments') || []);
+    setServices(getTable('services') || []);
+    setProducts(getTable('products') || []);
+    setUsers(getTable('users') || []);
+    setSettings(getTable('settings') || {});
+
+    // Auto-sync current logged in client profile parameters
+    if (appCurrentClient) {
+      const match = clientsTable.find(c => c.id === appCurrentClient);
+      if (match) {
+        setProfileForm({
+          name: match.name || '',
+          email: match.email || '',
+          phone: match.phone || '',
+          password: match.password || '',
+          deliveryAddress: match.deliveryAddress || ''
+        });
+      }
+    }
   };
 
   useEffect(() => {
@@ -68,7 +147,7 @@ export default function ClientWebsite() {
     return () => {
       window.removeEventListener('salon_db_sync', handleSync);
     };
-  }, []);
+  }, [appCurrentClient]);
 
   // HTML5 Canvas gold & lilac fairy dust mouse trail tracker
   useEffect(() => {
@@ -180,6 +259,297 @@ export default function ClientWebsite() {
     setGlitters(newGlitters);
     logAction('E-Commerce Engine', 'Glitter Victory Bomb', 'Spawning checkout victory confetti explosion.');
     setTimeout(() => setGlitters([]), 1500);
+  };
+
+  // Auth Action Handlers
+  const handleAppLogin = (e) => {
+    e.preventDefault();
+    if (!authPhone || !authPassword) {
+      return alert('Please enter both your cellphone number and password.');
+    }
+    const res = loginClientApp(authPhone, authPassword);
+    if (res.success) {
+      setAppCurrentClient(res.client.id);
+      setIsLoggedIn(true);
+      setAuthPhone('');
+      setAuthPassword('');
+      alert(`Successfully logged in! Welcome back, ${res.client.name}.`);
+      syncStorefront();
+    } else {
+      alert(`Login Error: ${res.error}`);
+    }
+  };
+
+  const handleAppRegister = (e) => {
+    e.preventDefault();
+    if (!authName || !authPhone || !authEmail || !authPassword) {
+      return alert('Please fill in all registration fields.');
+    }
+    const res = registerClientApp('Website Client Portal', authName, authEmail, authPhone, authPassword);
+    if (res.success) {
+      setAppCurrentClient(res.client.id);
+      setIsLoggedIn(true);
+      
+      // Clear forms
+      setAuthName('');
+      setAuthPhone('');
+      setAuthEmail('');
+      setAuthPassword('');
+      
+      if (res.linked) {
+        alert(`Linked Profile Detected!\n\nWelcome back, ${res.client.name}! We found your details in our clinic system and linked your past booking histories and Glow Points (${res.client.loyaltyPoints} points) to your profile.`);
+      } else {
+        alert(`Welcome to Sculpt & Glow, ${authName}! Your client account has been registered successfully.`);
+      }
+      syncStorefront();
+    } else {
+      alert(`Registration Error: ${res.error}`);
+    }
+  };
+
+  const handleForgotPasswordRequest = (e) => {
+    e.preventDefault();
+    if (!forgotEmail.trim()) {
+      return alert('Please enter your email address.');
+    }
+    const match = clients.find(c => c.email?.toLowerCase().trim() === forgotEmail.toLowerCase().trim());
+    if (!match) {
+      return alert(`Error: No registered client account found with email "${forgotEmail}".`);
+    }
+    
+    alert(`Reset Link Dispatched!\n\nA secure password reset request has been sent to ${forgotEmail}.\n\nFor simulation convenience, you can now enter your new password below.`);
+    setResetClientId(match.id);
+    setForgotStep(2);
+  };
+
+  const handleForgotPasswordReset = (e) => {
+    e.preventDefault();
+    if (!forgotNewPassword || forgotNewPassword.length < 4) {
+      return alert('Password must be at least 4 characters long.');
+    }
+    
+    const match = clients.find(c => c.id === resetClientId);
+    if (match) {
+      const updatedProfile = { ...match, password: forgotNewPassword };
+      const res = updateClientProfileFromApp('Website Client Portal', resetClientId, updatedProfile);
+      if (res) {
+        alert('Success! Your password has been reset successfully. Please login with your cellphone number and new password.');
+        logAction('Website Client Portal', 'Password Reset via Email', `Client ${match.name} reset password via email verification`);
+        
+        setAuthMode('login');
+        setForgotStep(1);
+        setForgotEmail('');
+        setForgotNewPassword('');
+        setResetClientId('');
+        syncStorefront();
+      } else {
+        alert('Error resetting password.');
+      }
+    }
+  };
+
+  const handleProfileUpdate = (e) => {
+    e.preventDefault();
+    if (!profileForm.name || !profileForm.email || !profileForm.phone) {
+      return alert('Profile name, email, and phone are required.');
+    }
+    const res = updateClientProfileFromApp('Website Client Portal', appCurrentClient, profileForm);
+    if (res) {
+      alert('Your profile details have been successfully updated in the salon CRM.');
+      syncStorefront();
+      setShowProfileEditModal(false);
+    } else {
+      alert('Error saving profile changes.');
+    }
+  };
+
+  const handleAvatarFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64Str = reader.result;
+        updateClientProfileFromApp('Website Client Portal', appCurrentClient, {
+          profilePhoto: base64Str
+        });
+        syncStorefront();
+        alert('Profile picture uploaded successfully!');
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Cancel policy warning calculations
+  const getCancelPolicyWarning = (apt) => {
+    if (!apt) return null;
+    const policyMinDays = settings.cancelPolicyDaysMin || 8;
+    const policyMinForfeit = settings.cancelPolicyForfeitMin || 100;
+    const policyMaxDays = settings.cancelPolicyDaysMax || 14;
+    const policyMaxForfeit = settings.cancelPolicyForfeitMax || 50;
+
+    const bookingDateObj = new Date(`${apt.date}T${apt.time}`);
+    const today = new Date();
+    const diffTime = bookingDateObj - today;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays <= 0) {
+      return {
+        forfeitPercent: 100,
+        text: 'This booking is today or has already passed. Canceling forfeits 100% of the session cost.',
+        severity: 'critical'
+      };
+    } else if (diffDays <= policyMinDays) {
+      return {
+        forfeitPercent: policyMinForfeit,
+        text: `Strict Policy Warning: Canceling within ${policyMinDays} days of the appointment forfeits ${policyMinForfeit}% of the payment. You will lose the full payment amount.`,
+        severity: 'strict'
+      };
+    } else if (diffDays <= policyMaxDays) {
+      return {
+        forfeitPercent: policyMaxForfeit,
+        text: `Moderate Policy Warning: Canceling within ${policyMaxDays} days of the appointment forfeits ${policyMaxForfeit}% of the payment. You will lose 50% of the payment amount.`,
+        severity: 'moderate'
+      };
+    } else {
+      return {
+        forfeitPercent: 0,
+        text: `Normal Policy: You are eligible for a 100% full refund on this booking (cancelled ${diffDays} days in advance).`,
+        severity: 'free'
+      };
+    }
+  };
+
+  const handleCancelBookingSubmit = () => {
+    if (!cancelReason.trim()) {
+      return alert('Please enter a cancellation reason.');
+    }
+    if (!cancelPolicyChecked) {
+      return alert('You must review and accept the cancellation refund policy warning checkbox.');
+    }
+
+    const res = cancelAppointmentFromApp('Website Client Portal', cancelingApt.id, cancelReason);
+    if (res.success) {
+      alert('Your appointment has been successfully cancelled and references updated.');
+      setCancelingApt(null);
+      setCancelReason('');
+      setCancelPolicyChecked(false);
+      syncStorefront();
+    } else {
+      alert(`Error canceling booking: ${res.error}`);
+    }
+  };
+
+  const handleRescheduleSubmit = (e) => {
+    e.preventDefault();
+    const res = rescheduleAppointmentFromApp('Website Client Portal', reschedulingAptId, rescheduleForm.date, rescheduleForm.time);
+    if (res.success) {
+      alert('Rescheduled request submitted! Your booking date has been updated and is awaiting admin check.');
+      setReschedulingAptId(null);
+      syncStorefront();
+    } else {
+      alert(`Scheduling Conflict:\n\n${res.error}`);
+    }
+  };
+
+  const handleAppSubmitMeasurements = (e) => {
+    e.preventDefault();
+    if (!measurementForm.weight) return alert('Please enter your weight.');
+    
+    addClientWeightLog('Website Client Portal', appCurrentClient, {
+      weight: Number(measurementForm.weight),
+      waist: Number(measurementForm.waist) || 0,
+      hips: Number(measurementForm.hips) || 0
+    });
+    
+    setMeasurementForm({ weight: '', waist: '', hips: '' });
+    syncStorefront();
+    alert('Progress metrics logged successfully!');
+  };
+
+  const handleRedeemPoints = (points, rewardName) => {
+    const client = clients.find(c => c.id === appCurrentClient);
+    if (!client || (client.loyaltyPoints || 0) < points) {
+      return alert('Inadequate Glow Points balance to claim this reward.');
+    }
+    
+    const res = redeemGlowPoints('Website Client Portal', appCurrentClient, points, rewardName);
+    if (res.success) {
+      alert(`Successfully redeemed reward voucher: "${rewardName}"!\nA unique voucher code has been added to your vouchers ledger in settings.`);
+      syncStorefront();
+    } else {
+      alert(`Redemption Error: ${res.error}`);
+    }
+  };
+
+  // Custom Inline SVG weight progress graph renderer
+  const renderScaleLogsGraph = (activeClientProfile) => {
+    const logs = activeClientProfile?.weightLogs || [];
+    if (logs.length < 2) {
+      return (
+        <div style={{
+          height: '140px', backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: '12px',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: '#BFA6D8', fontSize: '0.8rem', border: '1px dashed rgba(107, 44, 145, 0.3)'
+        }}>
+          Need at least 2 logged weight records to display progress trend graph.
+        </div>
+      );
+    }
+
+    const weights = logs.map(l => Number(l.weight));
+    const minW = Math.min(...weights) - 2;
+    const maxW = Math.max(...weights) + 2;
+    const diffW = maxW - minW || 1;
+
+    // SVG parameters
+    const width = 500;
+    const height = 180;
+    const padding = 25;
+    const graphWidth = width - padding * 2;
+    const graphHeight = height - padding * 2;
+
+    // Map logs to coordinates
+    const points = logs.map((log, index) => {
+      const x = padding + (index / (logs.length - 1)) * graphWidth;
+      const y = padding + graphHeight - ((Number(log.weight) - minW) / diffW) * graphHeight;
+      return { x, y, weight: log.weight, date: log.date };
+    });
+
+    // Generate path
+    const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+
+    return (
+      <div style={{ backgroundColor: 'rgba(0,0,0,0.2)', padding: '16px', borderRadius: '12px', border: '1px solid rgba(107, 44, 145, 0.25)', flex: 1 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#D4AF37', marginBottom: '12px', fontWeight: 600 }}>
+          <span>Scale Weight Progress (Trend Line)</span>
+          <span style={{ color: '#34d399' }}>Net Change: {(weights[weights.length - 1] - weights[0]).toFixed(1)} kg</span>
+        </div>
+        
+        <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} style={{ overflow: 'visible' }}>
+          {/* Grid lines */}
+          <line x1={padding} y1={padding} x2={width - padding} y2={padding} stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
+          <line x1={padding} y1={padding + graphHeight/2} x2={width - padding} y2={padding + graphHeight/2} stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
+          <line x1={padding} y1={padding + graphHeight} x2={width - padding} y2={padding + graphHeight} stroke="rgba(255,255,255,0.1)" strokeWidth="1" />
+
+          {/* Line Path */}
+          <path d={pathD} fill="none" stroke="#D4AF37" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ filter: 'drop-shadow(0 0 4px rgba(212,175,55,0.4))' }} />
+
+          {/* Dots & Labels */}
+          {points.map((p, idx) => (
+            <g key={idx}>
+              <circle cx={p.x} cy={p.y} r="5" fill="#6B2C91" stroke="#D4AF37" strokeWidth="2" />
+              {/* Tooltip text */}
+              <text x={p.x} y={p.y - 10} fill="white" fontSize="9px" fontWeight="bold" textAnchor="middle">
+                {p.weight}kg
+              </text>
+              <text x={p.x} y={height - 5} fill="#BFA6D8" fontSize="8px" textAnchor="middle">
+                {p.date}
+              </text>
+            </g>
+          ))}
+        </svg>
+      </div>
+    );
   };
 
   // E-commerce handlers
@@ -523,7 +893,7 @@ export default function ClientWebsite() {
             { id: 'products', label: 'Boutique' },
             { id: 'about', label: 'Philosophy' },
             { id: 'contact', label: 'Contact Us' },
-            { id: 'app', label: 'The App' }
+            { id: 'portal', label: 'Member Portal' }
           ].map(menuItem => (
             <button
               key={menuItem.id}
@@ -1064,46 +1434,573 @@ export default function ClientWebsite() {
           </div>
         )}
 
-        {/* SUBTAB: DOWNLOAD MOBILE APP (Radial purple and gold visual showcase) */}
-        {activeTab === 'app' && (
+        {/* SUBTAB: INTEGRATED CLIENT MEMBER PORTAL */}
+        {activeTab === 'portal' && (
           <div style={{ 
-            padding: '160px 8% 80px 8%', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', 
-            gap: '60px', alignItems: 'center', background: 'linear-gradient(to top, #0D0D0D, #1A0A24)' 
+            padding: '140px 6% 80px 6%', 
+            background: 'linear-gradient(to bottom, #0E0712 0%, #0A0A0A 100%)',
+            minHeight: '80vh',
+            boxSizing: 'border-box'
           }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
-              <div>
-                <span style={{ fontSize: '0.72rem', letterSpacing: '3px', textTransform: 'uppercase', color: '#D4AF37', fontWeight: 600 }}>concierge on demand</span>
-                <h2 className="font-luxury-serif" style={{ fontSize: '2.5rem', color: 'white', margin: '6px 0 0 0' }}>Luxury At Your Fingertips</h2>
+            
+            {/* LOGGED OUT PORTAL: Authentication Screen */}
+            {!isLoggedIn ? (
+              <div className="animate-fade-in" style={{ maxWidth: '500px', margin: '40px auto 0 auto' }}>
+                
+                {/* Mode Selectors */}
+                <div style={{ display: 'flex', borderBottom: '1px solid rgba(212, 175, 55, 0.15)', marginBottom: '30px' }}>
+                  <button 
+                    onClick={() => { setAuthMode('login'); setForgotStep(1); }}
+                    style={{ 
+                      flex: 1, background: 'none', border: 'none', padding: '14px', color: authMode === 'login' ? '#D4AF37' : '#BFA6D8',
+                      fontSize: '0.85rem', fontWeight: 600, letterSpacing: '2px', textTransform: 'uppercase', cursor: 'pointer',
+                      borderBottom: authMode === 'login' ? '2px solid #D4AF37' : '2px solid transparent', transition: 'all 0.3s'
+                    }}
+                  >
+                    🔐 Login
+                  </button>
+                  <button 
+                    onClick={() => setAuthMode('register')}
+                    style={{ 
+                      flex: 1, background: 'none', border: 'none', padding: '14px', color: authMode === 'register' ? '#D4AF37' : '#BFA6D8',
+                      fontSize: '0.85rem', fontWeight: 600, letterSpacing: '2px', textTransform: 'uppercase', cursor: 'pointer',
+                      borderBottom: authMode === 'register' ? '2px solid #D4AF37' : '2px solid transparent', transition: 'all 0.3s'
+                    }}
+                  >
+                    ✨ Register
+                  </button>
+                </div>
+
+                {/* LOGIN FORM */}
+                {authMode === 'login' && (
+                  <form onSubmit={handleAppLogin} className="luxury-card animate-fade-in" style={{ padding: '40px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    <div style={{ textAlign: 'center', marginBottom: '10px' }}>
+                      <h3 className="font-luxury-serif" style={{ color: 'white', margin: 0, fontSize: '1.4rem' }}>Welcome to the Atelier</h3>
+                      <p style={{ color: '#BFA6D8', fontSize: '0.78rem', marginTop: '6px' }}>Access your personalized wellness goals, active bookings & loyalty rewards.</p>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.72rem', letterSpacing: '1px', textTransform: 'uppercase', color: '#A89684', marginBottom: '6px' }}>Cellphone Number:</label>
+                        <input 
+                          type="tel" 
+                          required
+                          className="luxury-input" 
+                          style={{ width: '100%', boxSizing: 'border-box' }}
+                          placeholder="e.g. +27829982020" 
+                          value={authPhone} 
+                          onChange={(e) => setAuthPhone(e.target.value)} 
+                        />
+                      </div>
+
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                          <label style={{ fontSize: '0.72rem', letterSpacing: '1px', textTransform: 'uppercase', color: '#A89684' }}>Access Password:</label>
+                          <button 
+                            type="button" 
+                            onClick={() => { setAuthMode('forgot'); setForgotStep(1); }}
+                            style={{ background: 'none', border: 'none', color: '#BFA6D8', fontSize: '0.7rem', cursor: 'pointer', textDecoration: 'underline' }}
+                          >
+                            Forgot Password?
+                          </button>
+                        </div>
+                        <input 
+                          type="password" 
+                          required
+                          className="luxury-input" 
+                          style={{ width: '100%', boxSizing: 'border-box' }}
+                          placeholder="••••••••" 
+                          value={authPassword} 
+                          onChange={(e) => setAuthPassword(e.target.value)} 
+                        />
+                      </div>
+                    </div>
+
+                    <button type="submit" className="btn-luxury-gold" style={{ width: '100%', justifyContent: 'center', marginTop: '10px' }}>
+                      Authorize Account & Enter
+                    </button>
+                  </form>
+                )}
+
+                {/* REGISTER FORM */}
+                {authMode === 'register' && (
+                  <form onSubmit={handleAppRegister} className="luxury-card animate-fade-in" style={{ padding: '40px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    <div style={{ textAlign: 'center', marginBottom: '10px' }}>
+                      <h3 className="font-luxury-serif" style={{ color: 'white', margin: 0, fontSize: '1.4rem' }}>Create Member Account</h3>
+                      <p style={{ color: '#BFA6D8', fontSize: '0.78rem', marginTop: '6px' }}>Register with your cellphone number to link with our clinic ledger database.</p>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.7rem', letterSpacing: '1px', textTransform: 'uppercase', color: '#A89684', marginBottom: '4px' }}>Full Name:</label>
+                        <input 
+                          type="text" 
+                          required
+                          className="luxury-input" 
+                          style={{ width: '100%', boxSizing: 'border-box' }}
+                          placeholder="Charlotte Guest" 
+                          value={authName} 
+                          onChange={(e) => setAuthName(e.target.value)} 
+                        />
+                      </div>
+
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.7rem', letterSpacing: '1px', textTransform: 'uppercase', color: '#A89684', marginBottom: '4px' }}>Email Address:</label>
+                        <input 
+                          type="email" 
+                          required
+                          className="luxury-input" 
+                          style={{ width: '100%', boxSizing: 'border-box' }}
+                          placeholder="charlotte@gmail.com" 
+                          value={authEmail} 
+                          onChange={(e) => setAuthEmail(e.target.value)} 
+                        />
+                      </div>
+
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.7rem', letterSpacing: '1px', textTransform: 'uppercase', color: '#A89684', marginBottom: '4px' }}>Cellphone Number (acts as login ID):</label>
+                        <input 
+                          type="tel" 
+                          required
+                          className="luxury-input" 
+                          style={{ width: '100%', boxSizing: 'border-box' }}
+                          placeholder="+27821234567" 
+                          value={authPhone} 
+                          onChange={(e) => setAuthPhone(e.target.value)} 
+                        />
+                      </div>
+
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.7rem', letterSpacing: '1px', textTransform: 'uppercase', color: '#A89684', marginBottom: '4px' }}>Create Password (min 4 chars):</label>
+                        <input 
+                          type="password" 
+                          required
+                          className="luxury-input" 
+                          style={{ width: '100%', boxSizing: 'border-box' }}
+                          placeholder="••••••••" 
+                          value={authPassword} 
+                          onChange={(e) => setAuthPassword(e.target.value)} 
+                        />
+                      </div>
+                    </div>
+
+                    <button type="submit" className="btn-luxury-purple" style={{ width: '100%', justifyContent: 'center', marginTop: '10px' }}>
+                      Register Profile
+                    </button>
+                  </form>
+                )}
+
+                {/* FORGOT PASSWORD FORM */}
+                {authMode === 'forgot' && (
+                  <div className="luxury-card animate-fade-in" style={{ padding: '40px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    <div style={{ textAlign: 'center', marginBottom: '10px' }}>
+                      <h3 className="font-luxury-serif" style={{ color: 'white', margin: 0, fontSize: '1.4rem' }}>Reset Password</h3>
+                      <p style={{ color: '#BFA6D8', fontSize: '0.78rem', marginTop: '6px' }}>Provide your email to verify and set a new portal security password.</p>
+                    </div>
+
+                    {forgotStep === 1 ? (
+                      <form onSubmit={handleForgotPasswordRequest} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.72rem', letterSpacing: '1px', textTransform: 'uppercase', color: '#A89684', marginBottom: '6px' }}>Account Email Address:</label>
+                          <input 
+                            type="email" 
+                            required
+                            className="luxury-input" 
+                            style={{ width: '100%', boxSizing: 'border-box' }}
+                            placeholder="charlotte@gmail.com" 
+                            value={forgotEmail} 
+                            onChange={(e) => setForgotEmail(e.target.value)} 
+                          />
+                        </div>
+                        <button type="submit" className="btn-luxury-gold" style={{ width: '100%', justifyContent: 'center' }}>
+                          Send Verification Link
+                        </button>
+                      </form>
+                    ) : (
+                      <form onSubmit={handleForgotPasswordReset} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                        <div className="psych-badge" style={{ fontSize: '0.75rem', justifyContent: 'center', boxSizing: 'border-box' }}>
+                          🔑 Verification Code Verified! Enter your new password below.
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.72rem', letterSpacing: '1px', textTransform: 'uppercase', color: '#A89684', marginBottom: '6px' }}>Enter New Password:</label>
+                          <input 
+                            type="password" 
+                            required
+                            className="luxury-input" 
+                            style={{ width: '100%', boxSizing: 'border-box' }}
+                            placeholder="••••••••" 
+                            value={forgotNewPassword} 
+                            onChange={(e) => setForgotNewPassword(e.target.value)} 
+                          />
+                        </div>
+                        <button type="submit" className="btn-luxury-purple" style={{ width: '100%', justifyContent: 'center' }}>
+                          Confirm Password Reset
+                        </button>
+                      </form>
+                    )}
+
+                    <button 
+                      type="button" 
+                      onClick={() => setAuthMode('login')}
+                      style={{ background: 'none', border: 'none', color: '#BFA6D8', fontSize: '0.78rem', cursor: 'pointer', alignSelf: 'center', marginTop: '10px' }}
+                    >
+                      Return to Login
+                    </button>
+                  </div>
+                )}
+
               </div>
+            ) : (
               
-              <p style={{ color: '#A89684', fontSize: '0.9rem', lineHeight: '1.7', margin: 0 }}>
-                The Sculpt & Glow Client App acts as your private digital gateway. Specially developed for our members to ensure complete schedule convenience and loyalty progression.
-              </p>
+              // LOGGED IN PORTAL: Dashboard
+              (() => {
+                const activeClientProfile = clients.find(c => c.id === appCurrentClient);
+                if (!activeClientProfile) return <div style={{ color: 'white' }}>Error loading member profile.</div>;
 
-              <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '14px', fontSize: '0.85rem' }}>
-                <li style={{ display: 'flex', alignItems: 'center', gap: '12px' }}><Sparkles style={{ color: '#D4AF37', width: '16px', height: '16px' }} /> TRACK LOYALTY POINTS & REDEEM REWARDS</li>
-                <li style={{ display: 'flex', alignItems: 'center', gap: '12px' }}><Sparkles style={{ color: '#D4AF37', width: '16px', height: '16px' }} /> ORDER RETAIL PRODUCTS TO PRETORIA EAST</li>
-                <li style={{ display: 'flex', alignItems: 'center', gap: '12px' }}><Sparkles style={{ color: '#D4AF37', width: '16px', height: '16px' }} /> INSTANT BOOKING, RESCHEDULING & CANCELS</li>
-                <li style={{ display: 'flex', alignItems: 'center', gap: '12px' }}><Sparkles style={{ color: '#D4AF37', width: '16px', height: '16px' }} /> LOG MEASUREMENTS & SCALE GOALS LIVE</li>
-              </ul>
+                const clientBookings = appointments.filter(a => a.clientId === appCurrentClient && a.status !== 'Cancelled');
+                const glowPoints = activeClientProfile.loyaltyPoints || 0;
+                const weightLogs = activeClientProfile.weightLogs || [];
+                const latestWeight = weightLogs.length > 0 ? weightLogs[weightLogs.length - 1].weight : '--';
 
-              <div style={{ display: 'flex', gap: '14px' }}>
-                <button onClick={() => alert('iOS download fired!')} className="btn-luxury-gold"><Download style={{ width: '14px', height: '14px' }} /> App Store</button>
-                <button onClick={() => alert('Android APK download fired!')} className="btn-luxury-purple"><Download style={{ width: '14px', height: '14px' }} /> Google Play</button>
-              </div>
-            </div>
+                return (
+                  <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+                    
+                    {/* TOP SUMMARY BAR */}
+                    <div className="luxury-card" style={{ padding: '24px 30px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '20px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+                        {activeClientProfile.profilePhoto ? (
+                          <img 
+                            src={activeClientProfile.profilePhoto} 
+                            style={{ width: '70px', height: '70px', borderRadius: '50%', objectFit: 'cover', border: '2px solid #D4AF37' }} 
+                            alt="Profile" 
+                          />
+                        ) : (
+                          <div style={{ width: '70px', height: '70px', borderRadius: '50%', backgroundColor: 'rgba(107, 44, 145, 0.2)', border: '2px solid #D4AF37', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#D4AF37' }}>
+                            <User style={{ width: '32px', height: '32px' }} />
+                          </div>
+                        )}
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <h2 style={{ fontSize: '1.4rem', color: 'white', margin: 0, fontWeight: 700 }}>{activeClientProfile.name}</h2>
+                            <span className="badge-brand gold" style={{ fontSize: '0.62rem', letterSpacing: '1px', textTransform: 'uppercase', padding: '2px 8px' }}>
+                              🏆 VIP Tier: {activeClientProfile.membershipTier || 'Gold'}
+                            </span>
+                          </div>
+                          <p style={{ color: '#BFA6D8', fontSize: '0.8rem', margin: '4px 0 0 0' }}>
+                            Phone: {activeClientProfile.phone} • Email: {activeClientProfile.email}
+                          </p>
+                        </div>
+                      </div>
 
-            <div style={{ textAlign: 'center' }}>
-              <img 
-                src="/logo.jpg" 
-                style={{ 
-                  width: '260px', height: '260px', borderRadius: '50%', 
-                  border: '3px solid #D4AF37', filter: 'drop-shadow(0 0 25px rgba(107, 44, 145, 0.7))',
-                  animation: 'glitterFly 3s infinite alternate ease-in-out'
-                }} 
-                alt="Sculpt app logo" 
-              />
-            </div>
+                      <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                        <button 
+                          onClick={() => {
+                            setProfileForm({
+                              name: activeClientProfile.name || '',
+                              email: activeClientProfile.email || '',
+                              phone: activeClientProfile.phone || '',
+                              password: activeClientProfile.password || '',
+                              deliveryAddress: activeClientProfile.deliveryAddress || ''
+                            });
+                            setShowProfileEditModal(true);
+                          }} 
+                          className="btn-luxury-purple"
+                          style={{ padding: '8px 16px', fontSize: '0.75rem' }}
+                        >
+                          <Settings style={{ width: '14px', height: '14px' }} /> Edit Profile
+                        </button>
+                        
+                        <button 
+                          onClick={() => {
+                            setIsLoggedIn(false);
+                            setAppCurrentClient('');
+                            alert('You have logged out successfully.');
+                          }} 
+                          className="btn-luxury-gold" 
+                          style={{ padding: '8px 16px', fontSize: '0.75rem', borderColor: '#ef4444', color: '#ef4444' }}
+                        >
+                          <LogOut style={{ width: '14px', height: '14px' }} /> Log Out
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* THREE COLUMNS GRID LAYOUT */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '30px', alignItems: 'start' }}>
+                      
+                      {/* COLUMN A: LOYALTY POINTS & VOUCHERS */}
+                      <div className="luxury-card" style={{ padding: '30px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                        <div style={{ borderBottom: '1px solid rgba(212,175,55,0.15)', paddingBottom: '12px' }}>
+                          <span style={{ fontSize: '0.62rem', letterSpacing: '2px', textTransform: 'uppercase', color: '#D4AF37', fontWeight: 700 }}>VIP rewards program</span>
+                          <h3 style={{ fontFamily: 'Outfit', color: 'white', margin: '4px 0 0 0', fontSize: '1.25rem' }}>Glow Points Engine</h3>
+                        </div>
+
+                        {/* Balance display */}
+                        <div style={{ background: 'rgba(107, 44, 145, 0.1)', border: '1px solid rgba(107, 44, 145, 0.3)', padding: '16px', borderRadius: '12px', textAlign: 'center' }}>
+                          <span style={{ fontSize: '0.75rem', color: '#BFA6D8', display: 'block', textTransform: 'uppercase', letterSpacing: '1px' }}>Current Loyalty Balance</span>
+                          <span style={{ fontSize: '2.5rem', fontWeight: 800, color: '#D4AF37', display: 'block', textShadow: '0 0 10px rgba(212,175,55,0.3)', margin: '4px 0' }}>
+                            {glowPoints} <span style={{ fontSize: '1rem', fontWeight: 400, color: 'white' }}>Points</span>
+                          </span>
+                          <button 
+                            onClick={() => setShowGlowInfoModal(true)}
+                            style={{ background: 'none', border: 'none', color: '#BFA6D8', textDecoration: 'underline', fontSize: '0.72rem', cursor: 'pointer' }}
+                          >
+                            How does points conversion work?
+                          </button>
+                        </div>
+
+                        {/* Point Redemption Vouchers list */}
+                        <div>
+                          <strong style={{ display: 'block', fontSize: '0.78rem', color: '#A89684', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '10px' }}>Available Reward Vouchers:</strong>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                            {[
+                              { points: 50, label: '🎟️ R100 Off any Treatment' },
+                              { points: 100, label: '🧬 Free Korean Peptide Mini Serum' },
+                              { points: 120, label: '🎟️ R250 Off Voucher' },
+                              { points: 200, label: '🔥 Free 30m Vacutherm Chamber session' }
+                            ].map((reward, rIdx) => {
+                              const canRedeem = glowPoints >= reward.points;
+                              return (
+                                <div key={rIdx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', backgroundColor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '8px' }}>
+                                  <div>
+                                    <span style={{ display: 'block', fontSize: '0.8rem', color: 'white', fontWeight: 600 }}>{reward.label}</span>
+                                    <span style={{ fontSize: '0.7rem', color: '#BFA6D8' }}>Cost: {reward.points} Glow Points</span>
+                                  </div>
+                                  <button
+                                    onClick={() => handleRedeemPoints(reward.points, reward.label.slice(3))}
+                                    disabled={!canRedeem}
+                                    className={canRedeem ? "btn-brand-gold" : "btn-brand-purple"}
+                                    style={{
+                                      padding: '6px 12px', fontSize: '0.7rem', height: '28px',
+                                      opacity: canRedeem ? 1 : 0.4, cursor: canRedeem ? 'pointer' : 'not-allowed'
+                                    }}
+                                  >
+                                    Claim
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Redeemed vouchers list */}
+                        <div style={{ marginTop: '10px' }}>
+                          <strong style={{ display: 'block', fontSize: '0.78rem', color: '#A89684', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px' }}>Your Vouchers Ledger:</strong>
+                          {(activeClientProfile.vouchers || []).length === 0 ? (
+                            <span style={{ color: '#BFA6D8', fontSize: '0.72rem', fontStyle: 'italic' }}>No redeemed vouchers in your account yet.</span>
+                          ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '150px', overflowY: 'auto' }}>
+                              {(activeClientProfile.vouchers || []).map((v, idx) => (
+                                <div key={idx} style={{ display: 'flex', justify: 'space-between', padding: '8px 12px', backgroundColor: 'rgba(52, 211, 153, 0.05)', border: '1px solid rgba(52, 211, 153, 0.15)', borderRadius: '6px', fontSize: '0.75rem' }}>
+                                  <span style={{ color: '#34d399', fontWeight: 600 }}>{v.rewardName}</span>
+                                  <code style={{ color: 'white', fontWeight: 'bold' }}>{v.code}</code>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                      </div>
+
+                      {/* COLUMN B: SCALE TRACKER PROGRESS */}
+                      <div className="luxury-card" style={{ padding: '30px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                        <div style={{ borderBottom: '1px solid rgba(212,175,55,0.15)', paddingBottom: '12px' }}>
+                          <span style={{ fontSize: '0.62rem', letterSpacing: '2px', textTransform: 'uppercase', color: '#D4AF37', fontWeight: 700 }}>physiological parameters</span>
+                          <h3 style={{ fontFamily: 'Outfit', color: 'white', margin: '4px 0 0 0', fontSize: '1.25rem' }}>Scale & Weight Tracker</h3>
+                        </div>
+
+                        {/* SVG trend graph */}
+                        {renderScaleLogsGraph(activeClientProfile)}
+
+                        {/* Add metric logging form */}
+                        <form onSubmit={handleAppSubmitMeasurements} style={{ display: 'flex', flexDirection: 'column', gap: '12px', backgroundColor: 'rgba(255, 255, 255, 0.02)', padding: '14px', borderRadius: '10px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                          <strong style={{ fontSize: '0.78rem', color: 'white', textTransform: 'uppercase' }}>Log Today's Measurement</strong>
+                          
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+                            <div>
+                              <label style={{ display: 'block', fontSize: '0.62rem', color: '#A89684', marginBottom: '4px' }}>Weight (kg):</label>
+                              <input 
+                                type="number" 
+                                step="0.1" 
+                                required
+                                placeholder="e.g. 72.5" 
+                                className="luxury-input" 
+                                style={{ width: '100%', padding: '8px !important', boxSizing: 'border-box' }}
+                                value={measurementForm.weight}
+                                onChange={(e) => setMeasurementForm(prev => ({ ...prev, weight: e.target.value }))}
+                              />
+                            </div>
+                            <div>
+                              <label style={{ display: 'block', fontSize: '0.62rem', color: '#A89684', marginBottom: '4px' }}>Waist (cm):</label>
+                              <input 
+                                type="number" 
+                                placeholder="Optional" 
+                                className="luxury-input" 
+                                style={{ width: '100%', padding: '8px !important', boxSizing: 'border-box' }}
+                                value={measurementForm.waist}
+                                onChange={(e) => setMeasurementForm(prev => ({ ...prev, waist: e.target.value }))}
+                              />
+                            </div>
+                            <div>
+                              <label style={{ display: 'block', fontSize: '0.62rem', color: '#A89684', marginBottom: '4px' }}>Hips (cm):</label>
+                              <input 
+                                type="number" 
+                                placeholder="Optional" 
+                                className="luxury-input" 
+                                style={{ width: '100%', padding: '8px !important', boxSizing: 'border-box' }}
+                                value={measurementForm.hips}
+                                onChange={(e) => setMeasurementForm(prev => ({ ...prev, hips: e.target.value }))}
+                              />
+                            </div>
+                          </div>
+
+                          <button type="submit" className="btn-luxury-gold" style={{ padding: '8px 16px', fontSize: '0.72rem', justify: 'center', display: 'flex', width: '100%' }}>
+                            Save Progress Log Entry
+                          </button>
+                        </form>
+
+                        {/* Past history logs table */}
+                        <div>
+                          <strong style={{ display: 'block', fontSize: '0.78rem', color: '#A89684', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px' }}>Chronological Log History:</strong>
+                          {weightLogs.length === 0 ? (
+                            <span style={{ color: '#BFA6D8', fontSize: '0.72rem', fontStyle: 'italic' }}>No logged weight parameters recorded yet.</span>
+                          ) : (
+                            <div style={{ maxHeight: '150px', overflowY: 'auto', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '8px' }}>
+                              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem', textAlign: 'left' }}>
+                                <thead style={{ backgroundColor: 'rgba(255,255,255,0.02)', color: '#A89684' }}>
+                                  <tr>
+                                    <th style={{ padding: '8px' }}>Date</th>
+                                    <th style={{ padding: '8px' }}>Weight</th>
+                                    <th style={{ padding: '8px' }}>Waist</th>
+                                    <th style={{ padding: '8px' }}>Hips</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {weightLogs.slice().reverse().map((wl, idx) => (
+                                    <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                                      <td style={{ padding: '8px', color: '#BFA6D8' }}>{wl.date}</td>
+                                      <td style={{ padding: '8px', color: 'white', fontWeight: 600 }}>{wl.weight} kg</td>
+                                      <td style={{ padding: '8px', color: 'white' }}>{wl.waist ? `${wl.waist} cm` : '--'}</td>
+                                      <td style={{ padding: '8px', color: 'white' }}>{wl.hips ? `${wl.hips} cm` : '--'}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
+
+                      </div>
+
+                      {/* COLUMN C: SCHEDULE & BOOKINGS */}
+                      <div className="luxury-card" style={{ padding: '30px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                        <div style={{ borderBottom: '1px solid rgba(212,175,55,0.15)', paddingBottom: '12px' }}>
+                          <span style={{ fontSize: '0.62rem', letterSpacing: '2px', textTransform: 'uppercase', color: '#D4AF37', fontWeight: 700 }}>active schedule blocks</span>
+                          <h3 style={{ fontFamily: 'Outfit', color: 'white', margin: '4px 0 0 0', fontSize: '1.25rem' }}>Active Appointments</h3>
+                        </div>
+
+                        {clientBookings.length === 0 ? (
+                          <div style={{ color: '#BFA6D8', fontSize: '0.82rem', padding: '24px 0', textAlign: 'center', border: '1px dashed rgba(255,255,255,0.05)', borderRadius: '8px' }}>
+                            No upcoming scheduled bookings in the system. Click "Treatments" tab to secure a slot.
+                          </div>
+                        ) : (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                            {clientBookings.map((apt) => {
+                              const srv = services.find(s => s.id === apt.serviceId) || { name: 'Aesthetic Treatment', price: 0 };
+                              const isRescheduling = reschedulingAptId === apt.id;
+                              
+                              return (
+                                <div 
+                                  key={apt.id} 
+                                  style={{ 
+                                    padding: '16px', backgroundColor: 'rgba(255,255,255,0.02)', 
+                                    border: '1px solid rgba(107, 44, 145, 0.2)', borderRadius: '10px',
+                                    display: 'flex', flexDirection: 'column', gap: '12px'
+                                  }}
+                                >
+                                  <div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                      <strong style={{ color: 'white', fontSize: '0.85rem' }}>{srv.name}</strong>
+                                      <span className="badge-brand purple" style={{ fontSize: '0.55rem', padding: '1px 6px', textTransform: 'uppercase' }}>{apt.status}</span>
+                                    </div>
+                                    <span style={{ display: 'block', fontSize: '0.72rem', color: '#BFA6D8', marginTop: '4px' }}>
+                                      📅 {apt.date} @ {apt.time} ({apt.duration || '60'} mins)
+                                    </span>
+                                    <span style={{ display: 'block', fontSize: '0.7rem', color: '#A89684', marginTop: '2px' }}>
+                                      Clinical Specialist: {apt.staffId === 'usr-3' ? 'Jessica (Laser Therapist)' : 'Victoria (Aesthetician)'}
+                                    </span>
+                                  </div>
+
+                                  {/* RESCHEDULE INNER CHOICE FORM */}
+                                  {isRescheduling ? (
+                                    <form onSubmit={handleRescheduleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '10px', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '10px' }}>
+                                      <strong style={{ fontSize: '0.7rem', color: '#D4AF37', textTransform: 'uppercase' }}>Select New Date & Time Slot:</strong>
+                                      <div style={{ display: 'flex', gap: '8px' }}>
+                                        <input 
+                                          type="date" 
+                                          required
+                                          className="luxury-input" 
+                                          style={{ flex: 1, padding: '8px !important' }}
+                                          value={rescheduleForm.date} 
+                                          onChange={(e) => setRescheduleForm(prev => ({ ...prev, date: e.target.value }))}
+                                        />
+                                        <select 
+                                          className="luxury-input" 
+                                          style={{ width: '120px', padding: '8px !important' }}
+                                          value={rescheduleForm.time}
+                                          onChange={(e) => setRescheduleForm(prev => ({ ...prev, time: e.target.value }))}
+                                        >
+                                          <option value="09:00">09:00 AM</option>
+                                          <option value="10:30">10:30 AM</option>
+                                          <option value="12:00">12:00 PM</option>
+                                          <option value="13:30">13:30 PM</option>
+                                          <option value="15:00">15:00 PM</option>
+                                          <option value="16:30">16:30 PM</option>
+                                        </select>
+                                      </div>
+                                      <div style={{ display: 'flex', gap: '6px' }}>
+                                        <button type="submit" className="btn-brand-gold" style={{ flex: 1, height: '30px', fontSize: '0.7rem', justifyContent: 'center' }}>
+                                          Confirm Reschedule
+                                        </button>
+                                        <button type="button" onClick={() => setReschedulingAptId(null)} className="btn-brand-purple" style={{ height: '30px', fontSize: '0.7rem', justifyContent: 'center' }}>
+                                          Cancel
+                                        </button>
+                                      </div>
+                                    </form>
+                                  ) : (
+                                    <div style={{ display: 'flex', gap: '8px', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '10px' }}>
+                                      <button 
+                                        onClick={() => {
+                                          setReschedulingAptId(apt.id);
+                                          setRescheduleForm({
+                                            date: new Date(Date.now() + 86400000).toISOString().split('T')[0],
+                                            time: apt.time
+                                          });
+                                        }}
+                                        className="btn-brand-gold"
+                                        style={{ flex: 1, padding: '4px', fontSize: '0.7rem', justifyContent: 'center', height: '26px' }}
+                                      >
+                                        Reschedule Slot
+                                      </button>
+                                      <button 
+                                        onClick={() => setCancelingApt(apt)}
+                                        className="btn-brand-purple"
+                                        style={{ flex: 1, padding: '4px', fontSize: '0.7rem', justifyContent: 'center', height: '26px', borderColor: '#ef4444', color: '#ef4444' }}
+                                      >
+                                        Cancel Booking
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()
+            )}
           </div>
         )}
 
@@ -1255,6 +2152,211 @@ export default function ClientWebsite() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MEMBER PROFILE EDIT MODAL */}
+      {showProfileEditModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100000, padding: '20px' }}>
+          <form onSubmit={handleProfileUpdate} className="luxury-card animate-fade-in" style={{ width: '100%', maxWidth: '480px', padding: '30px', border: '1px solid #D4AF37' }}>
+            <div style={{ display: 'flex', justify: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <span className="font-luxury-serif" style={{ fontSize: '0.85rem', color: '#D4AF37', letterSpacing: '2px' }}>Edit Profile Credentials</span>
+              <button type="button" onClick={() => setShowProfileEditModal(false)} style={{ background: 'none', border: 'none', color: '#A89684', cursor: 'pointer' }}>
+                <X style={{ width: '20px', height: '20px' }} />
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {/* Photo Upload Area */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', backgroundColor: 'rgba(255, 255, 255, 0.02)', padding: '10px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                <div style={{ position: 'relative' }}>
+                  {profileForm.profilePhoto ? (
+                    <img src={profileForm.profilePhoto} style={{ width: '56px', height: '56px', borderRadius: '50%', objectFit: 'cover' }} alt="Avatar" />
+                  ) : (
+                    <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: 'rgba(107, 44, 145, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#D4AF37' }}>
+                      <User style={{ width: '24px', height: '24px' }} />
+                    </div>
+                  )}
+                  <label style={{ position: 'absolute', bottom: '-4px', right: '-4px', backgroundColor: '#D4AF37', borderRadius: '50%', width: '22px', height: '22px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'black', boxShadow: '0 0 5px rgba(0,0,0,0.5)' }}>
+                    <Camera style={{ width: '12px', height: '12px' }} />
+                    <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleAvatarFileChange} />
+                  </label>
+                </div>
+                <div>
+                  <span style={{ display: 'block', fontSize: '0.78rem', color: 'white', fontWeight: 600 }}>Profile Avatar</span>
+                  <span style={{ fontSize: '0.65rem', color: '#BFA6D8' }}>Click icon to upload a custom image.</span>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.7rem', color: '#A89684', marginBottom: '4px' }}>Full Name:</label>
+                <input 
+                  type="text" 
+                  required
+                  className="luxury-input" 
+                  style={{ width: '100%', boxSizing: 'border-box' }}
+                  value={profileForm.name} 
+                  onChange={(e) => setProfileForm(prev => ({ ...prev, name: e.target.value }))} 
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.7rem', color: '#A89684', marginBottom: '4px' }}>Email Address:</label>
+                <input 
+                  type="email" 
+                  required
+                  className="luxury-input" 
+                  style={{ width: '100%', boxSizing: 'border-box' }}
+                  value={profileForm.email} 
+                  onChange={(e) => setProfileForm(prev => ({ ...prev, email: e.target.value }))} 
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.7rem', color: '#A89684', marginBottom: '4px' }}>Cellphone Number:</label>
+                <input 
+                  type="tel" 
+                  required
+                  className="luxury-input" 
+                  style={{ width: '100%', boxSizing: 'border-box' }}
+                  value={profileForm.phone} 
+                  onChange={(e) => setProfileForm(prev => ({ ...prev, phone: e.target.value }))} 
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.7rem', color: '#A89684', marginBottom: '4px' }}>Account Password:</label>
+                <input 
+                  type="password" 
+                  required
+                  className="luxury-input" 
+                  style={{ width: '100%', boxSizing: 'border-box' }}
+                  value={profileForm.password} 
+                  onChange={(e) => setProfileForm(prev => ({ ...prev, password: e.target.value }))} 
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.7rem', color: '#A89684', marginBottom: '4px' }}>Shipping Address (for boutique products):</label>
+                <input 
+                  type="text" 
+                  className="luxury-input" 
+                  style={{ width: '100%', boxSizing: 'border-box' }}
+                  value={profileForm.deliveryAddress} 
+                  onChange={(e) => setProfileForm(prev => ({ ...prev, deliveryAddress: e.target.value }))} 
+                />
+              </div>
+            </div>
+
+            <button type="submit" className="btn-luxury-gold" style={{ width: '100%', justifyContent: 'center', marginTop: '20px' }}>
+              Save Profile Changes
+            </button>
+          </form>
+        </div>
+      )}
+
+      {/* GLOW POINTS CONVERSION INFO MODAL */}
+      {showGlowInfoModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100000, padding: '20px' }}>
+          <div className="luxury-card animate-fade-in" style={{ width: '100%', maxWidth: '420px', padding: '30px', border: '1px solid #D4AF37' }}>
+            <div style={{ display: 'flex', justify: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <span className="font-luxury-serif" style={{ fontSize: '0.85rem', color: '#D4AF37', letterSpacing: '2px' }}>Loyalty Points Guidelines</span>
+              <button onClick={() => setShowGlowInfoModal(false)} style={{ background: 'none', border: 'none', color: '#A89684', cursor: 'pointer' }}>
+                <X style={{ width: '20px', height: '20px' }} />
+              </button>
+            </div>
+
+            <p style={{ color: '#F5EFE6', fontSize: '0.82rem', lineHeight: '1.6', margin: '0 0 14px 0' }}>
+              We reward our aesthetic members with <strong>Glow Points</strong> on all transactions:
+            </p>
+            <ul style={{ color: '#BFA6D8', fontSize: '0.8rem', display: 'flex', flexDirection: 'column', gap: '8px', paddingLeft: '20px', margin: '0 0 20px 0' }}>
+              <li>Earn <strong>1 Glow Point</strong> for every <strong>R 2.00</strong> spent on treatment services or boutique retail products.</li>
+              <li>Points are credited automatically to your portal profile immediately after invoicing and payment settlement.</li>
+              <li>Vouchers can be claimed from your portal and used dynamically to redeem discount offers in our atelier checkout.</li>
+            </ul>
+
+            <button onClick={() => setShowGlowInfoModal(false)} className="btn-luxury-purple" style={{ width: '100%', justifyContent: 'center' }}>
+              Got It
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* CANCELLATION policy & REASON PROMPT MODAL */}
+      {cancelingApt && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.9)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100000, padding: '20px' }}>
+          <div className="luxury-card animate-fade-in" style={{ width: '100%', maxWidth: '450px', padding: '30px', border: '1px solid #ef4444' }}>
+            
+            <div style={{ display: 'flex', justify: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <span className="font-luxury-serif" style={{ fontSize: '0.8rem', color: '#ef4444', letterSpacing: '1px', fontWeight: 'bold' }}>Cancel Appointment Request</span>
+              <button onClick={() => setCancelingApt(null)} style={{ background: 'none', border: 'none', color: '#A89684', cursor: 'pointer' }}>
+                <X style={{ width: '20px', height: '20px' }} />
+              </button>
+            </div>
+
+            {(() => {
+              const warning = getCancelPolicyWarning(cancelingApt);
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  
+                  {/* Warning banner */}
+                  <div style={{ 
+                    backgroundColor: warning.severity === 'free' ? 'rgba(52,211,153,0.08)' : 'rgba(239,68,68,0.08)',
+                    border: warning.severity === 'free' ? '1px solid rgba(52,211,153,0.2)' : '1px solid rgba(239,68,68,0.2)',
+                    padding: '14px', borderRadius: '8px', fontSize: '0.8rem', color: warning.severity === 'free' ? '#34d399' : '#f87171',
+                    lineHeight: '1.5'
+                  }}>
+                    <strong>Cancellation Ledger Assessment:</strong>
+                    <p style={{ margin: '6px 0 0 0' }}>{warning.text}</p>
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.75rem', color: '#A89684', marginBottom: '6px', fontWeight: 600 }}>
+                      Please provide a reason for cancellation (required):
+                    </label>
+                    <textarea 
+                      className="luxury-input" 
+                      style={{ width: '100%', boxSizing: 'border-box' }}
+                      rows={3} 
+                      placeholder="e.g. Flight delay / work commitment change"
+                      value={cancelReason}
+                      onChange={(e) => setCancelReason(e.target.value)}
+                    />
+                  </div>
+
+                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '0.72rem', color: '#BFA6D8', cursor: 'pointer' }}>
+                    <input 
+                      type="checkbox" 
+                      style={{ marginTop: '2px' }}
+                      checked={cancelPolicyChecked}
+                      onChange={(e) => setCancelPolicyChecked(e.target.checked)}
+                    />
+                    <span>I understand the terms and accept the fee deductions/refund calculations outlined above.</span>
+                  </label>
+
+                  <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                    <button 
+                      onClick={handleCancelBookingSubmit}
+                      className="btn-luxury-purple"
+                      style={{ flex: 1, justify: 'center', backgroundColor: '#ef4444', borderColor: '#ef4444' }}
+                    >
+                      Confirm Cancel Booking
+                    </button>
+                    <button 
+                      type="button" 
+                      onClick={() => setCancelingApt(null)}
+                      className="btn-luxury-gold"
+                      style={{ flex: 1, justify: 'center' }}
+                    >
+                      Keep Booking
+                    </button>
+                  </div>
+
+                </div>
+              );
+            })()}
+
           </div>
         </div>
       )}
